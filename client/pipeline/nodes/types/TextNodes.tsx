@@ -1,7 +1,6 @@
-import { T, TldrawUiButton, useEditor } from 'tldraw'
+import { T, useEditor } from 'tldraw'
 import { runTextTool, TEXT_TOOL_OPS, TextToolOp } from '../../../../shared/textTools'
 import { PromptConcatIcon } from '../../components/icons/PromptConcatIcon'
-import { PreviewIcon } from '../../components/icons/PreviewIcon'
 import {
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
@@ -9,7 +8,6 @@ import {
 	NODE_WIDTH_PX,
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
-import { placeTextOnCanvas } from '../../placeOnCanvas'
 import { NodeShape } from '../NodeShapeUtil'
 import { NodeTextResult, PortRow, stopEvent } from './fields'
 import {
@@ -139,92 +137,6 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 				empty="Press ▶ Play to run"
 				height={TOOL_RESULT_HEIGHT_PX}
 			/>
-		</>
-	)
-}
-
-// ---------------------------------------------------------------------------
-// Text view: read long text, copy it, or place it on the canvas
-// ---------------------------------------------------------------------------
-
-export type TextViewNode = T.TypeOf<typeof TextViewNode>
-export const TextViewNode = T.object({
-	type: T.literal('text_view'),
-	lastText: T.string.nullable(),
-})
-
-const VIEW_HEIGHT_PX = 220
-
-export class TextViewNodeDefinition extends NodeDefinition<TextViewNode> {
-	static type = 'text_view'
-	static validator = TextViewNode
-	title = 'Text view'
-	heading = 'Text view'
-	icon = <PreviewIcon />
-	category = 'output'
-	resultKeys = ['lastText'] as const
-	getDefault(): TextViewNode {
-		return { type: 'text_view', lastText: null }
-	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 2 + VIEW_HEIGHT_PX
-	}
-	getPorts(): Record<string, ShapePort> {
-		return {
-			input: { id: 'input', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'any' },
-			output: { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
-		}
-	}
-	async execute(shape: NodeShape, _node: TextViewNode, inputs: InputValues): Promise<ExecutionResult> {
-		const text = coerceToText(getInput(inputs, 'input'))
-		updateNode<TextViewNode>(this.editor, shape, (n) => ({ ...n, lastText: text }))
-		return { output: text }
-	}
-	getOutputInfo(shape: NodeShape, node: TextViewNode, inputs: InfoValues): InfoValues {
-		return {
-			output: {
-				value: node.lastText,
-				isOutOfDate: areAnyInputsOutOfDate(inputs) || shape.props.isOutOfDate,
-				dataType: 'text',
-			},
-		}
-	}
-	Component = TextViewNodeComponent
-}
-
-function TextViewNodeComponent({ shape, node }: NodeComponentProps<TextViewNode>) {
-	const editor = useEditor()
-	const text = node.lastText ?? ''
-	return (
-		<>
-			<PortRow shapeId={shape.id} portId="input" label="Text" dataType="any" />
-			<NodeTextResult text={node.lastText} empty="Connect text and press ▶ Play" height={VIEW_HEIGHT_PX} />
-			<NodeRow>
-				<TldrawUiButton
-					type="normal"
-					disabled={!text}
-					onPointerDown={stopEvent}
-					onClick={() => navigator.clipboard.writeText(text)}
-				>
-					Copy
-				</TldrawUiButton>
-				<TldrawUiButton
-					type="normal"
-					disabled={!text}
-					onPointerDown={stopEvent}
-					onClick={() => placeTextOnCanvas(editor, shape, text)}
-				>
-					Place on canvas
-				</TldrawUiButton>
-				<TldrawUiButton
-					type="normal"
-					disabled={!text}
-					onPointerDown={stopEvent}
-					onClick={() => placeTextOnCanvas(editor, shape, text, 'markdown')}
-				>
-					As Markdown
-				</TldrawUiButton>
-			</NodeRow>
 		</>
 	)
 }

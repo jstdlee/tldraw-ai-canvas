@@ -13,6 +13,7 @@ export const LlmSettingsFields = {
 	temperature: T.number.nullable().optional(),
 	maxTokens: T.number.nullable().optional(),
 	showSettings: T.boolean.optional(),
+	thinking: T.string.optional(),
 }
 
 export interface LlmSettings {
@@ -20,6 +21,8 @@ export interface LlmSettings {
 	temperature?: number | null
 	maxTokens?: number | null
 	showSettings?: boolean
+	/** '' = model default, 'none' | 'low' | 'medium' | 'high'. */
+	thinking?: string
 }
 
 export const DEFAULT_LLM_SETTINGS: Required<LlmSettings> = {
@@ -27,10 +30,11 @@ export const DEFAULT_LLM_SETTINGS: Required<LlmSettings> = {
 	temperature: null,
 	maxTokens: null,
 	showSettings: false,
+	thinking: '',
 }
 
 /** Height of the open settings panel (closed: one row for the toggle). */
-export const LLM_SETTINGS_OPEN_HEIGHT_PX = 150
+export const LLM_SETTINGS_OPEN_HEIGHT_PX = 176
 export const LLM_SETTINGS_TOGGLE_HEIGHT_PX = 28
 
 export function llmSettingsHeight(node: LlmSettings) {
@@ -42,6 +46,7 @@ export function llmRequestSettings(node: LlmSettings) {
 		system: node.system?.trim() || undefined,
 		temperature: node.temperature ?? null,
 		maxTokens: node.maxTokens ?? null,
+		thinking: node.thinking || undefined,
 	}
 }
 
@@ -66,7 +71,7 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 				onClick={() => set({ showSettings: !node.showSettings })}
 			>
 				{node.showSettings ? '▾' : '▸'} Model settings
-				{!node.showSettings && (node.system || node.temperature != null || node.maxTokens != null) && (
+				{!node.showSettings && (node.system || node.temperature != null || node.maxTokens != null || node.thinking) && (
 					<span className="LlmSettings-badge">custom</span>
 				)}
 			</button>
@@ -99,6 +104,21 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 								reset
 							</button>
 						)}
+					</label>
+					<label className="LlmSettings-row">
+						<span>Thinking</span>
+						<select
+							className="NodeField-select"
+							value={node.thinking ?? ''}
+							onPointerDown={stop}
+							onChange={(e) => set({ thinking: e.target.value })}
+						>
+							<option value="">model default</option>
+							<option value="none">off (fast)</option>
+							<option value="low">low</option>
+							<option value="medium">medium</option>
+							<option value="high">high (slow, careful)</option>
+						</select>
 					</label>
 					<label className="LlmSettings-row">
 						<span>Max tokens</span>

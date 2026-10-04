@@ -175,7 +175,13 @@ export class ConnectionShapeUtil extends ShapeUtil<ConnectionShape> {
 			target.port.dataType !== 'any' &&
 			target.port.dataType !== dragDataType
 
-		const wouldCreateACycle = (target && nodesWhichWouldCreateACycle?.has(target.shape.id)) ?? false
+		// A wire into a loop-back port (For each "Result") closes the loop on purpose.
+		const oppositeIsFeedback =
+			!!oppositeBinding &&
+			!!getNodePorts(this.editor, oppositeBinding.toId)[oppositeBinding.props.portId]?.feedback
+		const intoFeedback = draggingTerminal === 'end' ? !!target?.port.feedback : oppositeIsFeedback
+		const wouldCreateACycle =
+			(!intoFeedback && target && nodesWhichWouldCreateACycle?.has(target.shape.id)) ?? false
 		if (!target || wouldCreateACycle || isTypeIncompatible) {
 			this.pendingReplacementId = null
 			updatePortState(this.editor, { hintingPort: null })

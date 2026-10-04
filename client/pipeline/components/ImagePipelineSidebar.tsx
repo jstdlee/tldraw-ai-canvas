@@ -11,14 +11,14 @@ import { getNodeDefinitions, NodeType } from '../nodes/nodeTypes'
 
 const CATEGORY_LABELS: Record<string, string> = {
 	input: 'Input',
-	text: 'Text',
-	process: 'Image & chat',
+	text: 'Text & AI',
+	image: 'Image',
+	logic: 'Logic & code',
 	web: 'Web',
 	output: 'Output',
-	utility: 'Utility',
 }
 
-const CATEGORY_ORDER = ['input', 'text', 'process', 'web', 'output', 'utility']
+const CATEGORY_ORDER = ['input', 'text', 'image', 'logic', 'web', 'output']
 
 const DRAG_DISTANCE_SQ = 36 // 6px
 

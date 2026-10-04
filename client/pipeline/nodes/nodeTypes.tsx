@@ -8,21 +8,20 @@ import {
 import { PortId, ShapePort } from '../ports/Port'
 import { NodeShape } from './NodeShapeUtil'
 import { AdjustNodeDefinition } from './types/AdjustNode'
-import { BlendNodeDefinition } from './types/BlendNode'
 import { CaptureNodeDefinition } from './types/CaptureNode'
 import { ChatNodeDefinition } from './types/ChatNode'
 import { TextAINodeDefinition } from './types/TextAINode'
-import { TextToolNodeDefinition, TextViewNodeDefinition } from './types/TextNodes'
+import { TextToolNodeDefinition } from './types/TextNodes'
+import { OutputNodeDefinition } from './types/OutputNode'
+import { CameraNodeDefinition, CropNodeDefinition, ImageFilterNodeDefinition, ImageResizeNodeDefinition } from './types/ImageNodes'
+import { ForEachNodeDefinition, IfNodeDefinition, LogicNodeDefinition } from './types/LogicNodes'
+import { CodeNodeDefinition } from './types/CodeNode'
+import { SubgraphNodeDefinition } from './types/SubgraphNode'
+import { removedNodeDefinition } from './types/RemovedNode'
 import { DownloadNodeDefinition, HttpNodeDefinition, SaveNodeDefinition } from './types/WebNodes'
-import { ControlNetNodeDefinition } from './types/ControlNetNode'
-import { GenerateNodeDefinition } from './types/GenerateNode'
 import { GenerateTextNodeDefinition } from './types/GenerateTextNode'
-import { IPAdapterNodeDefinition } from './types/IPAdapterNode'
-import { IteratorNodeDefinition } from './types/IteratorNode'
 import { LoadImageNodeDefinition } from './types/LoadImageNode'
-import { ModelNodeDefinition } from './types/ModelNode'
 import { NumberNodeDefinition } from './types/NumberNode'
-import { PreviewNodeDefinition } from './types/PreviewNode'
 import { PromptConcatNodeDefinition } from './types/PromptConcatNode'
 import { PromptNodeDefinition } from './types/PromptNode'
 import { RouterNodeDefinition } from './types/RouterNode'
@@ -32,36 +31,62 @@ import {
 	NodeDefinition,
 	NodeDefinitionConstructor,
 } from './types/shared'
-import { StyleTransferNodeDefinition } from './types/StyleTransferNode'
-import { UpscaleNodeDefinition } from './types/UpscaleNode'
 
 /** All our node types */
 export const NodeDefinitions = {
-	model: ModelNodeDefinition,
+	// Input
 	prompt: PromptNodeDefinition,
-	generate: GenerateNodeDefinition,
-	generate_text: GenerateTextNodeDefinition,
-	chat: ChatNodeDefinition,
+	number: NumberNodeDefinition,
+	load_image: LoadImageNodeDefinition,
+	camera: CameraNodeDefinition,
+	capture: CaptureNodeDefinition,
+	// Text & AI
 	text_ai: TextAINodeDefinition,
 	text_tool: TextToolNodeDefinition,
-	text_view: TextViewNodeDefinition,
+	generate_text: GenerateTextNodeDefinition,
+	chat: ChatNodeDefinition,
+	prompt_concat: PromptConcatNodeDefinition,
+	// Image (runs in the browser)
+	crop: CropNodeDefinition,
+	image_resize: ImageResizeNodeDefinition,
+	image_filter: ImageFilterNodeDefinition,
+	adjust: AdjustNodeDefinition,
+	// Logic & code
+	if: IfNodeDefinition,
+	logic: LogicNodeDefinition,
+	for_each: ForEachNodeDefinition,
+	router: RouterNodeDefinition,
+	code: CodeNodeDefinition,
+	subgraph: SubgraphNodeDefinition,
+	// Web
 	http: HttpNodeDefinition,
 	download: DownloadNodeDefinition,
+	// Output
+	output: OutputNodeDefinition,
 	save: SaveNodeDefinition,
-	controlnet: ControlNetNodeDefinition,
-	load_image: LoadImageNodeDefinition,
-	preview: PreviewNodeDefinition,
-	blend: BlendNodeDefinition,
-	adjust: AdjustNodeDefinition,
-	upscale: UpscaleNodeDefinition,
-	ip_adapter: IPAdapterNodeDefinition,
-	style_transfer: StyleTransferNodeDefinition,
-	prompt_concat: PromptConcatNodeDefinition,
-	number: NumberNodeDefinition,
-	router: RouterNodeDefinition,
-	iterator: IteratorNodeDefinition,
-	capture: CaptureNodeDefinition,
 } satisfies Record<string, NodeDefinitionConstructor<any>>
+
+/**
+ * Removed node types. Not part of the typed NodeType union, but still accepted
+ * at runtime, so canvases saved with them keep loading (they show as cards to delete).
+ */
+const RemovedNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {
+	model: removedNodeDefinition('model', 'Image model'),
+	generate: removedNodeDefinition('generate', 'Generate image'),
+	controlnet: removedNodeDefinition('controlnet', 'ControlNet'),
+	ip_adapter: removedNodeDefinition('ip_adapter', 'IP-Adapter'),
+	style_transfer: removedNodeDefinition('style_transfer', 'Style transfer'),
+	upscale: removedNodeDefinition('upscale', 'Upscale'),
+	iterator: removedNodeDefinition('iterator', 'Iterator'),
+	blend: removedNodeDefinition('blend', 'Blend'),
+	preview: removedNodeDefinition('preview', 'Preview'),
+	text_view: removedNodeDefinition('text_view', 'Text view'),
+}
+
+const AllNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {
+	...NodeDefinitions,
+	...RemovedNodeDefinitions,
+}
 
 /**
  * A union type of all our node types.
@@ -69,7 +94,7 @@ export const NodeDefinitions = {
 export type NodeType = T.TypeOf<typeof NodeType>
 export const NodeType = T.union(
 	'type',
-	Object.fromEntries(Object.values(NodeDefinitions).map((type) => [type.type, type.validator])) as {
+	Object.fromEntries(Object.values(AllNodeDefinitions).map((type) => [type.type, type.validator])) as {
 		[K in keyof typeof NodeDefinitions as (typeof NodeDefinitions)[K]['type']]: (typeof NodeDefinitions)[K]['validator']
 	}
 )
@@ -81,7 +106,7 @@ const nodeDefinitions = new WeakCache<
 export function getNodeDefinitions(editor: Editor) {
 	return nodeDefinitions.get(editor, () => {
 		return Object.fromEntries(
-			Object.values(NodeDefinitions).map((value) => [value.type, new value(editor)])
+			Object.values(AllNodeDefinitions).map((value) => [value.type, new value(editor)])
 		) as any
 	})
 }
@@ -95,15 +120,26 @@ export function getNodeDefinition(
 	] as NodeDefinition<NodeType>
 }
 
-export function getNodeWidthPx(editor: Editor, shape: NodeShape): number {
+/** The node's own width, before the user resized it. */
+export function getNodeBaseWidthPx(editor: Editor, shape: NodeShape): number {
 	return getNodeDefinition(editor, shape.props.node).getWidthPx(shape, shape.props.node)
 }
 
+export function getNodeWidthPx(editor: Editor, shape: NodeShape): number {
+	const base = getNodeBaseWidthPx(editor, shape)
+	return shape.props.w ? Math.max(shape.props.w, 200) : base
+}
+
 export function getNodeBodyHeightPx(editor: Editor, shape: NodeShape): number {
-	return getNodeDefinition(editor, shape.props.node).getBodyHeightPx(shape, shape.props.node)
+	if (shape.props.collapsed) return 0
+	return (
+		getNodeDefinition(editor, shape.props.node).getBodyHeightPx(shape, shape.props.node) +
+		(shape.props.extraH ?? 0)
+	)
 }
 
 export function getNodeHeightPx(editor: Editor, shape: NodeShape): number {
+	if (shape.props.collapsed) return NODE_HEADER_HEIGHT_PX + NODE_FOOTER_HEIGHT_PX
 	return (
 		NODE_HEADER_HEIGHT_PX +
 		NODE_ROW_HEADER_GAP_PX +
@@ -114,7 +150,25 @@ export function getNodeHeightPx(editor: Editor, shape: NodeShape): number {
 }
 
 export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<string, ShapePort> {
-	return getNodeDefinition(editor, shape.props.node).getPorts(shape, shape.props.node)
+	const ports = getNodeDefinition(editor, shape.props.node).getPorts(shape, shape.props.node)
+	const baseW = getNodeBaseWidthPx(editor, shape)
+	const w = getNodeWidthPx(editor, shape)
+	const list = Object.values(ports)
+	if (shape.props.collapsed) {
+		// Collapsed: spread the ports over the header + footer strip, inputs left, outputs right.
+		const h = NODE_HEADER_HEIGHT_PX + NODE_FOOTER_HEIGHT_PX
+		const place = (side: ShapePort[], x: number) =>
+			side.map((p, i) => [p.id, { ...p, x, y: (h * (i + 1)) / (side.length + 1) }] as const)
+		return Object.fromEntries([
+			...place(list.filter((p) => p.terminal === 'end'), 0),
+			...place(list.filter((p) => p.terminal === 'start'), w),
+		])
+	}
+	if (w === baseW) return ports
+	// Resized: keep output ports on the right edge.
+	return Object.fromEntries(
+		list.map((p) => [p.id, p.x >= baseW - 1 ? { ...p, x: w } : p])
+	)
 }
 
 export async function executeNode(
@@ -144,6 +198,11 @@ export function onNodePortDisconnect(editor: Editor, shape: NodeShape, port: Por
 export function NodeBody({ shape }: { shape: NodeShape }) {
 	const editor = useEditor()
 	const node = shape.props.node
+	if (shape.props.collapsed) return null
 	const { Component } = getNodeDefinition(editor, node)
-	return <Component shape={shape} node={node} />
+	return (
+		<div className="NodeBody" style={{ height: getNodeBodyHeightPx(editor, shape) }}>
+			<Component shape={shape} node={node} />
+		</div>
+	)
 }

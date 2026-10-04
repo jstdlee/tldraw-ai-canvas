@@ -40,7 +40,7 @@ export function getProviderOptions(provider: ProviderConfig, model: ModelConfig)
 		case 'openai':
 			return { openai: { reasoningEffort: effort } }
 		case 'openai-compatible':
-			return effort === 'none' ? {} : { [provider.id]: { reasoningEffort: effort } }
+			return { [provider.id]: { reasoningEffort: effort } }
 		case 'anthropic':
 			return effort === 'none'
 				? { anthropic: { thinking: { type: 'disabled' } } }
@@ -104,18 +104,5 @@ export async function listProviderModels(provider: ProviderConfig): Promise<Prov
 				.filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
 				.map((m: any) => ({ id: String(m.name).replace(/^models\//, ''), label: m.displayName }))
 		}
-		case 'comfyui': {
-			const root = base ?? 'http://127.0.0.1:8188'
-			const [ckpt, upscale] = await Promise.all([
-				json(`${root}/object_info/CheckpointLoaderSimple`),
-				json(`${root}/object_info/UpscaleModelLoader`).catch(() => ({})),
-			])
-			const ckpts: string[] = ckpt?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] ?? []
-			const ups: string[] = upscale?.UpscaleModelLoader?.input?.required?.model_name?.[0] ?? []
-			return [...ckpts, ...ups].map((id) => ({ id }))
-		}
-		case 'replicate':
-			// Replicate has no useful "list my models" call; add model ids by hand.
-			return []
 	}
 }

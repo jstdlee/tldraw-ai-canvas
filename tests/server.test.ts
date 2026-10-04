@@ -10,8 +10,8 @@ process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'ai-canvas-test-'))
 
 const { stripToJson } = await import('../server/agent/AgentService')
 const { closeAndParseJson } = await import('../server/agent/closeAndParseJson')
-const { fillComfyWorkflow, generateImage, readImage } = await import('../server/images')
-const { loadConfig, mergeClientConfig, saveConfig, toPublicConfig, resolveModel } = await import(
+const { readImage, saveImage } = await import('../server/images')
+const { loadConfig, mergeClientConfig, reloadConfig, saveConfig, toPublicConfig, resolveModel } = await import(
 	'../server/config'
 )
 const { guessCapabilities, getDefaultModelKey } = await import('../shared/aiConfig')
@@ -43,9 +43,8 @@ describe('chat text', () => {
 describe('capability guesses', () => {
 	it('marks vision and image models', () => {
 		expect(guessCapabilities('openai-compatible', 'qwen3-vl:8b')).toContain('vision')
-		expect(guessCapabilities('openai', 'gpt-image-1')).toEqual(['image'])
-		expect(guessCapabilities('comfyui', '4x-UltraSharp.pth')).toEqual(['upscale'])
-		expect(guessCapabilities('comfyui', 'sd_xl_base_1.0.safetensors')).toEqual(['image'])
+		expect(guessCapabilities('openai', 'gpt-image-1')).toEqual([])
+		expect(guessCapabilities('openai-compatible', 'text-embedding-3-small')).toEqual([])
 	})
 })
 
@@ -84,82 +83,43 @@ describe('config', () => {
 		}
 		expect(getDefaultModelKey(config, 'chat')).toBe('a/y')
 		expect(getDefaultModelKey(config, 'agent')).toBe('a/y')
-		expect(getDefaultModelKey(config, 'image')).toBeUndefined()
+		expect(getDefaultModelKey(config, 'vision')).toBeUndefined()
 	})
 })
 
-describe('ComfyUI', () => {
-	it('fills placeholders and keeps number types', () => {
-		const graph = fillComfyWorkflow(
+describe('older configs', () => {
+	it('drop image providers and image jobs', async () => {
+		const { writeFileSync, mkdirSync } = await import('node:fs')
+		mkdirSync(process.env.DATA_DIR!, { recursive: true })
+		writeFileSync(
+			join(process.env.DATA_DIR!, 'ai-config.json'),
 			JSON.stringify({
-				'3': { class_type: 'KSampler', inputs: { seed: '{{seed}}', steps: '{{steps}}' } },
-				'6': { class_type: 'CLIPTextEncode', inputs: { text: 'a photo of {{prompt}}' } },
-			}),
-			{ seed: 42, steps: 20, prompt: 'a cat' }
-		)
-		expect(graph['3'].inputs).toEqual({ seed: 42, steps: 20 })
-		expect(graph['6'].inputs.text).toBe('a photo of a cat')
-	})
-
-	describe('generate against a mock ComfyUI', () => {
-		let server: Server
-		let submitted: any = null
-		const PNG = Buffer.from(
-			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-			'base64'
-		)
-
-		beforeAll(async () => {
-			server = createServer((req, res) => {
-				let body = ''
-				req.on('data', (c) => (body += c))
-				req.on('end', () => {
-					if (req.url === '/prompt') {
-						submitted = JSON.parse(body).prompt
-						res.end(JSON.stringify({ prompt_id: 'job1' }))
-					} else if (req.url === '/history/job1') {
-						res.end(
-							JSON.stringify({
-								job1: {
-									status: { status_str: 'success', completed: true },
-									outputs: { save: { images: [{ filename: 'out.png', subfolder: '', type: 'output' }] } },
-								},
-							})
-						)
-					} else if (req.url?.startsWith('/view')) {
-						res.setHeader('content-type', 'image/png')
-						res.end(PNG)
-					} else {
-						res.statusCode = 404
-						res.end()
-					}
-				})
-			})
-			await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
-			const port = (server.address() as AddressInfo).port
-			saveConfig({
 				providers: [
-					{ id: 'comfy', name: 'ComfyUI', kind: 'comfyui', baseURL: `http://127.0.0.1:${port}`, enabled: true },
+					{ id: 'comfy', name: 'ComfyUI', kind: 'comfyui', enabled: true },
+					{ id: 'm', name: 'Magpie', kind: 'openai-compatible', baseURL: 'http://x/v1', enabled: true },
 				],
 				models: [
-					{ key: 'comfy/sdxl.safetensors', providerId: 'comfy', model: 'sdxl.safetensors', label: 'SDXL', capabilities: ['image'] },
+					{ key: 'comfy/sdxl', providerId: 'comfy', model: 'sdxl', label: 'SDXL', capabilities: ['image'] },
+					{ key: 'm/g', providerId: 'm', model: 'g', label: 'G', capabilities: ['chat', 'image', 'vision'] },
 				],
-				defaults: {},
+				defaults: { image: 'comfy/sdxl', chat: 'm/g' },
 			})
-		})
+		)
+		const config = reloadConfig()
+		expect(config.providers.map((p) => p.id)).toEqual(['m'])
+		expect(config.models).toEqual([
+			{ key: 'm/g', providerId: 'm', model: 'g', label: 'G', capabilities: ['chat', 'vision'] },
+		])
+		expect(config.defaults).toEqual({ chat: 'm/g' })
+	})
+})
 
-		afterAll(() => server.close())
-
-		it('submits a checkpoint graph and stores the result locally', async () => {
-			expect(resolveModel(null, 'image').model.key).toBe('comfy/sdxl.safetensors')
-			const result = await generateImage({ prompt: 'a lighthouse', steps: 8, cfgScale: 5, seed: 7 })
-			expect(submitted.ckpt.inputs.ckpt_name).toBe('sdxl.safetensors')
-			expect(submitted.pos.inputs.text).toBe('a lighthouse')
-			expect(submitted.sample.inputs).toMatchObject({ seed: 7, steps: 8, cfg: 5, denoise: 1 })
-			expect(result.imageUrl).toMatch(/^\/api\/images\/img_/)
-			const stored = readImage(result.imageUrl.split('/').pop()!)
-			expect(Buffer.from(stored!.bytes).equals(PNG)).toBe(true)
-		}, 10_000)
+describe('image store', () => {
+	it('stores and reads images by id', () => {
+		const url = saveImage(new Uint8Array([137, 80, 78, 71]), 'image/png')
+		expect(url).toMatch(/^\/api\/images\/img_/)
+		expect(readImage(url.split('/').pop()!)?.mime).toBe('image/png')
+		expect(readImage('../../etc/passwd')).toBeNull()
 	})
 })
 

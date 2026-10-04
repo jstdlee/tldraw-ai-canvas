@@ -6,13 +6,7 @@
  * client only sees `hasApiKey`.
  */
 
-export type ProviderKind =
-	| 'openai-compatible'
-	| 'openai'
-	| 'anthropic'
-	| 'google'
-	| 'comfyui'
-	| 'replicate'
+export type ProviderKind = 'openai-compatible' | 'openai' | 'anthropic' | 'google'
 
 /** What a model can be used for. */
 export type ModelCapability =
@@ -22,12 +16,8 @@ export type ModelCapability =
 	| 'chat'
 	/** Accepts images as input (chat with sketches, describe image). */
 	| 'vision'
-	/** Text-to-image / image-to-image generation. */
-	| 'image'
-	/** Image upscaling. */
-	| 'upscale'
 
-export const MODEL_CAPABILITIES: ModelCapability[] = ['agent', 'chat', 'vision', 'image', 'upscale']
+export const MODEL_CAPABILITIES: ModelCapability[] = ['agent', 'chat', 'vision']
 
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high'
 
@@ -58,16 +48,12 @@ export interface ModelConfig {
 	supportsTemperature?: boolean
 	reasoningEffort?: ReasoningEffort
 	maxOutputTokens?: number
-	/** ComfyUI only: optional API-format workflow JSON that replaces the built-in graph. */
-	comfyWorkflow?: string
 }
 
 export interface AIDefaults {
 	agent?: string
 	chat?: string
 	vision?: string
-	image?: string
-	upscale?: string
 }
 
 export interface AIConfig {
@@ -97,14 +83,14 @@ export const PROVIDER_KINDS: Record<ProviderKind, ProviderKindInfo> = {
 		label: 'OpenAI-compatible (Ollama, LM Studio, vLLM, llama.cpp…)',
 		defaultBaseURL: 'http://127.0.0.1:11434/v1',
 		needsApiKey: false,
-		capabilities: ['agent', 'chat', 'vision', 'image'],
+		capabilities: ['agent', 'chat', 'vision'],
 		local: true,
 	},
 	openai: {
 		label: 'OpenAI',
 		defaultBaseURL: 'https://api.openai.com/v1',
 		needsApiKey: true,
-		capabilities: ['agent', 'chat', 'vision', 'image'],
+		capabilities: ['agent', 'chat', 'vision'],
 		local: false,
 	},
 	anthropic: {
@@ -119,20 +105,6 @@ export const PROVIDER_KINDS: Record<ProviderKind, ProviderKindInfo> = {
 		defaultBaseURL: 'https://generativelanguage.googleapis.com/v1beta',
 		needsApiKey: true,
 		capabilities: ['agent', 'chat', 'vision'],
-		local: false,
-	},
-	comfyui: {
-		label: 'ComfyUI',
-		defaultBaseURL: 'http://127.0.0.1:8188',
-		needsApiKey: false,
-		capabilities: ['image', 'upscale'],
-		local: true,
-	},
-	replicate: {
-		label: 'Replicate',
-		defaultBaseURL: 'https://api.replicate.com/v1',
-		needsApiKey: true,
-		capabilities: ['image', 'upscale'],
 		local: false,
 	},
 }
@@ -166,14 +138,9 @@ export const PROVIDER_PRESETS: { label: string; provider: Omit<ProviderConfig, '
 			enabled: true,
 		},
 	},
-	{
-		label: 'ComfyUI',
-		provider: { name: 'ComfyUI', kind: 'comfyui', baseURL: 'http://127.0.0.1:8188', enabled: true },
-	},
 	{ label: 'OpenAI', provider: { name: 'OpenAI', kind: 'openai', enabled: true } },
 	{ label: 'Anthropic', provider: { name: 'Anthropic', kind: 'anthropic', enabled: true } },
 	{ label: 'Google Gemini', provider: { name: 'Google', kind: 'google', enabled: true } },
-	{ label: 'Replicate', provider: { name: 'Replicate', kind: 'replicate', enabled: true } },
 ]
 
 export function modelKey(providerId: string, model: string) {
@@ -195,11 +162,8 @@ export function getDefaultModelKey(
  */
 export function guessCapabilities(kind: ProviderKind, model: string): ModelCapability[] {
 	const id = model.toLowerCase()
-	if (kind === 'comfyui') {
-		return /(upscal|esrgan|ultrasharp|swinir|(^|[^a-z0-9])[248]x|x[248]($|[^a-z0-9]))/.test(id) ? ['upscale'] : ['image']
-	}
-	if (/(dall-e|gpt-image|flux|sdxl|stable-diffusion|imagen)/.test(id)) return ['image']
-	if (/(embed|whisper|tts|rerank)/.test(id)) return []
+	// Image generators, embeddings and speech models can't chat.
+	if (/(dall-e|gpt-image|flux|sdxl|stable-diffusion|imagen|embed|whisper|tts|rerank)/.test(id)) return []
 	const caps: ModelCapability[] = ['chat']
 	if (/(vl|vision|gpt-4o|gpt-4\.1|gpt-5|claude|gemini|llava|gemma3|gemma4|pixtral|qwen2\.5-omni)/.test(id)) {
 		caps.push('vision')

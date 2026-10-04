@@ -8,6 +8,7 @@ import {
 	Editor,
 	ErrorBoundary,
 	TLComponents,
+	TLShape,
 	Tldraw,
 	TldrawOptions,
 	TldrawUiButton,
@@ -49,6 +50,7 @@ import { keepConnectionsAtBottom } from './pipeline/connection/keepConnectionsAt
 import { disableTransparency } from './pipeline/disableTransparency'
 import { NodeShapeUtil } from './pipeline/nodes/NodeShapeUtil'
 import { PointingPort } from './pipeline/ports/PointingPort'
+import { isPacked, watchPackedNodes } from './pipeline/subgraph'
 import { TargetAreaTool } from './tools/TargetAreaTool'
 import { TargetShapeTool } from './tools/TargetShapeTool'
 import { canvasActionOverrides, CanvasContextMenu, CanvasToolsMenuGroup, MarkdownIcon, MermaidIcon } from './clips/CanvasMenus'
@@ -67,6 +69,10 @@ const bindingUtils = [ConnectionBindingUtil]
 const overlayUtils = [ConnectionCenterHandleOverlayUtil, AgentHighlightOverlayUtil]
 // Agent context pickers
 const tools = [TargetShapeTool, TargetAreaTool, ...clipTools]
+
+// Shapes packed into a group node stay in the document but are hidden.
+// Must be a stable function: a new one each render would rebuild the editor.
+const getShapeVisibility = (shape: TLShape) => (isPacked(shape) ? 'hidden' : 'inherit') as 'hidden' | 'inherit'
 
 const options: Partial<TldrawOptions> = {
 	actionShortcutsLocation: 'menu',
@@ -260,6 +266,7 @@ function App() {
 				<div className="app-canvas">
 					<Tldraw
 						persistenceKey="tldraw-ai-canvas"
+						getShapeVisibility={getShapeVisibility}
 						assetUrls={assetUrls}
 						options={options}
 						overrides={overrides}
@@ -276,6 +283,7 @@ function App() {
 							keepConnectionsAtBottom(editor)
 							disableTransparency(editor, ['connection'])
 							registerClipHandlers(editor)
+							watchPackedNodes(editor)
 						}}
 					>
 						<TldrawAgentAppProvider onMount={setApp} onUnmount={handleUnmount} />

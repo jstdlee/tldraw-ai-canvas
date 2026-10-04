@@ -16,18 +16,10 @@ import {
 	saveConfig,
 	toPublicConfig,
 } from './config'
-import {
-	generateImage,
-	ImageRequest,
-	readImage,
-	resolveImage,
-	saveImage,
-	toDataUrl,
-	upscaleImage,
-} from './images'
+import { readImage, resolveImage, saveImage, toDataUrl } from './images'
 import { downloadUrl, httpRequest, HttpRequestInput, saveContent, unfurl } from './http'
 import { getLanguageModel, getProviderOptions, listProviderModels, ProviderModelInfo } from './llm'
-import { guessCapabilities, ModelCapability } from '../shared/aiConfig'
+import { guessCapabilities, ModelCapability, ModelConfig } from '../shared/aiConfig'
 
 const PORT = Number(process.env.API_PORT ?? 8790)
 const HOST = process.env.HOST ?? '127.0.0.1'
@@ -203,6 +195,7 @@ app.post('/api/chat', async (c) => {
 		system?: string
 		temperature?: number | null
 		maxTokens?: number | null
+		thinking?: string
 	}
 	const messages = await inlineImages(body.messages)
 	const { model, provider } = resolveModel(body.model, hasImages(messages) ? 'vision' : 'chat')
@@ -212,7 +205,7 @@ app.post('/api/chat', async (c) => {
 		messages,
 		...(body.temperature != null ? { temperature: body.temperature } : {}),
 		maxOutputTokens: body.maxTokens || model.maxOutputTokens,
-		providerOptions: getProviderOptions(provider, model),
+		providerOptions: getProviderOptions(provider, withThinking(model, body.thinking)),
 		experimental_transform: smoothStream(),
 		abortSignal: c.req.raw.signal,
 	})
@@ -242,6 +235,7 @@ app.post('/api/generate-text', async (c) => {
 		system?: string
 		temperature?: number | null
 		maxTokens?: number | null
+		thinking?: string
 	}
 	if (!body.prompt) throw new ConfigError('prompt is required')
 	const input = body.input != null ? String(body.input) : ''
@@ -261,66 +255,12 @@ app.post('/api/generate-text', async (c) => {
 		messages: [{ role: 'user', content }],
 		...(body.temperature != null ? { temperature: body.temperature } : {}),
 		maxOutputTokens: body.maxTokens || model.maxOutputTokens || 2048,
-		providerOptions: getProviderOptions(provider, model),
+		providerOptions: getProviderOptions(provider, withThinking(model, body.thinking)),
 	})
 	return c.json({ text: stripThink(text) })
 })
 
-// --- Images ------------------------------------------------------------------
-
-app.post('/api/generate', async (c) => {
-	const body = (await c.req.json()) as ImageRequest & {
-		controlNetMode?: string
-		controlNetStrength?: number
-	}
-	// ControlNet: guide generation by the reference image (strength 0-100).
-	const strength =
-		body.controlNetStrength != null ? 1 - clamp01(body.controlNetStrength / 100) * 0.7 : body.strength
-	return c.json(await generateImage({ ...body, strength }))
-})
-
-app.post('/api/upscale', async (c) => {
-	const body = (await c.req.json()) as { imageUrl: string; scale: number; model?: string; method?: string }
-	return c.json(await upscaleImage({ imageUrl: body.imageUrl, scale: body.scale, model: body.model }))
-})
-
-/** Reference-guided generation (IP-Adapter node). */
-app.post('/api/ip-adapter', async (c) => {
-	const body = (await c.req.json()) as {
-		imageUrl: string
-		prompt: string
-		scale: number
-		steps: number
-		model?: string
-	}
-	const result = await generateImage({
-		model: body.model,
-		prompt: body.prompt,
-		steps: body.steps,
-		referenceImageUrl: body.imageUrl,
-		// Higher adapter scale = follow the reference more = change it less.
-		strength: 1 - clamp01(body.scale) * 0.6,
-	})
-	return c.json({ imageUrl: result.imageUrl })
-})
-
-/** Style transfer node: repaint the content image in the style described / shown. */
-app.post('/api/style-transfer', async (c) => {
-	const body = (await c.req.json()) as {
-		styleImageUrl: string
-		contentImageUrl?: string
-		prompt?: string
-		model?: string
-		strength: number
-	}
-	const result = await generateImage({
-		model: body.model?.includes('/') ? body.model : undefined,
-		prompt: body.prompt || 'the same scene, repainted in the style of the reference artwork',
-		referenceImageUrl: body.contentImageUrl || body.styleImageUrl,
-		strength: clamp01(body.strength > 1 ? body.strength / 100 : body.strength),
-	})
-	return c.json({ imageUrl: result.imageUrl })
-})
+// --- Local image store -----------------------------------------------------
 
 app.post('/api/images/:imageId', async (c) => {
 	const mime = c.req.header('content-type') ?? 'image/png'
@@ -361,13 +301,18 @@ function errorMessage(e: unknown) {
 	return `${err?.message ?? String(e)}${body}`
 }
 
+/** Apply a per-request thinking level over the model's own setting. */
+function withThinking(model: ModelConfig, thinking?: string): ModelConfig {
+	const allowed = ['none', 'minimal', 'low', 'medium', 'high']
+	return thinking && allowed.includes(thinking)
+		? { ...model, reasoningEffort: thinking as ModelConfig['reasoningEffort'] }
+		: model
+}
+
 function stripThink(text: string) {
 	return text.replace(/^\s*<think>[\s\S]*?<\/think>\s*/, '')
 }
 
-function clamp01(v: number) {
-	return Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0))
-}
 
 serve({ fetch: app.fetch, port: PORT, hostname: HOST }, () => {
 	console.log(`AI canvas server on http://${HOST}:${PORT}${PROD ? '' : ' (API only; open the Vite URL)'}`)

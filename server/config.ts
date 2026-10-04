@@ -3,7 +3,9 @@ import { dirname, join, resolve } from 'node:path'
 import {
 	AIConfig,
 	getDefaultModelKey,
+	MODEL_CAPABILITIES,
 	ModelCapability,
+	PROVIDER_KINDS,
 	ModelConfig,
 	ProviderConfig,
 	PublicAIConfig,
@@ -38,12 +40,23 @@ export function loadConfig(): AIConfig {
 		return cached
 	}
 	const raw = JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) as Partial<AIConfig>
-	cached = {
-		providers: raw.providers ?? [],
-		models: raw.models ?? [],
-		defaults: raw.defaults ?? {},
-	}
+	// Older configs may hold image providers (ComfyUI, Replicate) and image jobs: drop them.
+	const providers = (raw.providers ?? []).filter((p) => p.kind in PROVIDER_KINDS)
+	const ids = new Set(providers.map((p) => p.id))
+	const models = (raw.models ?? [])
+		.filter((m) => ids.has(m.providerId))
+		.map((m) => ({ ...m, capabilities: m.capabilities.filter((c) => MODEL_CAPABILITIES.includes(c)) }))
+	const defaults = Object.fromEntries(
+		Object.entries(raw.defaults ?? {}).filter(([job]) => MODEL_CAPABILITIES.includes(job as ModelCapability))
+	)
+	cached = { providers, models, defaults }
 	return cached
+}
+
+/** Forget the cached config and read the file again. */
+export function reloadConfig(): AIConfig {
+	cached = null
+	return loadConfig()
 }
 
 export function saveConfig(config: AIConfig) {

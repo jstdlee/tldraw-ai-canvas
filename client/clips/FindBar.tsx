@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { atom, Editor, TLShapeId, useValue } from 'tldraw'
-import { shapeText } from './canvasFeatures'
+import { shapeText } from './shapeText'
 
 /** Whether the "Find on canvas" bar is open. */
 export const $findOpen = atom('find open', false)

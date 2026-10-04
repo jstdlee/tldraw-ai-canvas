@@ -31,7 +31,7 @@ export class RouterNodeDefinition extends NodeDefinition<RouterNode> {
 	heading = 'Router'
 	hidden = true as const
 	icon = <RouterIcon />
-	category = 'utility'
+	category = 'logic'
 	getDefault(): RouterNode {
 		return {
 			type: 'router',

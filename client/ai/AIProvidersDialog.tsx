@@ -20,8 +20,6 @@ const CAPABILITY_HELP: Record<ModelCapability, string> = {
 	agent: 'Canvas agent (edits shapes). Needs a strong model that follows JSON well.',
 	chat: 'Chat and text nodes',
 	vision: 'Reads images (chat with sketches, describe image)',
-	image: 'Generates images',
-	upscale: 'Upscales images',
 }
 
 function uniqueId(base: string, taken: string[]) {
@@ -319,16 +317,6 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 														title={m.model}
 														onChange={(e) => updateModel(m.key, { label: e.target.value })}
 													/>
-													{provider.kind === 'comfyui' && m.capabilities.includes('image') && (
-														<details className="ai-comfy">
-															<summary>Custom workflow</summary>
-															<textarea
-																placeholder='Optional: ComfyUI "Save (API)" JSON with {{prompt}}, {{negative}}, {{seed}}, {{steps}}, {{cfg}}, {{width}}, {{height}}, {{image}}, {{denoise}}, {{model}}'
-																value={m.comfyWorkflow ?? ''}
-																onChange={(e) => updateModel(m.key, { comfyWorkflow: e.target.value || undefined })}
-															/>
-														</details>
-													)}
 												</td>
 												{MODEL_CAPABILITIES.map((cap) => (
 													<td key={cap} className="ai-center">

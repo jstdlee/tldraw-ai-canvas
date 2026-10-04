@@ -35,6 +35,7 @@ import { Port } from '../ports/Port'
 import { getNodeOutputPortInfo, getNodePorts } from './nodePorts'
 import { getNodeDefinition, getNodeHeightPx, getNodeWidthPx, NodeBody, NodeType } from './nodeTypes'
 import { resizeNode } from './resizeNode'
+import { unpack } from '../subgraph'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../placeOnCanvas'
 import { NodeValue, STOP_EXECUTION } from './types/shared'
 
@@ -42,7 +43,16 @@ const NODE_TYPE = 'node'
 
 declare module 'tldraw' {
 	export interface TLGlobalShapePropsMap {
-		[NODE_TYPE]: { node: NodeType; isOutOfDate: boolean }
+		[NODE_TYPE]: {
+			node: NodeType
+			isOutOfDate: boolean
+			/** User-set width (resize). */
+			w?: number
+			/** Extra body height added by resizing. */
+			extraH?: number
+			/** Show only the header and footer. */
+			collapsed?: boolean
+		}
 	}
 }
 
@@ -53,6 +63,9 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 	static override props: RecordProps<NodeShape> = {
 		node: NodeType,
 		isOutOfDate: T.boolean,
+		w: T.number.optional(),
+		extraH: T.number.optional(),
+		collapsed: T.boolean.optional(),
 	}
 
 	getDefaultProps(): NodeShape['props'] {
@@ -65,8 +78,12 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 	override canEdit(_shape: NodeShape) {
 		return false
 	}
+	override onDoubleClick(shape: NodeShape) {
+		// Double-click a packed group to open it.
+		if (shape.props.node.type === 'subgraph') unpack(this.editor, shape.id)
+	}
 	override canResize(shape: NodeShape) {
-		return getNodeDefinition(this.editor, shape.props.node).canResizeNode
+		return !shape.props.collapsed
 	}
 	override hideResizeHandles(shape: NodeShape) {
 		return !this.canResize(shape)
@@ -148,7 +165,20 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 				},
 			}
 		}
-		return resizeBox(shape, info)
+		// Any other node: free width, and extra height for its result area.
+		const initial = info.initialShape as NodeShape
+		const prevW = getNodeWidthPx(this.editor, initial)
+		const prevH = getNodeHeightPx(this.editor, initial)
+		const baseH = prevH - (initial.props.extraH ?? 0)
+		const newW = Math.max(220, Math.round(prevW * Math.abs(info.scaleX)))
+		const newH = Math.round(prevH * Math.abs(info.scaleY))
+		// resizeBox works on w/h props; give it the node's current box to get the new position.
+		const asBox = (s: NodeShape) => ({ ...s, props: { ...s.props, w: prevW, h: prevH } }) as any
+		const resized = resizeBox(asBox(shape), { ...info, initialShape: asBox(initial) })
+		return {
+			...resized,
+			props: { ...shape.props, w: newW, extraH: Math.max(0, newH - baseH) },
+		}
 	}
 
 	component(shape: NodeShape) {
@@ -197,6 +227,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 			className={classNames('NodeShape', {
 				NodeShape_executing: isExecuting,
 				NodeShape_capture: shape.props.node.type === 'capture',
+				NodeShape_collapsed: !!shape.props.collapsed,
 			})}
 			onContextMenu={(e) => {
 				const target = e.target as HTMLElement
@@ -244,9 +275,82 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 					{isExecuting ? <StopIcon /> : <PlayIcon />}
 					<span>{isExecuting ? 'Stop' : 'Play from here'}</span>
 				</button>
+				<NodeFooterTools shape={shape} />
 				<NodeFooterMenu shape={shape} />
 			</div>
 		</HTMLContainer>
+	)
+}
+
+/** Copy a node value: images as image data (fallback: URL), everything else as text. */
+async function copyValue(value: string) {
+	if (/^(data:image\/|\/api\/images\/)/.test(value)) {
+		try {
+			const blob = await (await fetch(value)).blob()
+			const png = blob.type === 'image/png' ? blob : await toPng(blob)
+			await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+			return
+		} catch {
+			// Fall through to copying the URL.
+		}
+	}
+	await navigator.clipboard.writeText(value)
+}
+
+async function toPng(blob: Blob): Promise<Blob> {
+	const bitmap = await createImageBitmap(blob)
+	const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+	canvas.getContext('2d')!.drawImage(bitmap, 0, 0)
+	return canvas.convertToBlob({ type: 'image/png' })
+}
+
+/** Bottom-right icons on every node: copy the output, collapse / expand. */
+function NodeFooterTools({ shape }: { shape: NodeShape }) {
+	const editor = useEditor()
+	const value = useValue(
+		'primary output',
+		() => {
+			const info = getNodeOutputPortInfo(editor, shape.id)
+			for (const out of Object.values(info)) {
+				const v = out.multi ? out.value[0] : out.value
+				if (v != null && v !== STOP_EXECUTION && v !== '') return String(v)
+			}
+			return null
+		},
+		[editor, shape.id]
+	)
+	const collapsed = !!shape.props.collapsed
+	return (
+		<div className="NodeFooterTools" onPointerDown={(e) => e.stopPropagation()}>
+			<button
+				className="NodeFooterTools-button"
+				title={value ? 'Copy output' : 'No output yet'}
+				disabled={!value}
+				onClick={async (e) => {
+					if (!value) return
+					await copyValue(value)
+					const button = e.currentTarget
+					button.classList.add('is-done')
+					setTimeout(() => button.classList.remove('is-done'), 900)
+				}}
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+					<rect x="9" y="9" width="12" height="12" rx="2" />
+					<path d="M5 15V5a2 2 0 0 1 2-2h10" />
+				</svg>
+			</button>
+			<button
+				className="NodeFooterTools-button"
+				title={collapsed ? 'Expand node' : 'Collapse node'}
+				onClick={() =>
+					editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { collapsed: !collapsed } })
+				}
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+					{collapsed ? <path d="m6 9 6 6 6-6" /> : <path d="m18 15-6-6-6 6" />}
+				</svg>
+			</button>
+		</div>
 	)
 }
 

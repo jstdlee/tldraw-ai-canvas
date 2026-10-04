@@ -8,6 +8,19 @@ import {
 import { NodeShape } from '../nodes/NodeShapeUtil'
 import { executeNode } from '../nodes/nodeTypes'
 import { ExecutionResult, PipelineValue, STOP_EXECUTION } from '../nodes/types/shared'
+import { getArrowInputs, writeArrowOutputs } from './arrows'
+
+export interface ExecutionGraphOptions {
+	/** Only these nodes may run (loop bodies, packed groups). */
+	allowed?: Set<TLShapeId>
+	/** Fixed input values, keyed `${nodeId}|${portId}` (loop item, packed-group inputs). */
+	overrides?: Map<string, PipelineValue>
+}
+
+/** True when the connection ends on a loop-back (feedback) port. */
+function isFeedbackEnd(editor: Editor, nodeId: TLShapeId, portId: string) {
+	return !!getNodePorts(editor, nodeId)[portId]?.feedback
+}
 
 interface PendingExecutionGraphNode {
 	readonly state: 'waiting' | 'executing'
@@ -28,13 +41,15 @@ export class ExecutionGraph {
 
 	constructor(
 		private readonly editor: Editor,
-		private readonly startingNodeIds: Set<TLShapeId>
+		private readonly startingNodeIds: Set<TLShapeId>,
+		private readonly options: ExecutionGraphOptions = {}
 	) {
 		const toVisit = Array.from(startingNodeIds)
 
 		while (toVisit.length > 0) {
 			const nodeId = toVisit.pop()!
 			if (this.nodesById.has(nodeId)) continue
+			if (options.allowed && !options.allowed.has(nodeId)) continue
 
 			const node = this.editor.getShape(nodeId)
 			if (!node || !this.editor.isShapeOfType(node, 'node')) continue
@@ -49,9 +64,17 @@ export class ExecutionGraph {
 
 			for (const connection of Object.values(connections)) {
 				if (!connection || connection.terminal !== 'start') continue
+				// Don't follow wires into loop-back ports: that would close the loop.
+				if (isFeedbackEnd(editor, connection.connectedShapeId, connection.connectedPortId)) continue
 				toVisit.push(connection.connectedShapeId)
 			}
 		}
+	}
+
+	/** Outputs of a node that ran in this graph. */
+	getOutputs(nodeId: TLShapeId): ExecutionResult | undefined {
+		const node = this.nodesById.get(nodeId)
+		return node?.state === 'executed' ? node.outputs : undefined
 	}
 
 	private state: 'waiting' | 'executing' | 'stopped' = 'waiting'
@@ -87,8 +110,11 @@ export class ExecutionGraph {
 		const ports = getNodePorts(this.editor, nodeId)
 		const sortedConnections = [...node.connections].sort((a, b) => a.order - b.order)
 
+		const overrides = this.options.overrides
 		for (const connection of sortedConnections) {
 			if (!connection || connection.terminal !== 'end') continue
+			if (ports[connection.ownPortId]?.feedback) continue
+			if (overrides?.has(`${nodeId}|${connection.ownPortId}`)) continue
 
 			const dependency = this.nodesById.get(connection.connectedShapeId)
 			let value: PipelineValue | STOP_EXECUTION
@@ -127,6 +153,20 @@ export class ExecutionGraph {
 			}
 		}
 
+		if (overrides) {
+			for (const [key, value] of overrides) {
+				const [id, portId] = key.split('|')
+				if (id === nodeId) inputs[portId] = value
+			}
+		}
+
+		// Values from tldraw arrows (shape → node), for ports without a wire.
+		for (const [portId, value] of Object.entries(await getArrowInputs(this.editor, nodeId))) {
+			if (!(portId in inputs)) inputs[portId] = value
+		}
+		if (this.state !== 'executing') return
+		if (this.nodesById.get(nodeId)?.state !== 'waiting') return
+
 		this.nodesById.set(nodeId, {
 			...node,
 			state: 'executing',
@@ -150,9 +190,15 @@ export class ExecutionGraph {
 			outputs,
 		})
 
+		// Results to the canvas through tldraw arrows (node → shape).
+		await writeArrowOutputs(this.editor, nodeId, outputs).catch((e) =>
+			console.warn('Writing node output to canvas failed:', e)
+		)
+
 		const executingDependentPromises = []
 		for (const connection of Object.values(node.connections)) {
 			if (!connection || connection.terminal !== 'start') continue
+			if (isFeedbackEnd(this.editor, connection.connectedShapeId, connection.connectedPortId)) continue
 
 			executingDependentPromises.push(this.executeNodeIfReady(connection.connectedShapeId))
 		}

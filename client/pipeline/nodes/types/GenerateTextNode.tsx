@@ -51,7 +51,7 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 	title = 'Generate text'
 	heading = 'Generate text'
 	icon = <GenerateTextIcon />
-	category = 'process'
+	category = 'text'
 	resultKeys = ['lastResultText'] as const
 	getDefault(): GenerateTextNode {
 		return {

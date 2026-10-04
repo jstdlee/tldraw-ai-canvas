@@ -1,6 +1,6 @@
 import classNames from 'classnames'
 import { useCallback } from 'react'
-import { Editor, T, TldrawUiButton, useEditor, useValue } from 'tldraw'
+import { Editor, T, useEditor, useValue } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiChatStream, ChatMessage } from '../../api/pipelineApi'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
@@ -68,7 +68,7 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 	title = 'Chat message'
 	heading = 'Chat'
 	icon = <GenerateTextIcon />
-	category = 'process'
+	category = 'text'
 	resultKeys = ['assistantMessage', 'error'] as const
 	getDefault(): ChatNode {
 		return {
@@ -278,9 +278,21 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 						if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend()
 					}}
 				/>
-				<TldrawUiButton type="primary" onClick={handleSend} onPointerDown={editor.markEventAsHandled}>
-					{busy ? '…' : 'Send'}
-				</TldrawUiButton>
+				<button
+					className="ChatNode-send"
+					title="Send (Ctrl+Enter)"
+					disabled={busy}
+					onPointerDown={editor.markEventAsHandled}
+					onClick={handleSend}
+				>
+					{busy ? (
+						<span>…</span>
+					) : (
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+							<path d="M12 19V5M5 12l7-7 7 7" />
+						</svg>
+					)}
+				</button>
 			</div>
 			<div
 				className={classNames('GenerateTextNode-result', 'ChatNode-reply', {

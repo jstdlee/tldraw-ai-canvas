@@ -45,19 +45,27 @@ export function OnCanvasNodePicker() {
 	return (
 		<OnCanvasNodePickerDialog onClose={onClose}>
 			<TldrawUiMenuGroup id="inputs">
-				<OnCanvasNodePickerItem definition={nodeDefs.model} onClose={onClose} />
 				<OnCanvasNodePickerItem definition={nodeDefs.prompt} onClose={onClose} />
 				<OnCanvasNodePickerItem definition={nodeDefs.load_image} onClose={onClose} />
 			</TldrawUiMenuGroup>
-			<TldrawUiMenuGroup id="process">
-				<OnCanvasNodePickerItem definition={nodeDefs.generate} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.controlnet} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.blend} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.adjust} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.prompt_concat} onClose={onClose} />
+			<TldrawUiMenuGroup id="text">
+				<OnCanvasNodePickerItem definition={nodeDefs.text_ai} onClose={onClose} />
+				<OnCanvasNodePickerItem definition={nodeDefs.text_tool} onClose={onClose} />
+				<OnCanvasNodePickerItem definition={nodeDefs.chat} onClose={onClose} />
+			</TldrawUiMenuGroup>
+			<TldrawUiMenuGroup id="image">
+				<OnCanvasNodePickerItem definition={nodeDefs.crop} onClose={onClose} />
+				<OnCanvasNodePickerItem definition={nodeDefs.image_resize} onClose={onClose} />
+				<OnCanvasNodePickerItem definition={nodeDefs.image_filter} onClose={onClose} />
+			</TldrawUiMenuGroup>
+			<TldrawUiMenuGroup id="logic">
+				<OnCanvasNodePickerItem definition={nodeDefs.if} onClose={onClose} />
+				<OnCanvasNodePickerItem definition={nodeDefs.for_each} onClose={onClose} />
+				<OnCanvasNodePickerItem definition={nodeDefs.code} onClose={onClose} />
 			</TldrawUiMenuGroup>
 			<TldrawUiMenuGroup id="output">
-				<OnCanvasNodePickerItem definition={nodeDefs.preview} onClose={onClose} />
+				<OnCanvasNodePickerItem definition={nodeDefs.output} onClose={onClose} />
+				<OnCanvasNodePickerItem definition={nodeDefs.save} onClose={onClose} />
 			</TldrawUiMenuGroup>
 		</OnCanvasNodePickerDialog>
 	)

@@ -91,6 +91,8 @@ const nodeInputPortValuesCache = createComputedCache(
 		const values: InfoValues = {}
 		for (const connection of sorted) {
 			if (!connection || connection.terminal !== 'end') continue
+			// Loop-back ports (For each "Result") would make this lookup go round forever.
+			if (ports[connection.ownPortId]?.feedback) continue
 
 			const connectedShapeOutputs = getNodeOutputPortInfo(editor, connection.connectedShapeId)
 			if (!connectedShapeOutputs) {
@@ -145,7 +147,9 @@ const nodeOutputPortInfoCache = createComputedCache(
 	'node output port info',
 	(editor: Editor, node: NodeShape): InfoValues => {
 		const inputs = getNodeInputPortValues(editor, node)
-		if (Object.values(inputs).some(hasStopExecution)) {
+		const nodePorts = getNodePorts(editor, node)
+		const blocking = Object.entries(inputs).filter(([portId]) => !nodePorts[portId]?.feedback)
+		if (blocking.some(([, input]) => hasStopExecution(input))) {
 			const ports = getNodePorts(editor, node)
 			return Object.fromEntries(
 				Object.values(ports)

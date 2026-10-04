@@ -95,7 +95,8 @@ export const HttpNode = T.object({
 	error: T.string.nullable(),
 })
 
-const HTTP_HEADERS_HEIGHT_PX = 52
+const HTTP_HEADERS_HEIGHT_PX = 90
+const HTTP_BODY_HEIGHT_PX = 110
 const HTTP_RESULT_HEIGHT_PX = 140
 
 export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
@@ -121,7 +122,7 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 		}
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 5 + HTTP_HEADERS_HEIGHT_PX + HTTP_RESULT_HEIGHT_PX
+		return NODE_ROW_HEIGHT_PX * 5 + HTTP_HEADERS_HEIGHT_PX + HTTP_BODY_HEIGHT_PX + HTTP_RESULT_HEIGHT_PX
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
@@ -192,27 +193,13 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 					/>
 				</NodeRow>
 			)}
-			{bodyConnected || !needsBody ? (
-				<PortRow
-					shapeId={shape.id}
-					portId="body"
-					label="Body"
-					dataType="any"
-					hint={needsBody ? 'not connected' : `not used by ${node.method}`}
-				/>
-			) : (
-				<NodeRow>
-					<PortDot shapeId={shape.id} portId="body" />
-					<input
-						className="NodeField-input"
-						placeholder='Body, e.g. {"q": "hello"}'
-						value={node.body}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ body: e.target.value })}
-					/>
-				</NodeRow>
-			)}
+			<PortRow
+				shapeId={shape.id}
+				portId="body"
+				label="Body"
+				dataType="any"
+				hint={bodyConnected ? '' : needsBody ? 'or type it below' : `not used by ${node.method}`}
+			/>
 			<NodeRow>
 				<span className="NodeInputRow-label">Method</span>
 				<select
@@ -228,12 +215,23 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 			</NodeRow>
 			<div className="NodeField-block" style={{ height: HTTP_HEADERS_HEIGHT_PX }}>
 				<textarea
-					className="NodeField-textarea"
-					placeholder={'Headers (optional), one per line:\nAuthorization: Bearer …'}
+					className="NodeField-textarea is-mono"
+					placeholder={'Headers (optional), one per line:\nAuthorization: Bearer …\nAccept: application/json'}
 					value={node.headers}
 					onPointerDown={stopEvent}
 					onKeyDown={stopEvent}
 					onChange={(e) => set({ headers: e.target.value })}
+				/>
+			</div>
+			<div className="NodeField-block" style={{ height: HTTP_BODY_HEIGHT_PX }}>
+				<textarea
+					className="NodeField-textarea is-mono"
+					placeholder={needsBody ? 'Body (JSON or text), e.g.\n{\n  "q": "hello"\n}' : `${node.method} sends no body`}
+					disabled={!needsBody || bodyConnected}
+					value={bodyConnected ? '(from the Body input)' : node.body}
+					onPointerDown={stopEvent}
+					onKeyDown={stopEvent}
+					onChange={(e) => set({ body: e.target.value })}
 				/>
 			</div>
 			<NodeRow>

@@ -34,6 +34,7 @@
 		"react-dom": "^19.2.1",
 		"react-markdown": "^10.1.0",
 		"remark-gfm": "^4.0.1",
+		"sucrase": "^3.35.1",
 		"tldraw": "5.5.2",
 		"tsx": "^4.20.0",
 		"zod": "^4.1.8"

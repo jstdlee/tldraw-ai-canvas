@@ -5,7 +5,6 @@ import {
 	defaultHandleExternalTextContent,
 	Editor,
 	getHashForString,
-	renderPlaintextFromRichText,
 	TLAsset,
 	TLShape,
 	TLShapeId,
@@ -14,30 +13,13 @@ import {
 import { apiGenerateText, apiHttp } from '../pipeline/api/pipelineApi'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../pipeline/placeOnCanvas'
 import { isMermaid, looksLikeMarkdown } from '../../shared/clipText'
+import { shapeText } from './shapeText'
+
+export { shapeText }
 
 // ---------------------------------------------------------------------------
 // Reading the selection
 // ---------------------------------------------------------------------------
-
-/** Plain text of one shape (text, note, geo label, arrow label, clips, nodes). */
-export function shapeText(editor: Editor, shape: TLShape): string {
-	const props = shape.props as Record<string, any>
-	if (props.richText) return renderPlaintextFromRichText(editor, props.richText)
-	if (shape.type === 'markdown') return props.md ?? ''
-	if (shape.type === 'mermaid') return props.code ?? ''
-	if (shape.type === 'bookmark') {
-		const asset = props.assetId ? (editor.getAsset(props.assetId) as TLAsset | undefined) : undefined
-		const p = asset?.props as Record<string, string> | undefined
-		return [p?.title, p?.description, props.url].filter(Boolean).join('\n')
-	}
-	if (shape.type === 'node') {
-		const node = props.node ?? {}
-		return [node.text, node.userMessage, node.assistantMessage, node.lastResultText, node.lastText]
-			.filter((v) => typeof v === 'string' && v)
-			.join('\n')
-	}
-	return ''
-}
 
 /** Text of the selection, top-to-bottom then left-to-right; includes children of frames/groups. */
 export function selectionText(editor: Editor): string {

@@ -11,6 +11,7 @@ import {
 	useValue,
 } from 'tldraw'
 import { executionState, startExecution, stopExecution } from '../execution/executionState'
+import { isPacked } from '../subgraph'
 import { getNodePortConnections } from '../nodes/nodePorts'
 import { NodeShape } from '../nodes/NodeShapeUtil'
 import { PlayIcon } from './icons/PlayIcon'
@@ -43,7 +44,8 @@ function findPipelineRegions(editor: Editor): PipelineRegion[] {
 	}
 
 	for (const node of editor.getCurrentPageShapes()) {
-		if (editor.isShapeOfType(node, 'node')) {
+		// Nodes packed into a group are hidden; the packed node stands in for them.
+		if (editor.isShapeOfType(node, 'node') && !isPacked(node)) {
 			visit(node)
 		}
 	}

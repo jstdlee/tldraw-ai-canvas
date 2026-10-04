@@ -41,7 +41,7 @@ export class PromptConcatNodeDefinition extends NodeDefinition<PromptConcatNode>
 	title = 'Concat'
 	heading = 'Prompt concat'
 	icon = <PromptConcatIcon />
-	category = 'process'
+	category = 'text'
 	getDefault(): PromptConcatNode {
 		return {
 			type: 'prompt_concat',

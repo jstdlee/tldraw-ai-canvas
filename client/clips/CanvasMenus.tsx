@@ -28,6 +28,7 @@ import {
 } from './canvasFeatures'
 import { $findOpen } from './FindBar'
 import { $imageEditorTarget } from './ImageEditor'
+import { packSelection, unpack } from '../pipeline/subgraph'
 
 export const MarkdownIcon = (
 	<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -77,6 +78,13 @@ export function canvasActionOverrides(
 		...a('fetch-page', 'Web page → Markdown…', () => fetchPageAsMarkdown(editor, notify)),
 		...a('new-markdown', 'New Markdown clip', () => createClipAtCenter(editor, 'markdown'), '?m'),
 		...a('new-mermaid', 'New Mermaid diagram', () => createClipAtCenter(editor, 'mermaid'), '?g'),
+		...a('pack-nodes', 'Pack into one node', async () => {
+			if (!(await packSelection(editor))) notify('Select at least one node to pack', 'warning')
+		}, '$!p'),
+		...a('unpack-node', 'Unpack', () => {
+			const s = editor.getOnlySelectedShape()
+			if (s?.type === 'node' && (s.props as any).node?.type === 'subgraph') unpack(editor, s.id)
+		}),
 	}
 }
 
@@ -85,6 +93,15 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 	const editor = useEditor()
 	const hasSelection = useValue('has selection', () => editor.getSelectedShapeIds().length > 0, [editor])
 	const isImage = useValue('is image', () => !!selectedImage(editor), [editor])
+	const hasNodes = useValue('has nodes', () => editor.getSelectedShapes().some((s) => s.type === 'node'), [editor])
+	const isPackedNode = useValue(
+		'is packed node',
+		() => {
+			const s = editor.getOnlySelectedShape()
+			return s?.type === 'node' && (s.props as any).node?.type === 'subgraph'
+		},
+		[editor]
+	)
 	return (
 		<DefaultContextMenu {...props}>
 			{isImage && (
@@ -93,6 +110,11 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 					<TldrawUiMenuActionItem actionId="ai-describe-image" />
 					<TldrawUiMenuActionItem actionId="ai-extract-text" />
 					<TldrawUiMenuActionItem actionId="image-to-pipeline" />
+				</TldrawUiMenuGroup>
+			)}
+			{(hasNodes || isPackedNode) && (
+				<TldrawUiMenuGroup id="pack-tools">
+					{isPackedNode ? <TldrawUiMenuActionItem actionId="unpack-node" /> : <TldrawUiMenuActionItem actionId="pack-nodes" />}
 				</TldrawUiMenuGroup>
 			)}
 			{hasSelection ? (

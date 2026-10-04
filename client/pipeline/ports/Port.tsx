@@ -24,6 +24,11 @@ export interface ShapePort extends VecModel {
 	dataType: PortDataType
 	/** When true, this input port accepts multiple simultaneous connections. */
 	multi?: boolean
+	/**
+	 * Loop-back input (e.g. For each "Result"): the normal run ignores it, so a
+	 * loop body can feed back into the node without a cycle.
+	 */
+	feedback?: boolean
 }
 
 /**
@@ -57,7 +62,8 @@ export function Port({ shapeId, portId }: { shapeId: TLShapeId; portId: PortId }
 			const { eligiblePorts } = portState.get(editor)
 			if (!eligiblePorts) return false
 			if (eligiblePorts.terminal !== port.terminal) return false
-			if (eligiblePorts.excludeNodes?.has(shapeId)) return false
+			// Loop-back ports may close a loop on purpose.
+			if (eligiblePorts.excludeNodes?.has(shapeId) && !port?.feedback) return false
 			// type compatibility: 'any' matches everything, otherwise types must match
 			if (
 				eligiblePorts.dataType &&

@@ -1,0 +1,176 @@
+/**
+ * Image operations that run in the browser (canvas 2D). Results are stored in
+ * the local image store (/api/images/…), so documents stay small.
+ */
+
+export function loadImageElement(src: string): Promise<HTMLImageElement> {
+	return new Promise((resolve, reject) => {
+		const img = new Image()
+		img.crossOrigin = 'anonymous'
+		img.onload = () => resolve(img)
+		img.onerror = () => reject(new Error('Cannot load the image'))
+		img.src = src
+	})
+}
+
+export async function canvasToStoredUrl(canvas: HTMLCanvasElement, type = 'image/png'): Promise<string> {
+	const blob = await new Promise<Blob>((resolve, reject) =>
+		canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Export failed'))), type, 0.92)
+	)
+	return storeBlob(blob)
+}
+
+export async function storeBlob(blob: Blob): Promise<string> {
+	const id = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+	const res = await fetch(`/api/images/${id}`, {
+		method: 'POST',
+		headers: { 'Content-Type': blob.type || 'image/png' },
+		body: blob,
+	})
+	if (!res.ok) throw new Error(`Saving the image failed (${res.status})`)
+	return `/api/images/${id}`
+}
+
+export interface CropRect {
+	/** All in percent of the image (0–100). */
+	x: number
+	y: number
+	w: number
+	h: number
+}
+
+export async function cropImage(src: string, rect: CropRect): Promise<string> {
+	const img = await loadImageElement(src)
+	const sx = Math.round((img.naturalWidth * clampPct(rect.x)) / 100)
+	const sy = Math.round((img.naturalHeight * clampPct(rect.y)) / 100)
+	const sw = Math.max(1, Math.min(img.naturalWidth - sx, Math.round((img.naturalWidth * clampPct(rect.w)) / 100)))
+	const sh = Math.max(1, Math.min(img.naturalHeight - sy, Math.round((img.naturalHeight * clampPct(rect.h)) / 100)))
+	const canvas = document.createElement('canvas')
+	canvas.width = sw
+	canvas.height = sh
+	canvas.getContext('2d')!.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
+	return canvasToStoredUrl(canvas)
+}
+
+/** Crop to an aspect ratio (e.g. 1 for square), centred. */
+export function centeredAspectRect(imgW: number, imgH: number, aspect: number): CropRect {
+	const current = imgW / imgH
+	if (current > aspect) {
+		const w = (aspect / current) * 100
+		return { x: (100 - w) / 2, y: 0, w, h: 100 }
+	}
+	const h = (current / aspect) * 100
+	return { x: 0, y: (100 - h) / 2, w: 100, h }
+}
+
+export async function resizeImage(
+	src: string,
+	opts: { mode: 'scale' | 'width' | 'height' | 'fit'; value: number; value2?: number }
+): Promise<string> {
+	const img = await loadImageElement(src)
+	const iw = img.naturalWidth
+	const ih = img.naturalHeight
+	let w = iw
+	let h = ih
+	switch (opts.mode) {
+		case 'scale':
+			w = (iw * opts.value) / 100
+			h = (ih * opts.value) / 100
+			break
+		case 'width':
+			w = opts.value
+			h = (ih * opts.value) / iw
+			break
+		case 'height':
+			h = opts.value
+			w = (iw * opts.value) / ih
+			break
+		case 'fit': {
+			const k = Math.min(opts.value / iw, (opts.value2 ?? opts.value) / ih)
+			w = iw * k
+			h = ih * k
+			break
+		}
+	}
+	const canvas = document.createElement('canvas')
+	canvas.width = Math.max(1, Math.round(w))
+	canvas.height = Math.max(1, Math.round(h))
+	const ctx = canvas.getContext('2d')!
+	ctx.imageSmoothingQuality = 'high'
+	ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+	return canvasToStoredUrl(canvas)
+}
+
+export interface ImageFilter {
+	brightness: number
+	contrast: number
+	saturate: number
+	hue: number
+	grayscale: number
+	sepia: number
+	invert: number
+	blur: number
+	rotate: number
+	flipX: boolean
+	flipY: boolean
+}
+
+export const NO_FILTER: ImageFilter = {
+	brightness: 100,
+	contrast: 100,
+	saturate: 100,
+	hue: 0,
+	grayscale: 0,
+	sepia: 0,
+	invert: 0,
+	blur: 0,
+	rotate: 0,
+	flipX: false,
+	flipY: false,
+}
+
+export const FILTER_PRESETS: Record<string, Partial<ImageFilter>> = {
+	None: {},
+	'B & W': { grayscale: 100, contrast: 115 },
+	Vivid: { saturate: 160, contrast: 110 },
+	Warm: { sepia: 35, saturate: 120 },
+	Cool: { hue: 190, saturate: 80 },
+	Faded: { contrast: 80, brightness: 110, saturate: 70 },
+	Sketch: { grayscale: 100, contrast: 180, brightness: 120 },
+	Negative: { invert: 100 },
+	Soft: { blur: 2, brightness: 105 },
+}
+
+export function cssFilter(f: ImageFilter) {
+	return [
+		`brightness(${f.brightness}%)`,
+		`contrast(${f.contrast}%)`,
+		`saturate(${f.saturate}%)`,
+		`hue-rotate(${f.hue}deg)`,
+		`grayscale(${f.grayscale}%)`,
+		`sepia(${f.sepia}%)`,
+		`invert(${f.invert}%)`,
+		f.blur ? `blur(${f.blur}px)` : '',
+	].join(' ')
+}
+
+export async function filterImage(src: string, f: ImageFilter): Promise<string> {
+	const img = await loadImageElement(src)
+	const w = img.naturalWidth
+	const h = img.naturalHeight
+	const turned = f.rotate % 180 !== 0
+	const canvas = document.createElement('canvas')
+	canvas.width = turned ? h : w
+	canvas.height = turned ? w : h
+	const ctx = canvas.getContext('2d')!
+	ctx.filter = cssFilter(f)
+	ctx.translate(canvas.width / 2, canvas.height / 2)
+	ctx.rotate((f.rotate * Math.PI) / 180)
+	ctx.scale(f.flipX ? -1 : 1, f.flipY ? -1 : 1)
+	ctx.drawImage(img, -w / 2, -h / 2, w, h)
+	return canvasToStoredUrl(canvas)
+}
+
+function clampPct(v: number) {
+	return Math.min(100, Math.max(0, Number.isFinite(v) ? v : 0))
+}
