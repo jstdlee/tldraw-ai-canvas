@@ -14,6 +14,13 @@ import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues, getNodePortConnections, NodePortConnection } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import {
+	DEFAULT_LLM_SETTINGS,
+	LlmSettingsFields,
+	LlmSettingsPanel,
+	llmRequestSettings,
+	llmSettingsHeight,
+} from './llmSettings'
+import {
 	ExecutionResult,
 	InfoValues,
 	InputValues,
@@ -41,9 +48,18 @@ export const ChatNode = T.object({
 	assistantMessage: T.string,
 	model: T.string,
 	error: T.string.nullable(),
+	...LlmSettingsFields,
 })
 
 const MESSAGE_HEIGHT_PX = 76
+const EMPTY_TURN: ChatNode = {
+	type: 'chat',
+	userMessage: '',
+	assistantMessage: '',
+	model: '',
+	error: null,
+	...DEFAULT_LLM_SETTINGS,
+}
 const REPLY_HEIGHT_PX = 168
 
 export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
@@ -55,10 +71,17 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 	category = 'process'
 	resultKeys = ['assistantMessage', 'error'] as const
 	getDefault(): ChatNode {
-		return { type: 'chat', userMessage: '', assistantMessage: '', model: '', error: null }
+		return {
+			type: 'chat',
+			userMessage: '',
+			assistantMessage: '',
+			model: '',
+			error: null,
+			...DEFAULT_LLM_SETTINGS,
+		}
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + MESSAGE_HEIGHT_PX + REPLY_HEIGHT_PX
+	getBodyHeightPx(_shape: NodeShape, node: ChatNode) {
+		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node) + MESSAGE_HEIGHT_PX + REPLY_HEIGHT_PX
 	}
 	getPorts(): Record<string, ShapePort> {
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
@@ -124,7 +147,7 @@ export function buildChatHistory(editor: Editor, shape: NodeShape): ChatMessage[
 			// A non-chat node (e.g. a Prompt) feeds text in as an earlier user turn.
 			const value = getNodeInputPortValues(editor, current.id).parent?.value
 			if (typeof value === 'string' && value) {
-				turns.unshift({ ...ChatNodeDefinition.prototype.getDefault(), userMessage: value })
+				turns.unshift({ ...EMPTY_TURN, userMessage: value })
 			}
 			break
 		}
@@ -167,7 +190,7 @@ export async function sendChat(
 
 	updateNode<ChatNode>(editor, shape, (n) => ({ ...n, assistantMessage: '', error: null }))
 	try {
-		const reply = await apiChatStream({ model: node.model || undefined, messages }, (text) => {
+		const reply = await apiChatStream({ model: node.model || undefined, messages, ...llmRequestSettings(node) }, (text) => {
 			const latest = editor.getShape<NodeShape>(shape.id)
 			if (!latest) return
 			updateNode<ChatNode>(editor, latest, (n) => ({ ...n, assistantMessage: text }))
@@ -240,6 +263,7 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 					onChange={(model) => updateNode<ChatNode>(editor, shape, (n) => ({ ...n, model }), false)}
 				/>
 			</NodeRow>
+			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
 			<div className="ChatNode-compose" style={{ height: MESSAGE_HEIGHT_PX }}>
 				<textarea
 					className="ChatNode-input"

@@ -3,7 +3,7 @@ import { Editor, useValue } from 'tldraw'
 import { AtIcon } from '../../shared/icons/AtIcon'
 import { BrainIcon } from '../../shared/icons/BrainIcon'
 import { ChevronDownIcon } from '../../shared/icons/ChevronDownIcon'
-import { getModelLabel, openProvidersDialog, useModels } from '../ai/aiConfig'
+import { getModelLabel, ModelSelect } from '../ai/aiConfig'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
 import { ContextItemTag } from './ContextItemTag'
 import { SelectionTag } from './SelectionTag'
@@ -32,7 +32,6 @@ export function ChatInput({
 	const selectedShapes = useValue('selectedShapes', () => editor.getSelectedShapes(), [editor])
 	const contextItems = useValue('contextItems', () => agent.context.getItems(), [agent])
 	const modelName = useValue('modelName', () => agent.modelName.getModelName(), [agent])
-	const agentModels = useModels('agent')
 	const modelLabel = useValue('model label', () => getModelLabel(modelName || null, 'agent'), [modelName])
 
 	return (
@@ -102,21 +101,11 @@ export function ChatInput({
 							<div className="chat-model-select-label">
 								<BrainIcon /> {modelLabel}
 							</div>
-							<select
-								value={agentModels.some((m) => m.key === modelName) ? modelName : ''}
-								onChange={(e) => {
-									if (e.target.value === '__providers__') return openProvidersDialog()
-									agent.modelName.setModelName(e.target.value)
-								}}
-							>
-								<option value="">Default ({getModelLabel(null, 'agent')})</option>
-								{agentModels.map((model) => (
-									<option key={model.key} value={model.key}>
-										{model.label || model.key}
-									</option>
-								))}
-								<option value="__providers__">AI providers…</option>
-							</select>
+							<ModelSelect
+								capability="agent"
+								value={modelName}
+								onChange={(key) => agent.modelName.setModelName(key)}
+							/>
 							<ChevronDownIcon />
 						</div>
 					</div>

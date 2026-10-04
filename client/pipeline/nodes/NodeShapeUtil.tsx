@@ -35,6 +35,7 @@ import { Port } from '../ports/Port'
 import { getNodeOutputPortInfo, getNodePorts } from './nodePorts'
 import { getNodeDefinition, getNodeHeightPx, getNodeWidthPx, NodeBody, NodeType } from './nodeTypes'
 import { resizeNode } from './resizeNode'
+import { placeImageOnCanvas, placeTextOnCanvas } from '../placeOnCanvas'
 import { NodeValue, STOP_EXECUTION } from './types/shared'
 
 const NODE_TYPE = 'node'
@@ -342,6 +343,20 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 							<TldrawUiDropdownMenuItem>
 								<TldrawUiButton type="menu" onClick={handleDownloadImage}>
 									<TldrawUiButtonLabel>Download image</TldrawUiButtonLabel>
+								</TldrawUiButton>
+							</TldrawUiDropdownMenuItem>
+						)}
+						{imageUrl && (
+							<TldrawUiDropdownMenuItem>
+								<TldrawUiButton type="menu" onClick={() => placeImageOnCanvas(editor, shape, imageUrl)}>
+									<TldrawUiButtonLabel>Place image on canvas</TldrawUiButtonLabel>
+								</TldrawUiButton>
+							</TldrawUiDropdownMenuItem>
+						)}
+						{textResult && (
+							<TldrawUiDropdownMenuItem>
+								<TldrawUiButton type="menu" onClick={() => placeTextOnCanvas(editor, shape, textResult, 'markdown')}>
+									<TldrawUiButtonLabel>Place text on canvas</TldrawUiButtonLabel>
 								</TldrawUiButton>
 							</TldrawUiDropdownMenuItem>
 						)}

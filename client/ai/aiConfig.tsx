@@ -84,8 +84,47 @@ export function getDefaultModel(capability: ModelCapability): ModelConfig | unde
 export function getModelLabel(key: string | null | undefined, capability: ModelCapability) {
 	const config = $aiConfig.get()
 	const model = key ? config?.models.find((m) => m.key === key) : getDefaultModel(capability)
-	if (!model) return key ? `${key} (missing)` : 'No model set'
+	if (!model && key) {
+		const live = $liveModels.get()?.flatMap((p) => p.models).find((m) => m.key === key)
+		return live?.label ?? key.slice(key.indexOf('/') + 1)
+	}
+	if (!model) return 'No model set'
 	return model.label || model.key
+}
+
+export interface LiveModel {
+	key: string
+	model: string
+	label: string
+	capabilities: ModelCapability[]
+}
+
+export interface LiveProviderModels {
+	providerId: string
+	providerName: string
+	error?: string
+	models: LiveModel[]
+}
+
+/** Every model the enabled providers report (their /v1/models), loaded on demand. */
+export const $liveModels = atom<LiveProviderModels[] | null>('live models', null)
+let liveLoading: Promise<void> | null = null
+let liveLoadedAt = 0
+
+export function loadLiveModels(force = false) {
+	if (liveLoading) return liveLoading
+	if (!force && $liveModels.get() && Date.now() - liveLoadedAt < 60_000) return Promise.resolve()
+	liveLoading = fetch('/api/models')
+		.then((res) => readJson<{ providers: LiveProviderModels[] }>(res))
+		.then((data) => {
+			$liveModels.set(data.providers)
+			liveLoadedAt = Date.now()
+		})
+		.catch(() => {})
+		.finally(() => {
+			liveLoading = null
+		})
+	return liveLoading
 }
 
 /** Whether the AI providers dialog is open. */
@@ -113,13 +152,26 @@ export function ModelSelect({
 }) {
 	const models = useModels(capability)
 	const defaultLabel = useValue('default label', () => getModelLabel(null, capability), [capability])
-	const missing = value && !models.some((m) => m.key === value)
+	const live = useValue('live models', () => $liveModels.get(), [])
+	const configured = new Set(models.map((m) => m.key))
+	const liveGroups = (live ?? [])
+		.map((p) => ({
+			...p,
+			models: p.models.filter((m) => m.capabilities.includes(capability) && !configured.has(m.key)),
+		}))
+		.filter((p) => p.models.length > 0)
+	const isLive = liveGroups.some((p) => p.models.some((m) => m.key === value))
+	const missing = value && !configured.has(value) && !isLive
 	return (
 		<select
 			className={className}
-			title={title}
+			title={title ?? (value || 'Default model')}
 			value={value}
-			onPointerDown={(e) => e.stopPropagation()}
+			onFocus={() => loadLiveModels()}
+			onPointerDown={(e) => {
+				e.stopPropagation()
+				loadLiveModels()
+			}}
 			onChange={(e) => {
 				if (e.target.value === '__providers__') {
 					openProvidersDialog()
@@ -134,7 +186,17 @@ export function ModelSelect({
 					{m.label || m.key}
 				</option>
 			))}
-			{missing && <option value={value}>{value} (missing)</option>}
+			{liveGroups.map((p) => (
+				<optgroup key={p.providerId} label={`${p.providerName} — all models`}>
+					{p.models.map((m) => (
+						<option key={m.key} value={m.key}>
+							{m.label === m.model ? m.model : `${m.label} (${m.model})`}
+						</option>
+					))}
+				</optgroup>
+			))}
+			{missing && <option value={value}>{value}</option>}
+			{!live && <option disabled>Loading models from providers…</option>}
 			<option value="__providers__">AI providers…</option>
 		</select>
 	)

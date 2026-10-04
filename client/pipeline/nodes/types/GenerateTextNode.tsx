@@ -13,6 +13,13 @@ import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import {
+	DEFAULT_LLM_SETTINGS,
+	LlmSettingsFields,
+	LlmSettingsPanel,
+	llmRequestSettings,
+	llmSettingsHeight,
+} from './llmSettings'
+import {
 	areAnyInputsOutOfDate,
 	coerceToText,
 	ExecutionResult,
@@ -33,6 +40,7 @@ export const GenerateTextNode = T.object({
 	type: T.literal('generate_text'),
 	model: T.string,
 	lastResultText: T.string.nullable(),
+	...LlmSettingsFields,
 })
 
 const DEFAULT_PROMPT = 'Describe this image in detail.'
@@ -50,11 +58,12 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 			type: 'generate_text',
 			model: '',
 			lastResultText: null,
+			...DEFAULT_LLM_SETTINGS,
 		}
 	}
-	getBodyHeightPx() {
-		// input row + prompt row + model row (44 each) + result area (88 + 8 margin)
-		return NODE_ROW_HEIGHT_PX * 3 + 96
+	getBodyHeightPx(_shape: NodeShape, node: GenerateTextNode) {
+		// input row + prompt row + model row (44 each) + settings + result area (88 + 8 margin)
+		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node) + 96
 	}
 	getPorts(_shape: NodeShape, _node: GenerateTextNode): Record<string, ShapePort> {
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
@@ -94,6 +103,7 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 			input,
 			prompt,
 			model: node.model || undefined,
+			...llmRequestSettings(node),
 		})
 
 		updateNode<GenerateTextNode>(this.editor, shape, (n) => ({
@@ -175,6 +185,7 @@ function GenerateTextNodeComponent({ shape, node }: NodeComponentProps<GenerateT
 					onChange={(model) => updateNode<GenerateTextNode>(editor, shape, (n) => ({ ...n, model }))}
 				/>
 			</NodeRow>
+			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
 			<div
 				className={classNames('GenerateTextNode-result', {
 					'GenerateTextNode-result_loading': shape.props.isOutOfDate,

@@ -11,6 +11,9 @@ import { AdjustNodeDefinition } from './types/AdjustNode'
 import { BlendNodeDefinition } from './types/BlendNode'
 import { CaptureNodeDefinition } from './types/CaptureNode'
 import { ChatNodeDefinition } from './types/ChatNode'
+import { TextAINodeDefinition } from './types/TextAINode'
+import { TextToolNodeDefinition, TextViewNodeDefinition } from './types/TextNodes'
+import { DownloadNodeDefinition, HttpNodeDefinition, SaveNodeDefinition } from './types/WebNodes'
 import { ControlNetNodeDefinition } from './types/ControlNetNode'
 import { GenerateNodeDefinition } from './types/GenerateNode'
 import { GenerateTextNodeDefinition } from './types/GenerateTextNode'
@@ -39,6 +42,12 @@ export const NodeDefinitions = {
 	generate: GenerateNodeDefinition,
 	generate_text: GenerateTextNodeDefinition,
 	chat: ChatNodeDefinition,
+	text_ai: TextAINodeDefinition,
+	text_tool: TextToolNodeDefinition,
+	text_view: TextViewNodeDefinition,
+	http: HttpNodeDefinition,
+	download: DownloadNodeDefinition,
+	save: SaveNodeDefinition,
 	controlnet: ControlNetNodeDefinition,
 	load_image: LoadImageNodeDefinition,
 	preview: PreviewNodeDefinition,

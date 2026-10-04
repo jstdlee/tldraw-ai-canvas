@@ -107,6 +107,15 @@ export function resolveModel(
 ): { model: ModelConfig; provider: ProviderConfig } {
 	const config = loadConfig()
 	let model = key ? config.models.find((m) => m.key === key) : undefined
+	if (!model && key) {
+		// A model picked straight from a provider's live list ("providerId/model"),
+		// not added in the AI providers dialog: use it with default settings.
+		const provider = config.providers.find((p) => key.startsWith(`${p.id}/`))
+		if (provider) {
+			const id = key.slice(provider.id.length + 1)
+			model = { key, providerId: provider.id, model: id, label: id, capabilities: [capability] }
+		}
+	}
 	if (!model) {
 		const fallback = getDefaultModelKey(config, capability)
 		model = config.models.find((m) => m.key === fallback)

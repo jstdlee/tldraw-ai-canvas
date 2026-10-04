@@ -25,7 +25,9 @@ import {
 	toDataUrl,
 	upscaleImage,
 } from './images'
-import { getLanguageModel, getProviderOptions, listProviderModels } from './llm'
+import { downloadUrl, httpRequest, HttpRequestInput, saveContent, unfurl } from './http'
+import { getLanguageModel, getProviderOptions, listProviderModels, ProviderModelInfo } from './llm'
+import { guessCapabilities, ModelCapability } from '../shared/aiConfig'
 
 const PORT = Number(process.env.API_PORT ?? 8790)
 const HOST = process.env.HOST ?? '127.0.0.1'
@@ -85,6 +87,68 @@ app.post('/api/providers/models', async (c) => {
 	return c.json({ models })
 })
 
+/** Live model lists from every enabled provider (cached 60 s), for the model dropdowns. */
+const liveCache = new Map<string, { at: number; models: ProviderModelInfo[] }>()
+app.get('/api/models', async (c) => {
+	const config = loadConfig()
+	const results = await Promise.all(
+		config.providers
+			.filter((p) => p.enabled)
+			.map(async (provider) => {
+				const cacheKey = `${provider.id}|${provider.baseURL}|${provider.kind}`
+				const hit = liveCache.get(cacheKey)
+				let models = hit && Date.now() - hit.at < 60_000 ? hit.models : null
+				let error: string | undefined
+				if (!models) {
+					try {
+						models = await listProviderModels(provider)
+						liveCache.set(cacheKey, { at: Date.now(), models })
+					} catch (e) {
+						error = errorMessage(e)
+						models = []
+					}
+				}
+				return {
+					providerId: provider.id,
+					providerName: provider.name,
+					error,
+					models: models.map((m) => {
+						let caps: ModelCapability[] = guessCapabilities(provider.kind, m.id)
+						if (m.vision !== undefined && caps.includes('chat')) {
+							caps = caps.filter((x) => x !== 'vision')
+							if (m.vision) caps.push('vision')
+						}
+						// Any chat model may drive the agent; the user decides.
+						if (caps.includes('chat') && !caps.includes('agent')) caps.push('agent')
+						return { key: `${provider.id}/${m.id}`, model: m.id, label: m.label ?? m.id, capabilities: caps }
+					}),
+				}
+			})
+	)
+	return c.json({ providers: results })
+})
+
+// --- Web: HTTP request, download, save, link preview -------------------------
+
+app.post('/api/http', async (c) => c.json(await httpRequest((await c.req.json()) as HttpRequestInput)))
+
+app.post('/api/download', async (c) => {
+	const body = (await c.req.json()) as { url: string; fileName?: string }
+	return c.json(await downloadUrl(body.url, body.fileName))
+})
+
+app.post('/api/save', async (c) => {
+	const body = (await c.req.json()) as { content: string; fileName?: string }
+	if (typeof body.content !== 'string' || !body.content) throw new ConfigError('Nothing to save')
+	return c.json(await saveContent(body.content, body.fileName))
+})
+
+app.get('/api/unfurl', async (c) => {
+	const url = c.req.query('url')
+	if (!url) throw new ConfigError('url is required')
+	return c.json(await unfurl(url))
+})
+
 // --- Agent (canvas-editing chat) -------------------------------------------
 
 app.post('/stream', async (c) => {
@@ -133,14 +197,21 @@ function hasImages(messages: ModelMessage[]) {
 }
 
 app.post('/api/chat', async (c) => {
-	const body = (await c.req.json()) as { model?: string; messages: ModelMessage[]; system?: string }
+	const body = (await c.req.json()) as {
+		model?: string
+		messages: ModelMessage[]
+		system?: string
+		temperature?: number | null
+		maxTokens?: number | null
+	}
 	const messages = await inlineImages(body.messages)
 	const { model, provider } = resolveModel(body.model, hasImages(messages) ? 'vision' : 'chat')
 	const result = streamText({
 		model: getLanguageModel(provider, model),
-		system: body.system,
+		system: body.system || undefined,
 		messages,
-		maxOutputTokens: model.maxOutputTokens,
+		...(body.temperature != null ? { temperature: body.temperature } : {}),
+		maxOutputTokens: body.maxTokens || model.maxOutputTokens,
 		providerOptions: getProviderOptions(provider, model),
 		experimental_transform: smoothStream(),
 		abortSignal: c.req.raw.signal,
@@ -164,7 +235,14 @@ app.post('/api/chat', async (c) => {
 
 /** Generate Text node: optional image or text input + prompt -> text. */
 app.post('/api/generate-text', async (c) => {
-	const body = (await c.req.json()) as { input?: string; prompt: string; model?: string }
+	const body = (await c.req.json()) as {
+		input?: string
+		prompt: string
+		model?: string
+		system?: string
+		temperature?: number | null
+		maxTokens?: number | null
+	}
 	if (!body.prompt) throw new ConfigError('prompt is required')
 	const input = body.input != null ? String(body.input) : ''
 	const isImage = /^(data:image\/|\/api\/images\/|https?:\/\/)/.test(input)
@@ -179,8 +257,10 @@ app.post('/api/generate-text', async (c) => {
 	const { model, provider } = resolveModel(body.model, isImage ? 'vision' : 'chat')
 	const { text } = await generateText({
 		model: getLanguageModel(provider, model),
+		system: body.system || undefined,
 		messages: [{ role: 'user', content }],
-		maxOutputTokens: model.maxOutputTokens ?? 2048,
+		...(body.temperature != null ? { temperature: body.temperature } : {}),
+		maxOutputTokens: body.maxTokens || model.maxOutputTokens || 2048,
 		providerOptions: getProviderOptions(provider, model),
 	})
 	return c.json({ text: stripThink(text) })

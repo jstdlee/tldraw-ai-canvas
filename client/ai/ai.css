@@ -426,3 +426,205 @@
 	min-width: 0;
 	max-width: 100%;
 }
+
+/* Canvas clips (Markdown, Mermaid) */
+
+.clip {
+	background: var(--tl-color-panel);
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 8px;
+	box-shadow: var(--tl-shadow-1);
+	overflow: hidden;
+	color: var(--tl-color-text-1);
+	font-family: 'Inter', sans-serif;
+	font-size: 14px;
+	pointer-events: all;
+	display: flex;
+	flex-direction: column;
+}
+
+.clip.is-editing {
+	outline: 2px solid var(--tl-color-selected);
+}
+
+.clip-scroll {
+	flex: 1;
+	overflow: auto;
+	padding: 4px 16px;
+	line-height: 1.5;
+}
+
+.clip-markdown h1 { font-size: 1.5em; margin: 0.4em 0; }
+.clip-markdown h2 { font-size: 1.25em; margin: 0.4em 0; }
+.clip-markdown h3 { font-size: 1.1em; margin: 0.4em 0; }
+.clip-markdown p, .clip-markdown ul, .clip-markdown ol { margin: 0.5em 0; }
+.clip-markdown ul:has(input[type='checkbox']) { list-style: none; padding-left: 0.4em; }
+.clip-markdown input[type='checkbox'] { margin-right: 6px; cursor: pointer; }
+.clip-markdown a { color: var(--tl-color-primary); }
+.clip-markdown code { font-family: monospace; font-size: 0.9em; background: var(--tl-color-muted-2); padding: 0 4px; border-radius: 4px; }
+.clip-markdown pre { background: var(--tl-color-muted-2); padding: 8px; border-radius: 6px; overflow: auto; }
+.clip-markdown pre code { background: none; padding: 0; }
+.clip-markdown table { border-collapse: collapse; }
+.clip-markdown th, .clip-markdown td { border: 1px solid var(--tl-color-divider); padding: 3px 8px; }
+.clip-markdown blockquote { margin: 0.5em 0; padding-left: 10px; border-left: 3px solid var(--tl-color-divider); color: var(--tl-color-text-3); }
+.clip-markdown img { max-width: 100%; }
+
+.clip-editor {
+	flex: 1;
+	width: 100%;
+	box-sizing: border-box;
+	border: none;
+	outline: none;
+	resize: none;
+	padding: 12px 16px;
+	font: inherit;
+	font-size: 13px;
+	line-height: 1.5;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+}
+
+.clip-editor.is-mono {
+	font-family: ui-monospace, monospace;
+	font-size: 12px;
+	flex: 0 0 40%;
+	border-bottom: 1px solid var(--tl-color-divider);
+}
+
+.clip-mermaid-view {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 8px;
+}
+
+.clip-mermaid-svg {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.clip-mermaid-svg svg {
+	max-width: 100%;
+	max-height: 100%;
+	height: auto;
+}
+
+.clip-error {
+	color: var(--tl-color-danger, #e03131);
+	font-size: 11px;
+	white-space: pre-wrap;
+	margin: 0;
+}
+
+.clip-muted {
+	color: var(--tl-color-text-3);
+	font-size: 12px;
+}
+
+/* Image editor */
+
+.img-editor {
+	width: 900px;
+}
+
+.img-editor__body {
+	display: grid;
+	grid-template-columns: 1fr 300px;
+	gap: 16px;
+	min-height: 0;
+}
+
+.img-editor__preview {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 320px;
+	background: repeating-conic-gradient(var(--tl-color-muted-2) 0% 25%, transparent 0% 50%) 50% / 16px 16px;
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.img-editor__canvas {
+	max-width: 100%;
+	max-height: 60vh;
+	object-fit: contain;
+}
+
+.img-editor__controls {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.img-editor__buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.ai-button.is-on {
+	background: var(--tl-color-selected);
+	color: var(--tl-color-selected-contrast);
+}
+
+.img-editor__slider {
+	display: grid;
+	grid-template-columns: 74px 1fr 48px;
+	gap: 8px;
+	align-items: center;
+}
+
+.img-editor__value {
+	text-align: right;
+	color: var(--tl-color-text-3);
+	font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 700px) {
+	.img-editor__body {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Find on canvas */
+
+.find-bar {
+	position: absolute;
+	top: 52px;
+	right: 12px;
+	z-index: 400;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 6px;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 8px;
+	box-shadow: var(--tl-shadow-2);
+	pointer-events: all;
+	font-family: 'Inter', sans-serif;
+	font-size: 12px;
+}
+
+.find-bar input {
+	width: 200px;
+	font: inherit;
+	padding: 5px 8px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 6px;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+}
+
+.find-bar__count {
+	min-width: 36px;
+	text-align: center;
+	color: var(--tl-color-text-3);
+	font-variant-numeric: tabular-nums;
+}

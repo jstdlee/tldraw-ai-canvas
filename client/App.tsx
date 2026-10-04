@@ -4,6 +4,7 @@ import {
 	DefaultMainMenuContent,
 	DefaultToolbar,
 	DefaultToolbarContent,
+	ToolbarItem,
 	Editor,
 	ErrorBoundary,
 	TLComponents,
@@ -50,17 +51,22 @@ import { NodeShapeUtil } from './pipeline/nodes/NodeShapeUtil'
 import { PointingPort } from './pipeline/ports/PointingPort'
 import { TargetAreaTool } from './tools/TargetAreaTool'
 import { TargetShapeTool } from './tools/TargetShapeTool'
+import { canvasActionOverrides, CanvasContextMenu, CanvasToolsMenuGroup, MarkdownIcon, MermaidIcon } from './clips/CanvasMenus'
+import { registerClipHandlers } from './clips/canvasFeatures'
+import { clipShapeUtils, clipTools } from './clips/ClipShapes'
+import { FindBar } from './clips/FindBar'
+import { ImageEditorModal } from './clips/ImageEditor'
 
 // Every tldraw asset (fonts, icons, translations) is bundled, so the app works offline.
 const assetUrls = getAssetUrlsByImport()
 
 // Pipeline nodes + wires (image pipeline / branching chat kits)
-const shapeUtils = [NodeShapeUtil, ConnectionShapeUtil]
+const shapeUtils = [NodeShapeUtil, ConnectionShapeUtil, ...clipShapeUtils]
 const bindingUtils = [ConnectionBindingUtil]
 // Agent highlight overlay + "insert node" handle on wires
 const overlayUtils = [ConnectionCenterHandleOverlayUtil, AgentHighlightOverlayUtil]
 // Agent context pickers
-const tools = [TargetShapeTool, TargetAreaTool]
+const tools = [TargetShapeTool, TargetAreaTool, ...clipTools]
 
 const options: Partial<TldrawOptions> = {
 	actionShortcutsLocation: 'menu',
@@ -122,6 +128,24 @@ function App() {
 							editor.setCurrentTool('target-area')
 						},
 					},
+					markdown: {
+						id: 'markdown',
+						label: 'Markdown clip',
+						icon: MarkdownIcon,
+						kbd: '?m',
+						onSelect() {
+							editor.setCurrentTool('markdown')
+						},
+					},
+					mermaid: {
+						id: 'mermaid',
+						label: 'Mermaid diagram',
+						icon: MermaidIcon,
+						kbd: '?g',
+						onSelect() {
+							editor.setCurrentTool('mermaid')
+						},
+					},
 					'target-shape': {
 						id: 'target-shape',
 						label: 'Pick Shape',
@@ -133,8 +157,9 @@ function App() {
 					},
 				}
 			},
-			actions: (_editor, actions) => ({
+			actions: (editor, actions, helpers) => ({
 				...actions,
+				...canvasActionOverrides(editor, helpers),
 				'ai-providers': {
 					id: 'ai-providers',
 					label: 'AI providers…',
@@ -170,12 +195,14 @@ function App() {
 				<>
 					<OnCanvasNodePicker />
 					<PipelineRegions />
+					<FindBarHost />
 					<SetupBanner />
 				</>
 			),
 			MainMenu: () => (
 				<DefaultMainMenu>
 					<TldrawUiMenuGroup id="ai">
+						<CanvasToolsMenuGroup />
 						<TldrawUiMenuItem
 							id="ai-providers"
 							label="AI providers…"
@@ -201,9 +228,12 @@ function App() {
 			Toolbar: () => (
 				<DefaultToolbar>
 					<DefaultToolbarContent />
+					<ToolbarItem tool="markdown" />
+					<ToolbarItem tool="mermaid" />
 					<TemplatePicker />
 				</DefaultToolbar>
 			),
+			ContextMenu: CanvasContextMenu,
 			SharePanel: () => <PanelToggles panels={panels} toggle={togglePanel} />,
 			HelperButtons: () =>
 				app && (
@@ -245,12 +275,14 @@ function App() {
 							if (!select.children?.[PointingPort.id]) select.addChild(PointingPort)
 							keepConnectionsAtBottom(editor)
 							disableTransparency(editor, ['connection'])
+							registerClipHandlers(editor)
 						}}
 					>
 						<TldrawAgentAppProvider onMount={setApp} onUnmount={handleUnmount} />
 					</Tldraw>
 				</div>
 				<ProvidersModal editor={editor} />
+				<ImageEditorModal editor={editor} />
 				<div className="chat-panel-wrapper">
 					<ErrorBoundary fallback={ChatPanelFallback}>
 						{app && (
@@ -263,6 +295,11 @@ function App() {
 			</div>
 		</TldrawUiToastsProvider>
 	)
+}
+
+function FindBarHost() {
+	const editor = useEditor()
+	return <FindBar editor={editor} />
 }
 
 /** The AI providers dialog, over the whole window (not just the canvas column). */
