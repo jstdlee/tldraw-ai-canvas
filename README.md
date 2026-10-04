@@ -6,7 +6,7 @@ and merges four official tldraw starter kits into one app:
 | From kit | What you get |
 | --- | --- |
 | **Agent** | Chat panel (right). The agent reads the canvas (screenshot + shapes) and draws, moves, labels and arranges shapes. |
-| **Image pipeline** | Typed nodes and wires (left library): prompt → generate → upscale → preview, ControlNet, IP-Adapter, style transfer, blend, adjust, router, iterator, capture. |
+| **Image pipeline** | The typed node-and-wire system (left library). Its AI image-generation nodes were removed; image nodes now run in the browser. |
 | **Branching chat** | **Chat message** node: wire one reply into several children to branch a conversation. |
 | **Chat** | Chat with sketches: wire a **Capture** node (a canvas area) into a Chat node's **Attach** port. |
 
