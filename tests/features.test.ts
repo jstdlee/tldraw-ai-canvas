@@ -30,7 +30,7 @@ describe('text tools', () => {
 		expect(runTextTool('unique', 'x\ny\nx')).toBe('x\ny')
 	})
 	it('counts, cases, slugs, encodes', () => {
-		expect(runTextTool('count', 'one two\nthree')).toBe('3 words, 13 characters, 2 lines')
+		expect(runTextTool('count', 'one two\nthree')).toBe('3 words, 13 characters (11 without spaces), 2 lines, 0 sentences, 1 paragraph')
 		expect(runTextTool('title', 'hello wide world')).toBe('Hello Wide World')
 		expect(runTextTool('slug', 'Héllo, World!')).toBe('hello-world')
 		expect(runTextTool('base64_decode', runTextTool('base64_encode', 'héllo ✓'))).toBe('héllo ✓')

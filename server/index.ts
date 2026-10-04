@@ -18,6 +18,9 @@ import {
 } from './config'
 import { readImage, resolveImage, saveImage, toDataUrl } from './images'
 import { downloadUrl, httpRequest, HttpRequestInput, saveContent, unfurl } from './http'
+import { deleteCustomNode, listCustomNodes, readCustomNode, saveCustomNode } from './customNodes'
+import { decide, JevRequest } from './jev'
+import { NET_TOOLS, NetTool, runNetTool } from './nettools'
 import { getLanguageModel, getProviderOptions, listProviderModels, ProviderModelInfo } from './llm'
 import { guessCapabilities, ModelCapability, ModelConfig } from '../shared/aiConfig'
 
@@ -110,8 +113,9 @@ app.get('/api/models', async (c) => {
 							caps = caps.filter((x) => x !== 'vision')
 							if (m.vision) caps.push('vision')
 						}
-						// Any chat model may drive the agent; the user decides.
+						// Any chat model may drive the agent or answer JEV questions; the user decides.
 						if (caps.includes('chat') && !caps.includes('agent')) caps.push('agent')
+						if (caps.includes('chat') && !caps.includes('jev')) caps.push('jev')
 						return { key: `${provider.id}/${m.id}`, model: m.id, label: m.label ?? m.id, capabilities: caps }
 					}),
 				}
@@ -226,10 +230,28 @@ app.post('/api/chat', async (c) => {
 	})
 })
 
-/** Generate Text node: optional image or text input + prompt -> text. */
+/**
+ * Turn a node input into model content: images stay images; a URL is fetched
+ * (image → image, web page → its readable text); anything else is text.
+ */
+async function inputToContent(input: string): Promise<{ images: { bytes: Uint8Array; mime: string }[]; text: string }> {
+	const value = input.trim()
+	if (/^(data:image\/|\/api\/images\/)/.test(value)) return { images: [await resolveImage(value)], text: '' }
+	if (/^https?:\/\/\S+$/.test(value)) {
+		const page = await httpRequest({ url: value, extractText: true })
+		if (page.imageUrl) return { images: [await resolveImage(page.imageUrl)], text: '' }
+		if (!page.ok) throw new ConfigError(`Fetching ${value} failed: HTTP ${page.status}`)
+		return { images: [], text: `Content of ${value}:\n${page.text.slice(0, 60_000)}` }
+	}
+	return { images: [], text: input }
+}
+
+/** Generate Text / AI text / Summarize nodes: optional input (text, URL, image, frames) + prompt -> text. */
 app.post('/api/generate-text', async (c) => {
 	const body = (await c.req.json()) as {
 		input?: string
+		/** Extra images, e.g. frames taken from a video. */
+		images?: string[]
 		prompt: string
 		model?: string
 		system?: string
@@ -238,26 +260,44 @@ app.post('/api/generate-text', async (c) => {
 		thinking?: string
 	}
 	if (!body.prompt) throw new ConfigError('prompt is required')
-	const input = body.input != null ? String(body.input) : ''
-	const isImage = /^(data:image\/|\/api\/images\/|https?:\/\/)/.test(input)
-	const content: UserContent = []
-	if (input && isImage) {
-		const img = await resolveImage(input)
-		content.push({ type: 'image', image: img.bytes, mediaType: img.mime })
-		content.push({ type: 'text', text: body.prompt })
-	} else {
-		content.push({ type: 'text', text: input ? `Context:\n${input}\n\n${body.prompt}` : body.prompt })
-	}
-	const { model, provider } = resolveModel(body.model, isImage ? 'vision' : 'chat')
-	const { text } = await generateText({
+	const { images, text } = body.input ? await inputToContent(String(body.input)) : { images: [], text: '' }
+	for (const extra of (body.images ?? []).slice(0, 12)) images.push(await resolveImage(extra))
+	const content: UserContent = images.map((img) => ({ type: 'image' as const, image: img.bytes, mediaType: img.mime }))
+	content.push({ type: 'text', text: text ? `Input:\n${text}\n\n${body.prompt}` : body.prompt })
+	const { model, provider } = resolveModel(body.model, images.length ? 'vision' : 'chat')
+	const { text: reply } = await generateText({
 		model: getLanguageModel(provider, model),
 		system: body.system || undefined,
 		messages: [{ role: 'user', content }],
 		...(body.temperature != null ? { temperature: body.temperature } : {}),
-		maxOutputTokens: body.maxTokens || model.maxOutputTokens || 2048,
+		maxOutputTokens: body.maxTokens || model.maxOutputTokens || 4096,
 		providerOptions: getProviderOptions(provider, withThinking(model, body.thinking)),
 	})
-	return c.json({ text: stripThink(text) })
+	return c.json({ text: stripThink(reply) })
+})
+
+// --- Custom nodes (saved packed groups) -------------------------------------
+
+app.get('/api/custom-nodes', (c) => c.json({ nodes: listCustomNodes() }))
+app.get('/api/custom-nodes/:id', (c) => c.json(readCustomNode(c.req.param('id'))))
+app.post('/api/custom-nodes', async (c) => c.json(saveCustomNode(await c.req.json())))
+app.delete('/api/custom-nodes/:id', (c) => {
+	deleteCustomNode(c.req.param('id'))
+	return c.json({ ok: true })
+})
+
+// --- JEV decisions ---------------------------------------------------------------
+
+app.post('/api/jev', async (c) => c.json(await decide((await c.req.json()) as JevRequest)))
+
+// --- Network tools ---------------------------------------------------------------
+
+app.post('/api/nettool', async (c) => {
+	const body = (await c.req.json()) as { tool: NetTool; target?: string; option?: string }
+	if (!NET_TOOLS.includes(body.tool)) throw new ConfigError(`Unknown tool ${body.tool}`)
+	const started = Date.now()
+	const output = await runNetTool(body.tool, body.target ?? '', body.option ?? '')
+	return c.json({ output, ms: Date.now() - started })
 })
 
 // --- Local image store -----------------------------------------------------

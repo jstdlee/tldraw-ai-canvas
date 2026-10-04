@@ -95,6 +95,13 @@ export async function listProviderModels(provider: ProviderConfig): Promise<Prov
 			})
 			return data.data.map((m: any) => ({ id: m.id, label: m.display_name }))
 		}
+		case 'systemone': {
+			// One model behind the API; check it answers.
+			const root = (base ?? 'http://127.0.0.1:8011').replace(/\/v1$/, '')
+			const res = await fetch(`${root}/health`, { signal: AbortSignal.timeout(5000) }).catch(() => null)
+			if (!res) throw new Error(`No System One API at ${root}`)
+			return [{ id: 'julia-1', label: res.ok ? 'julia-1 (ready)' : `julia-1 (health ${res.status})` }]
+		}
 		case 'google': {
 			const data = await json(
 				`${base ?? 'https://generativelanguage.googleapis.com/v1beta'}/models?pageSize=200`,

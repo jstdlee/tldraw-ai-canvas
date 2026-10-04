@@ -6,7 +6,7 @@
  * client only sees `hasApiKey`.
  */
 
-export type ProviderKind = 'openai-compatible' | 'openai' | 'anthropic' | 'google'
+export type ProviderKind = 'openai-compatible' | 'openai' | 'anthropic' | 'google' | 'systemone'
 
 /** What a model can be used for. */
 export type ModelCapability =
@@ -16,8 +16,10 @@ export type ModelCapability =
 	| 'chat'
 	/** Accepts images as input (chat with sketches, describe image). */
 	| 'vision'
+	/** JEV decisions: probabilities for yes/no, choice and score questions. */
+	| 'jev'
 
-export const MODEL_CAPABILITIES: ModelCapability[] = ['agent', 'chat', 'vision']
+export const MODEL_CAPABILITIES: ModelCapability[] = ['agent', 'chat', 'vision', 'jev']
 
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high'
 
@@ -54,6 +56,7 @@ export interface AIDefaults {
 	agent?: string
 	chat?: string
 	vision?: string
+	jev?: string
 }
 
 export interface AIConfig {
@@ -83,28 +86,35 @@ export const PROVIDER_KINDS: Record<ProviderKind, ProviderKindInfo> = {
 		label: 'OpenAI-compatible (Ollama, LM Studio, vLLM, llama.cpp…)',
 		defaultBaseURL: 'http://127.0.0.1:11434/v1',
 		needsApiKey: false,
-		capabilities: ['agent', 'chat', 'vision'],
+		capabilities: ['agent', 'chat', 'vision', 'jev'],
 		local: true,
 	},
 	openai: {
 		label: 'OpenAI',
 		defaultBaseURL: 'https://api.openai.com/v1',
 		needsApiKey: true,
-		capabilities: ['agent', 'chat', 'vision'],
+		capabilities: ['agent', 'chat', 'vision', 'jev'],
 		local: false,
 	},
 	anthropic: {
 		label: 'Anthropic',
 		defaultBaseURL: 'https://api.anthropic.com/v1',
 		needsApiKey: true,
-		capabilities: ['agent', 'chat', 'vision'],
+		capabilities: ['agent', 'chat', 'vision', 'jev'],
 		local: false,
+	},
+	systemone: {
+		label: 'JEV System One API (e.g. Julia-1 /v1/systemone)',
+		defaultBaseURL: 'http://127.0.0.1:8011',
+		needsApiKey: false,
+		capabilities: ['jev'],
+		local: true,
 	},
 	google: {
 		label: 'Google Gemini',
 		defaultBaseURL: 'https://generativelanguage.googleapis.com/v1beta',
 		needsApiKey: true,
-		capabilities: ['agent', 'chat', 'vision'],
+		capabilities: ['agent', 'chat', 'vision', 'jev'],
 		local: false,
 	},
 }
@@ -138,6 +148,10 @@ export const PROVIDER_PRESETS: { label: string; provider: Omit<ProviderConfig, '
 			enabled: true,
 		},
 	},
+	{
+		label: 'JEV / Julia (System One API)',
+		provider: { name: 'JEV', kind: 'systemone', baseURL: 'http://127.0.0.1:8011', enabled: true },
+	},
 	{ label: 'OpenAI', provider: { name: 'OpenAI', kind: 'openai', enabled: true } },
 	{ label: 'Anthropic', provider: { name: 'Anthropic', kind: 'anthropic', enabled: true } },
 	{ label: 'Google Gemini', provider: { name: 'Google', kind: 'google', enabled: true } },
@@ -162,6 +176,7 @@ export function getDefaultModelKey(
  */
 export function guessCapabilities(kind: ProviderKind, model: string): ModelCapability[] {
 	const id = model.toLowerCase()
+	if (kind === 'systemone') return ['jev']
 	// Image generators, embeddings and speech models can't chat.
 	if (/(dall-e|gpt-image|flux|sdxl|stable-diffusion|imagen|embed|whisper|tts|rerank)/.test(id)) return []
 	const caps: ModelCapability[] = ['chat']

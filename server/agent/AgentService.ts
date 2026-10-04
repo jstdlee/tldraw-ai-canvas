@@ -65,7 +65,7 @@ export async function* streamAgentActions(
 		model,
 		...(isAnthropic ? { allowSystemInMessages: true } : { system: systemPrompt }),
 		messages,
-		maxOutputTokens: modelConfig.maxOutputTokens ?? 8192,
+		maxOutputTokens: modelConfig.maxOutputTokens ?? 16384,
 		...(modelConfig.supportsTemperature === false ? {} : { temperature: 0 }),
 		providerOptions: getProviderOptions(provider, modelConfig),
 		abortSignal: signal,

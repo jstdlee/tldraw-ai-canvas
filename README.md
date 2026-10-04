@@ -37,28 +37,56 @@ never receives them.
 | Type | Use for | Offline |
 | --- | --- | --- |
 | OpenAI-compatible | Ollama, LM Studio, vLLM, llama.cpp, Magpie, any `/v1` gateway | yes, when local |
-| OpenAI, Anthropic, Google | chat, vision, agent | no |
-| ComfyUI | image generation (built-in checkpoint graph or your own API-format workflow), upscale | yes |
-| Replicate | image generation, upscale | no |
+| OpenAI, Anthropic, Google | chat, vision, agent, JEV | no |
+| JEV System One API | JEV decisions (Julia-1 and other `/v1/systemone` servers) | yes, when local |
+
+Jobs: *agent, chat, vision, jev*. Tip: the canvas agent needs a model that follows a long JSON
+format; through Magpie, `group/auto-gpt-5-6-luna` works well, while Grok often refuses
+"JSON only" replies.
 
 - **Fetch models** reads the provider's `/v1/models`. When the provider reports input types
   (Magpie does), image-capable models are marked *vision*.
 - Every model dropdown also lists **all live models** of every enabled provider. You can use a
   model without adding it first.
-- Each model has jobs: *agent, chat, vision, image, upscale*. Set a default model per job.
 - Nodes that call a language model have **Model settings**: system prompt, temperature, max tokens.
 
 ## Nodes
 
 | Group | Nodes |
 | --- | --- |
-| Input | Image model, Prompt, Load image, Capture (canvas area → image) |
-| Text | **AI text** (summarize, bullets, translate, rewrite, fix, simplify, keywords, title, extract JSON, classify, Q&A, explain, image prompt, custom) · **Text tools** (template, find & replace, regex, JSON path, split/join, append, count, trim, sort, unique, case, strip HTML, slug, URL / Base64 encode-decode) |
-| Image & chat | Generate, Generate text, Chat message, ControlNet, Blend, Adjust, Upscale, Style transfer, Concat, IP-Adapter, Router, Iterator, Number |
-| Web | **HTTP request** (GET/POST/PUT/PATCH/DELETE, headers, body, web page → readable text, image responses become images) · **Download URL** (saves to `data/downloads`) |
-| Output | Preview, **Text view**, **Save to file** (`data/exports`) |
+| Input | Prompt, Number, Random (number, pick, shuffle, coin, dice, UUID, password, colour), Load image, Camera, Capture (canvas area) |
+| Text & AI | **AI text** (14 jobs), **Summarize** (text, URL, image, video frames), **Text tools** (~65 tools: build, find & extract, clean up, order, case, count & diff, encode & SHA-256, CSV/JSON/Markdown, URL), Generate text, Chat message, Concat |
+| Image (runs in the browser) | Crop, Resize (fit / exact stretch / scale / width / height), Filter (presets, sliders, rotate, flip), **Image tools** (info, convert png/jpeg/webp, pixelate, border, round corners, watermark, pad to square, data URL) |
+| Logic & code | **JEV decision**, If / else, And / Or / Not, For each (per line / separator / paragraph / JSON / regex), Router, **Code** (TypeScript / JavaScript in a worker, AI writes and explains it) |
+| Web | HTTP request, Download URL, **Network tools** (ping, traceroute, dig, DNS, reverse DNS, TCP ports, whois, HTTP headers & redirects, my IPs, subnet calculator, subnet split, IP info) |
+| Output | **Output** (text, Markdown, Mermaid, image, link card, JSON), Save to file |
 
-Each node's ⋮ menu has **Place image / text on canvas**, so results become normal tldraw shapes.
+Every node can be resized, collapsed (⌃ icon) and copied (copy icon, bottom right).
+
+### Wires and arrows
+
+- Node wires connect typed ports. For each has a loop-back **Result** port: wire `item → … → Result`.
+- A **tldraw arrow** from any shape (text, note, Markdown, image, video, link card) to a node feeds
+  that shape in. An arrow from a node to a shape writes the result into it; an arrow that ends on
+  empty canvas creates a shape there and binds to it.
+- Any AI node reads a URL input: web pages are fetched as text, image URLs as images.
+
+### JEV decisions
+
+The JEV node asks a question about a context (often an LLM's output) and returns probabilities:
+yes/no (with yes / no branches), one of several options, or a score. With "filter", an LLM then
+applies the decision to the input text. JEV models come from:
+
+- a **System One API** provider (e.g. Julia-1 `POST /v1/systemone`, default `http://127.0.0.1:8011`), or
+- any chat model (it is asked for calibrated probabilities as JSON).
+
+### Pack, My nodes, files
+
+- Select nodes → right-click **Pack into one node** (Ctrl+Shift+P). The packed node shows a thumbnail,
+  the outside inputs and the final outputs. Double-click to unpack.
+- Right-click a packed node → **Save as my node…**. It appears under **My nodes** in the library
+  (saved in `data/custom-nodes/`), and can be exported / imported as `.node.json`.
+- Main menu → Canvas tools → **Save canvas as JSON** (Ctrl+Shift+S) / **Open canvas JSON…**.
 
 ## Daily canvas features
 
@@ -87,6 +115,10 @@ Each node's ⋮ menu has **Place image / text on canvas**, so results become nor
 | 21 | Show/hide node library and agent chat | Shift+N, Shift+A, or top-right buttons |
 | 22 | Save selected nodes as a reusable template | Template button in the toolbar |
 | 23 | Export PNG/SVG, copy as image, pages, embeds | tldraw main menu |
+| 24 | Text wrap on / off | Right-click a text shape, or Alt+T |
+| 25 | Image keep ratio on / off | Right-click an image, or Alt+R |
+| 26 | Pack nodes / save as my node | Right-click, Ctrl+Shift+P |
+| 27 | Save / open canvas JSON | Ctrl+Shift+S, main menu |
 
 ## Layout
 
@@ -108,6 +140,9 @@ tests/             vitest
 - The server listens on 127.0.0.1 only. It rejects other `Host` names and other web origins.
 - The HTTP, Download and link-card features fetch any http(s) URL that you enter. Use them for
   your own work only.
+- Network tools run `ping`, `tracepath`/`traceroute`, `dig` and `mtr` with `execFile` (no shell),
+  fixed arguments, a time limit, and a target that must be a host name or IP address.
+- Code nodes run in a Web Worker (no access to the page or canvas) with a 15 s limit.
 
 ## License
 

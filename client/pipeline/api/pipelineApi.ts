@@ -13,7 +13,10 @@ export interface LlmRequestSettings {
 }
 
 export interface GenerateTextParams extends LlmRequestSettings {
+	/** Text, an image URL / data URL, or a web URL (the server reads the page). */
 	input?: string
+	/** Extra images, e.g. frames from a video. */
+	images?: string[]
 	prompt: string
 	model?: string
 }
@@ -146,4 +149,29 @@ export function apiDownload(params: { url: string; fileName?: string }) {
 /** Save node: write text or an image into data/exports on this machine. */
 export function apiSave(params: { content: string; fileName?: string }) {
 	return postJson<{ path: string; bytes: number }>('/api/save', params)
+}
+
+export interface JevResult {
+	type: 'noul' | 'choice' | 'score'
+	answer: string
+	probabilities: Record<string, number>
+	confidence: number | null
+	source: string
+}
+
+/** JEV decision: System One API, or a chat model asked for probabilities. */
+export function apiJev(params: {
+	model?: string
+	type: 'noul' | 'choice' | 'score'
+	question: string
+	context?: string
+	options?: string[]
+	levels?: string[]
+}) {
+	return postJson<JevResult>('/api/jev', params)
+}
+
+/** Network tools on the local server: ping, traceroute, dig, whois, ports, subnet… */
+export function apiNetTool(params: { tool: string; target: string; option?: string }) {
+	return postJson<{ output: string; ms: number }>('/api/nettool', params)
 }

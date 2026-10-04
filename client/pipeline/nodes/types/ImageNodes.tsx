@@ -16,7 +16,9 @@ import {
 	cropImage,
 	FILTER_PRESETS,
 	filterImage,
+	IMAGE_TOOLS,
 	ImageFilter,
+	imageTool,
 	loadImageElement,
 	NO_FILTER,
 	resizeImage,
@@ -353,7 +355,7 @@ export class ImageResizeNodeDefinition extends NodeDefinition<ImageResizeNode> {
 	}
 	async execute(shape: NodeShape, node: ImageResizeNode, inputs: InputValues) {
 		return runImageOp<ImageResizeNode>(this, shape, inputs, (src) =>
-			resizeImage(src, { mode: node.mode as 'scale' | 'width' | 'height' | 'fit', value: node.value, value2: node.value2 })
+			resizeImage(src, { mode: node.mode as 'scale' | 'width' | 'height' | 'fit' | 'exact', value: node.value, value2: node.value2 })
 		)
 	}
 	getOutputInfo(shape: NodeShape, node: ImageResizeNode, inputs: InfoValues) {
@@ -380,7 +382,8 @@ function ImageResizeNodeComponent({ shape, node }: NodeComponentProps<ImageResiz
 						set({ mode, value: mode === 'scale' ? 50 : 1024, value2: 1024 })
 					}}
 				>
-					<option value="fit">Fit inside box (px)</option>
+					<option value="fit">Fit inside box (keep ratio)</option>
+					<option value="exact">Exact W × H (stretch, ratio not kept)</option>
 					<option value="scale">Scale (%)</option>
 					<option value="width">Width (px), keep ratio</option>
 					<option value="height">Height (px), keep ratio</option>
@@ -388,12 +391,14 @@ function ImageResizeNodeComponent({ shape, node }: NodeComponentProps<ImageResiz
 			</NodeRow>
 			<NodeRow>
 				<NumberField
-					label={node.mode === 'fit' ? 'W' : node.mode === 'scale' ? 'Scale' : node.mode === 'width' ? 'Width' : 'Height'}
+					label={node.mode === 'fit' || node.mode === 'exact' ? 'W' : node.mode === 'scale' ? 'Scale' : node.mode === 'width' ? 'Width' : 'Height'}
 					value={node.value}
 					suffix={node.mode === 'scale' ? '%' : 'px'}
 					onChange={(value) => set({ value })}
 				/>
-				{node.mode === 'fit' && <NumberField label="H" value={node.value2} suffix="px" onChange={(value2) => set({ value2 })} />}
+				{(node.mode === 'fit' || node.mode === 'exact') && (
+					<NumberField label="H" value={node.value2} suffix="px" onChange={(value2) => set({ value2 })} />
+				)}
 			</NodeRow>
 			<Preview url={node.lastResultUrl} error={node.error} />
 		</>
@@ -509,6 +514,101 @@ function ImageFilterNodeComponent({ shape, node }: NodeComponentProps<ImageFilte
 				</TldrawUiButton>
 			</NodeRow>
 			<Preview url={node.lastResultUrl} error={node.error} />
+		</>
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Image tools: info, convert, pixelate, border, round, watermark, square, data URL
+// ---------------------------------------------------------------------------
+
+export type ImageToolNode = T.TypeOf<typeof ImageToolNode>
+export const ImageToolNode = T.object({
+	type: T.literal('image_tool'),
+	tool: T.string,
+	a: T.string,
+	b: T.string,
+	lastResultUrl: T.string.nullable(),
+	lastText: T.string.nullable(),
+	error: T.string.nullable(),
+})
+
+export class ImageToolNodeDefinition extends NodeDefinition<ImageToolNode> {
+	static type = 'image_tool'
+	static validator = ImageToolNode
+	title = 'Image tools'
+	heading = 'Image tools'
+	icon = <AdjustIcon />
+	category = 'image'
+	resultKeys = ['lastResultUrl', 'lastText', 'error'] as const
+	getDefault(): ImageToolNode {
+		return { type: 'image_tool', tool: 'info', a: '', b: '', lastResultUrl: null, lastText: null, error: null }
+	}
+	getBodyHeightPx() {
+		return NODE_ROW_HEIGHT_PX * 3 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+	}
+	getPorts(): Record<string, ShapePort> {
+		return { image: imageIn(), output: { ...imageOut(), dataType: 'any' } }
+	}
+	async execute(shape: NodeShape, node: ImageToolNode, inputs: InputValues): Promise<ExecutionResult> {
+		const src = coerceToText(getInput(inputs, 'image'))
+		if (!src) {
+			updateNode<ImageToolNode>(this.editor, shape, (n) => ({ ...n, error: 'Connect an image' }), false)
+			return { output: STOP_EXECUTION }
+		}
+		try {
+			const r = await imageTool(src, node.tool, node.a, node.b)
+			updateNode<ImageToolNode>(this.editor, shape, (n) => ({ ...n, lastResultUrl: r.image ?? null, lastText: r.text ?? null, error: null }))
+			return { output: r.image ?? r.text ?? STOP_EXECUTION }
+		} catch (e) {
+			updateNode<ImageToolNode>(this.editor, shape, (n) => ({ ...n, error: (e as Error).message }), false)
+			return { output: STOP_EXECUTION }
+		}
+	}
+	getOutputInfo(shape: NodeShape, node: ImageToolNode, inputs: InfoValues): InfoValues {
+		return {
+			output: {
+				value: node.lastResultUrl ?? node.lastText,
+				isOutOfDate: areAnyInputsOutOfDate(inputs) || shape.props.isOutOfDate,
+				dataType: node.lastResultUrl ? 'image' : 'text',
+			},
+		}
+	}
+	Component = ImageToolNodeComponent
+}
+
+function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNode>) {
+	const editor = useEditor()
+	const set = (patch: Partial<ImageToolNode>) => updateNode<ImageToolNode>(editor, shape, (n) => ({ ...n, ...patch }))
+	const tool = IMAGE_TOOLS.find((t) => t.id === node.tool) ?? IMAGE_TOOLS[0]
+	return (
+		<>
+			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
+			<NodeRow>
+				<select className="NodeField-select" value={node.tool} onPointerDown={stopEvent} onChange={(e) => set({ tool: e.target.value, a: '', b: '' })}>
+					{IMAGE_TOOLS.map((t) => (
+						<option key={t.id} value={t.id}>
+							{t.label}
+						</option>
+					))}
+				</select>
+			</NodeRow>
+			<NodeRow>
+				{'a' in tool && (
+					<input className="NodeField-input" placeholder={tool.a} value={node.a} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ a: e.target.value })} />
+				)}
+				{'b' in tool && (
+					<input className="NodeField-input" placeholder={tool.b} value={node.b} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ b: e.target.value })} />
+				)}
+				{!('a' in tool) && !('b' in tool) && <span className="NodeRow-disconnected">no options</span>}
+			</NodeRow>
+			{node.lastText && !node.error ? (
+				<div className="NodeOutputView NodeGrow" style={{ height: NODE_IMAGE_PREVIEW_HEIGHT_PX - 8 }}>
+					<pre className="ValuePreview-text is-mono">{node.lastText.length > 2000 ? node.lastText.slice(0, 2000) + '…' : node.lastText}</pre>
+				</div>
+			) : (
+				<Preview url={node.lastResultUrl} error={node.error} />
+			)}
 		</>
 	)
 }

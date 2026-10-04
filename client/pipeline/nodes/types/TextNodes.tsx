@@ -108,10 +108,14 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 					onPointerDown={stopEvent}
 					onChange={(e) => set({ op: e.target.value, a: '', b: '' })}
 				>
-					{TEXT_TOOL_OPS.map((o) => (
-						<option key={o.id} value={o.id}>
-							{o.label}
-						</option>
+					{[...new Set(TEXT_TOOL_OPS.map((o) => o.group))].map((group) => (
+						<optgroup key={group} label={group}>
+							{TEXT_TOOL_OPS.filter((o) => o.group === group).map((o) => (
+								<option key={o.id} value={o.id}>
+									{o.label}
+								</option>
+							))}
+						</optgroup>
 					))}
 				</select>
 			</NodeRow>

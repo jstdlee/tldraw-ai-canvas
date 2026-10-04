@@ -13,11 +13,19 @@ import { ChatNodeDefinition } from './types/ChatNode'
 import { TextAINodeDefinition } from './types/TextAINode'
 import { TextToolNodeDefinition } from './types/TextNodes'
 import { OutputNodeDefinition } from './types/OutputNode'
-import { CameraNodeDefinition, CropNodeDefinition, ImageFilterNodeDefinition, ImageResizeNodeDefinition } from './types/ImageNodes'
+import {
+	CameraNodeDefinition,
+	CropNodeDefinition,
+	ImageFilterNodeDefinition,
+	ImageResizeNodeDefinition,
+	ImageToolNodeDefinition,
+} from './types/ImageNodes'
 import { ForEachNodeDefinition, IfNodeDefinition, LogicNodeDefinition } from './types/LogicNodes'
 import { CodeNodeDefinition } from './types/CodeNode'
 import { SubgraphNodeDefinition } from './types/SubgraphNode'
 import { removedNodeDefinition } from './types/RemovedNode'
+import { JevNodeDefinition } from './types/JevNode'
+import { NetToolNodeDefinition, RandomNodeDefinition, SummarizeNodeDefinition } from './types/UtilityNodes'
 import { DownloadNodeDefinition, HttpNodeDefinition, SaveNodeDefinition } from './types/WebNodes'
 import { GenerateTextNodeDefinition } from './types/GenerateTextNode'
 import { LoadImageNodeDefinition } from './types/LoadImageNode'
@@ -39,9 +47,11 @@ export const NodeDefinitions = {
 	number: NumberNodeDefinition,
 	load_image: LoadImageNodeDefinition,
 	camera: CameraNodeDefinition,
+	random: RandomNodeDefinition,
 	capture: CaptureNodeDefinition,
 	// Text & AI
 	text_ai: TextAINodeDefinition,
+	summarize: SummarizeNodeDefinition,
 	text_tool: TextToolNodeDefinition,
 	generate_text: GenerateTextNodeDefinition,
 	chat: ChatNodeDefinition,
@@ -50,8 +60,10 @@ export const NodeDefinitions = {
 	crop: CropNodeDefinition,
 	image_resize: ImageResizeNodeDefinition,
 	image_filter: ImageFilterNodeDefinition,
+	image_tool: ImageToolNodeDefinition,
 	adjust: AdjustNodeDefinition,
 	// Logic & code
+	jev: JevNodeDefinition,
 	if: IfNodeDefinition,
 	logic: LogicNodeDefinition,
 	for_each: ForEachNodeDefinition,
@@ -61,6 +73,7 @@ export const NodeDefinitions = {
 	// Web
 	http: HttpNodeDefinition,
 	download: DownloadNodeDefinition,
+	net_tool: NetToolNodeDefinition,
 	// Output
 	output: OutputNodeDefinition,
 	save: SaveNodeDefinition,

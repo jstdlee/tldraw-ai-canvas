@@ -1327,3 +1327,95 @@ body {
 	max-height: 100%;
 	object-fit: contain;
 }
+
+/* JEV probability bars */
+
+.JevBars {
+	flex: 1;
+	padding: 8px 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	overflow: auto;
+	font-size: 11px;
+}
+
+.JevBar {
+	display: grid;
+	grid-template-columns: 80px 1fr 40px;
+	gap: 6px;
+	align-items: center;
+}
+
+.JevBar-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--tl-color-text-3);
+}
+
+.JevBar.is-top .JevBar-label {
+	color: var(--tl-color-text-1);
+	font-weight: 600;
+}
+
+.JevBar-track {
+	height: 8px;
+	border-radius: 4px;
+	background: var(--tl-color-muted-2);
+	overflow: hidden;
+}
+
+.JevBar-fill {
+	display: block;
+	height: 100%;
+	background: var(--tl-color-text-3);
+}
+
+.JevBar.is-top .JevBar-fill {
+	background: var(--tl-color-primary);
+}
+
+.JevBar-value {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.JevBars-source {
+	margin-top: auto;
+	color: var(--tl-color-text-3);
+	font-size: 10px;
+}
+
+.CodeNode-outLabel-static {
+	font-size: 11px;
+	color: var(--tl-color-text-3);
+}
+
+.ImagePipelineSidebar-empty {
+	font-size: 11px;
+	color: var(--tl-color-text-3);
+	padding: 2px 12px 8px;
+}
+
+.ImagePipelineSidebar-mynode {
+	display: flex;
+	align-items: center;
+}
+
+.ImagePipelineSidebar-mynode .ImagePipelineSidebar-item {
+	flex: 1;
+	min-width: 0;
+}
+
+.ImagePipelineSidebar-delete {
+	all: unset;
+	cursor: pointer;
+	padding: 0 10px;
+	color: var(--tl-color-text-3);
+	visibility: hidden;
+}
+
+.ImagePipelineSidebar-mynode:hover .ImagePipelineSidebar-delete {
+	visibility: visible;
+}

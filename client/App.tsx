@@ -58,12 +58,14 @@ import { registerClipHandlers } from './clips/canvasFeatures'
 import { clipShapeUtils, clipTools } from './clips/ClipShapes'
 import { FindBar } from './clips/FindBar'
 import { ImageEditorModal } from './clips/ImageEditor'
+import { RatioImageShapeUtil } from './clips/shapeOptions'
 
 // Every tldraw asset (fonts, icons, translations) is bundled, so the app works offline.
 const assetUrls = getAssetUrlsByImport()
 
 // Pipeline nodes + wires (image pipeline / branching chat kits)
-const shapeUtils = [NodeShapeUtil, ConnectionShapeUtil, ...clipShapeUtils]
+// RatioImageShapeUtil replaces tldraw's image util (adds the keep-ratio switch).
+const shapeUtils = [NodeShapeUtil, ConnectionShapeUtil, ...clipShapeUtils, RatioImageShapeUtil]
 const bindingUtils = [ConnectionBindingUtil]
 // Agent highlight overlay + "insert node" handle on wires
 const overlayUtils = [ConnectionCenterHandleOverlayUtil, AgentHighlightOverlayUtil]
@@ -114,9 +116,12 @@ function App() {
 
 	const handleUnmount = useCallback(() => setApp(null), [])
 
-	// Dev only: lets scripts and tests drive the agent (window.agentApp.agents.getAgent()).
+	// Dev only: lets scripts and tests drive the agent and the node library.
 	useEffect(() => {
-		if (import.meta.env.DEV) (window as any).agentApp = app
+		if (!import.meta.env.DEV) return
+		;(window as any).agentApp = app
+		import('./pipeline/customNodes').then((m) => ((window as any).customNodes = m))
+		import('./pipeline/subgraph').then((m) => ((window as any).subgraph = m))
 	}, [app])
 
 	const overrides: TLUiOverrides = useMemo(

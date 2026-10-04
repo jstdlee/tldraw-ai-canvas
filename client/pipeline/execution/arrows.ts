@@ -62,6 +62,14 @@ export async function shapeValue(editor: Editor, shape: TLShape): Promise<string
 		const url = await editor.resolveAssetUrl(assetId, { shouldResolveToOriginal: true })
 		return url ? blobUrlToDataUrl(url) : null
 	}
+	if (shape.type === 'video') {
+		const assetId = (shape.props as { assetId?: any }).assetId
+		if (!assetId) return null
+		const src = (editor.getAsset(assetId)?.props as { src?: string } | undefined)?.src
+		if (src && /^(https?:|\/api\/)/.test(src)) return src
+		// Kept in the browser: a blob: URL is enough to read frames on this page.
+		return (await editor.resolveAssetUrl(assetId, { shouldResolveToOriginal: true })) ?? null
+	}
 	if (shape.type === 'bookmark') {
 		return (shape.props as { url?: string }).url ?? null
 	}

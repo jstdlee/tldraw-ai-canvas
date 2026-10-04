@@ -20,6 +20,7 @@ const CAPABILITY_HELP: Record<ModelCapability, string> = {
 	agent: 'Canvas agent (edits shapes). Needs a strong model that follows JSON well.',
 	chat: 'Chat and text nodes',
 	vision: 'Reads images (chat with sketches, describe image)',
+	jev: 'JEV decisions: probabilities for yes/no, choice, score (System One API, or any chat model)',
 }
 
 function uniqueId(base: string, taken: string[]) {

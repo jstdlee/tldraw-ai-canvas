@@ -29,6 +29,14 @@ import {
 import { $findOpen } from './FindBar'
 import { $imageEditorTarget } from './ImageEditor'
 import { packSelection, unpack } from '../pipeline/subgraph'
+import {
+	exportCustomNodeFile,
+	importCustomNodeFile,
+	openCanvasFile,
+	saveCanvasFile,
+	saveCustomNode,
+} from '../pipeline/customNodes'
+import { imagesKeepRatio, toggleImageRatio, toggleTextWrap } from './shapeOptions'
 
 export const MarkdownIcon = (
 	<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -78,9 +86,54 @@ export function canvasActionOverrides(
 		...a('fetch-page', 'Web page → Markdown…', () => fetchPageAsMarkdown(editor, notify)),
 		...a('new-markdown', 'New Markdown clip', () => createClipAtCenter(editor, 'markdown'), '?m'),
 		...a('new-mermaid', 'New Mermaid diagram', () => createClipAtCenter(editor, 'mermaid'), '?g'),
+		...a('toggle-text-wrap', 'Text: wrap on / off', () => {
+			const on = toggleTextWrap(editor)
+			if (on === null) notify('Select text shapes first', 'warning')
+			else notify(on ? 'Text wraps at its width' : 'Text grows on one line (no wrap)')
+		}, '?t'),
+		...a('toggle-image-ratio', 'Image: keep ratio on / off', () => {
+			const keep = imagesKeepRatio(editor)
+			if (!toggleImageRatio(editor)) notify('Select images first', 'warning')
+			else notify(keep ? 'Image can now stretch freely' : 'Image keeps its ratio')
+		}, '?r'),
 		...a('pack-nodes', 'Pack into one node', async () => {
 			if (!(await packSelection(editor))) notify('Select at least one node to pack', 'warning')
 		}, '$!p'),
+		...a('save-custom-node', 'Save as my node…', async () => {
+			const s = editor.getOnlySelectedShape()
+			if (!(s?.type === 'node' && (s.props as any).node?.type === 'subgraph')) {
+				return notify('Pack nodes first (Ctrl+Shift+P), then select the packed node', 'warning')
+			}
+			const name = window.prompt('Name for this node:', (s.props as any).node.title)
+			if (!name) return
+			try {
+				await saveCustomNode(editor, s.id, name)
+				notify(`Saved "${name}" to My nodes`, 'success')
+			} catch (e) {
+				notify((e as Error).message, 'error')
+			}
+		}),
+		...a('export-node-file', 'Export node file (.node.json)', async () => {
+			const s = editor.getOnlySelectedShape()
+			if (!(s?.type === 'node' && (s.props as any).node?.type === 'subgraph')) return notify('Select a packed node', 'warning')
+			await exportCustomNodeFile(editor, s.id)
+		}),
+		...a('import-node-file', 'Import node file…', async () => {
+			try {
+				if (await importCustomNodeFile(editor)) notify('Node added to My nodes and the canvas', 'success')
+			} catch (e) {
+				notify((e as Error).message, 'error')
+			}
+		}),
+		...a('save-canvas-file', 'Save canvas as JSON', () => saveCanvasFile(editor), '$!s'),
+		...a('open-canvas-file', 'Open canvas JSON…', async () => {
+			if (!window.confirm('Open a canvas file? It replaces what is on this canvas now (Ctrl+Z will not undo it).')) return
+			try {
+				if (await openCanvasFile(editor)) notify('Canvas opened', 'success')
+			} catch (e) {
+				notify((e as Error).message, 'error')
+			}
+		}),
 		...a('unpack-node', 'Unpack', () => {
 			const s = editor.getOnlySelectedShape()
 			if (s?.type === 'node' && (s.props as any).node?.type === 'subgraph') unpack(editor, s.id)
@@ -94,6 +147,7 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 	const hasSelection = useValue('has selection', () => editor.getSelectedShapeIds().length > 0, [editor])
 	const isImage = useValue('is image', () => !!selectedImage(editor), [editor])
 	const hasNodes = useValue('has nodes', () => editor.getSelectedShapes().some((s) => s.type === 'node'), [editor])
+	const hasText = useValue('has text', () => editor.getSelectedShapes().some((s) => s.type === 'text'), [editor])
 	const isPackedNode = useValue(
 		'is packed node',
 		() => {
@@ -110,11 +164,25 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 					<TldrawUiMenuActionItem actionId="ai-describe-image" />
 					<TldrawUiMenuActionItem actionId="ai-extract-text" />
 					<TldrawUiMenuActionItem actionId="image-to-pipeline" />
+					<TldrawUiMenuActionItem actionId="toggle-image-ratio" />
+				</TldrawUiMenuGroup>
+			)}
+			{hasText && (
+				<TldrawUiMenuGroup id="text-tools">
+					<TldrawUiMenuActionItem actionId="toggle-text-wrap" />
 				</TldrawUiMenuGroup>
 			)}
 			{(hasNodes || isPackedNode) && (
 				<TldrawUiMenuGroup id="pack-tools">
-					{isPackedNode ? <TldrawUiMenuActionItem actionId="unpack-node" /> : <TldrawUiMenuActionItem actionId="pack-nodes" />}
+					{isPackedNode ? (
+						<>
+							<TldrawUiMenuActionItem actionId="unpack-node" />
+							<TldrawUiMenuActionItem actionId="save-custom-node" />
+							<TldrawUiMenuActionItem actionId="export-node-file" />
+						</>
+					) : (
+						<TldrawUiMenuActionItem actionId="pack-nodes" />
+					)}
 				</TldrawUiMenuGroup>
 			)}
 			{hasSelection ? (
@@ -163,6 +231,11 @@ export function CanvasToolsMenuGroup() {
 				<TldrawUiMenuActionItem actionId="ai-explain" />
 				<TldrawUiMenuActionItem actionId="ai-summarize" />
 				<TldrawUiMenuActionItem actionId="ai-translate" />
+			</TldrawUiMenuGroup>
+			<TldrawUiMenuGroup id="ct-files">
+				<TldrawUiMenuActionItem actionId="save-canvas-file" />
+				<TldrawUiMenuActionItem actionId="open-canvas-file" />
+				<TldrawUiMenuActionItem actionId="import-node-file" />
 			</TldrawUiMenuGroup>
 			<TldrawUiMenuGroup id="ct-utils">
 				<TldrawUiMenuActionItem actionId="find-on-canvas" />

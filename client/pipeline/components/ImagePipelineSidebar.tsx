@@ -8,6 +8,8 @@ import {
 	Vec,
 } from 'tldraw'
 import { getNodeDefinitions, NodeType } from '../nodes/nodeTypes'
+import { $customNodes, addCustomNodeToCanvas, deleteCustomNode, refreshCustomNodes } from '../customNodes'
+import { useEffect } from 'react'
 
 const CATEGORY_LABELS: Record<string, string> = {
 	input: 'Input',
@@ -164,6 +166,7 @@ export function ImagePipelineSidebar({ editor }: { editor: Editor }) {
 				<span className="ImagePipelineSidebar-hint">drag onto the canvas</span>
 			</div>
 			<div className="ImagePipelineSidebar-list">
+				<MyNodes editor={editor} />
 				{CATEGORY_ORDER.map((cat) => {
 					const items = grouped[cat]
 					if (!items?.length) return null
@@ -183,6 +186,42 @@ export function ImagePipelineSidebar({ editor }: { editor: Editor }) {
 					)
 				})}
 			</div>
+		</div>
+	)
+}
+
+/** Saved custom nodes (packed groups with a name). Click to add one. */
+function MyNodes({ editor }: { editor: Editor }) {
+	const nodes = useValue('custom nodes', () => $customNodes.get(), [])
+	useEffect(() => {
+		refreshCustomNodes()
+	}, [])
+	return (
+		<div className="ImagePipelineSidebar-group">
+			<div className="ImagePipelineSidebar-category">My nodes</div>
+			{nodes.length === 0 ? (
+				<div className="ImagePipelineSidebar-empty">Pack nodes, then right-click → “Save as my node”.</div>
+			) : (
+				nodes.map((n) => (
+					<div key={n.id} className="ImagePipelineSidebar-mynode">
+						<button
+							className="ImagePipelineSidebar-item"
+							title={n.description || `Saved ${n.savedAt.slice(0, 10)}`}
+							onClick={() => addCustomNodeToCanvas(editor, n.id)}
+						>
+							<span className="ImagePipelineSidebar-item-icon">★</span>
+							<span className="ImagePipelineSidebar-item-title">{n.name}</span>
+						</button>
+						<button
+							className="ImagePipelineSidebar-delete"
+							title="Delete from My nodes"
+							onClick={() => window.confirm(`Delete "${n.name}" from My nodes?`) && deleteCustomNode(n.id)}
+						>
+							×
+						</button>
+					</div>
+				))
+			)}
 		</div>
 	)
 }
