@@ -1,0 +1,23 @@
+{
+	"compilerOptions": {
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"jsx": "react-jsx",
+		"lib": ["DOM", "DOM.Iterable", "ESNext"],
+		"module": "esnext",
+		"target": "esnext",
+		"moduleResolution": "bundler",
+		"types": ["node", "vite/client"],
+		"noEmit": true,
+		"noFallthroughCasesInSwitch": true,
+		"noImplicitAny": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"useDefineForClassFields": true,
+		"allowImportingTsExtensions": true
+	},
+	"include": ["client", "shared", "server", "tests", "vite.config.ts"],
+	"exclude": ["node_modules", "ref", "dist"]
+}

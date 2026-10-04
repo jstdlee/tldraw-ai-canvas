@@ -1,0 +1,345 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+	DefaultMainMenu,
+	DefaultMainMenuContent,
+	DefaultToolbar,
+	DefaultToolbarContent,
+	Editor,
+	ErrorBoundary,
+	TLComponents,
+	Tldraw,
+	TldrawOptions,
+	TldrawUiButton,
+	TldrawUiButtonLabel,
+	TldrawUiMenuGroup,
+	TldrawUiMenuItem,
+	TldrawUiToastsProvider,
+	TLUiOverrides,
+	useEditor,
+	useValue,
+} from 'tldraw'
+import { getAssetUrlsByImport } from '@tldraw/assets/imports.vite'
+import {
+	$aiConfig,
+	$aiConfigError,
+	$providersDialogOpen,
+	openProvidersDialog,
+	refreshAIConfig,
+} from './ai/aiConfig'
+import { AIProvidersDialog } from './ai/AIProvidersDialog'
+import { TldrawAgentApp } from './agent/TldrawAgentApp'
+import {
+	TldrawAgentAppContextProvider,
+	TldrawAgentAppProvider,
+} from './agent/TldrawAgentAppProvider'
+import { ChatPanel } from './components/ChatPanel'
+import { ChatPanelFallback } from './components/ChatPanelFallback'
+import { CustomHelperButtons } from './components/CustomHelperButtons'
+import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
+import { ImagePipelineSidebar } from './pipeline/components/ImagePipelineSidebar'
+import { OnCanvasNodePicker } from './pipeline/components/OnCanvasNodePicker'
+import { PipelineRegions } from './pipeline/components/PipelineRegions'
+import { TemplatePicker } from './pipeline/components/TemplatePicker'
+import { overrides as pipelineOverrides } from './pipeline/components/PipelineToolbar'
+import { ConnectionBindingUtil } from './pipeline/connection/ConnectionBindingUtil'
+import { ConnectionCenterHandleOverlayUtil } from './pipeline/connection/ConnectionCenterHandleOverlayUtil'
+import { ConnectionShapeUtil } from './pipeline/connection/ConnectionShapeUtil'
+import { keepConnectionsAtBottom } from './pipeline/connection/keepConnectionsAtBottom'
+import { disableTransparency } from './pipeline/disableTransparency'
+import { NodeShapeUtil } from './pipeline/nodes/NodeShapeUtil'
+import { PointingPort } from './pipeline/ports/PointingPort'
+import { TargetAreaTool } from './tools/TargetAreaTool'
+import { TargetShapeTool } from './tools/TargetShapeTool'
+
+// Every tldraw asset (fonts, icons, translations) is bundled, so the app works offline.
+const assetUrls = getAssetUrlsByImport()
+
+// Pipeline nodes + wires (image pipeline / branching chat kits)
+const shapeUtils = [NodeShapeUtil, ConnectionShapeUtil]
+const bindingUtils = [ConnectionBindingUtil]
+// Agent highlight overlay + "insert node" handle on wires
+const overlayUtils = [ConnectionCenterHandleOverlayUtil, AgentHighlightOverlayUtil]
+// Agent context pickers
+const tools = [TargetShapeTool, TargetAreaTool]
+
+const options: Partial<TldrawOptions> = {
+	actionShortcutsLocation: 'menu',
+}
+
+const PANEL_KEY = 'tldraw-ai-canvas:panels'
+
+function loadPanels(): { library: boolean; chat: boolean } {
+	// On a narrow window start with only the agent panel, so the canvas has room.
+	const defaults = { library: window.innerWidth >= 1100, chat: true }
+	try {
+		return { ...defaults, ...JSON.parse(localStorage.getItem(PANEL_KEY) ?? '{}') }
+	} catch {
+		return defaults
+	}
+}
+
+function App() {
+	const [app, setApp] = useState<TldrawAgentApp | null>(null)
+	const [editor, setEditor] = useState<Editor | null>(null)
+	const [panels, setPanels] = useState(loadPanels)
+
+	useEffect(() => {
+		refreshAIConfig()
+	}, [])
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(PANEL_KEY, JSON.stringify(panels))
+		} catch {
+			// Private mode: panel state just isn't remembered.
+		}
+	}, [panels])
+
+	const togglePanel = useCallback(
+		(panel: 'library' | 'chat') => setPanels((p) => ({ ...p, [panel]: !p[panel] })),
+		[]
+	)
+
+	const handleUnmount = useCallback(() => setApp(null), [])
+
+	// Dev only: lets scripts and tests drive the agent (window.agentApp.agents.getAgent()).
+	useEffect(() => {
+		if (import.meta.env.DEV) (window as any).agentApp = app
+	}, [app])
+
+	const overrides: TLUiOverrides = useMemo(
+		() => ({
+			tools: (editor, tools, helpers) => {
+				const withNodes = pipelineOverrides.tools!(editor, tools, helpers)
+				return {
+					...withNodes,
+					'target-area': {
+						id: 'target-area',
+						label: 'Pick Area',
+						kbd: 'c',
+						icon: 'tool-frame',
+						onSelect() {
+							editor.setCurrentTool('target-area')
+						},
+					},
+					'target-shape': {
+						id: 'target-shape',
+						label: 'Pick Shape',
+						kbd: 's',
+						icon: 'tool-frame',
+						onSelect() {
+							editor.setCurrentTool('target-shape')
+						},
+					},
+				}
+			},
+			actions: (_editor, actions) => ({
+				...actions,
+				'ai-providers': {
+					id: 'ai-providers',
+					label: 'AI providers…',
+					icon: 'external-link',
+					onSelect() {
+						openProvidersDialog()
+					},
+				},
+				'toggle-node-library': {
+					id: 'toggle-node-library',
+					label: 'Node library',
+					kbd: 'shift+n',
+					onSelect() {
+						togglePanel('library')
+					},
+				},
+				'toggle-agent-chat': {
+					id: 'toggle-agent-chat',
+					label: 'Agent chat',
+					kbd: 'shift+a',
+					onSelect() {
+						togglePanel('chat')
+					},
+				},
+			}),
+		}),
+		[togglePanel]
+	)
+
+	const components: TLComponents = useMemo(
+		() => ({
+			InFrontOfTheCanvas: () => (
+				<>
+					<OnCanvasNodePicker />
+					<PipelineRegions />
+					<SetupBanner />
+				</>
+			),
+			MainMenu: () => (
+				<DefaultMainMenu>
+					<TldrawUiMenuGroup id="ai">
+						<TldrawUiMenuItem
+							id="ai-providers"
+							label="AI providers…"
+							onSelect={() => openProvidersDialog()}
+						/>
+						<TldrawUiMenuItem
+							id="toggle-node-library"
+							label="Show/hide node library"
+							kbd="shift+n"
+							onSelect={() => togglePanel('library')}
+						/>
+						<TldrawUiMenuItem
+							id="toggle-agent-chat"
+							label="Show/hide agent chat"
+							kbd="shift+a"
+							onSelect={() => togglePanel('chat')}
+						/>
+					</TldrawUiMenuGroup>
+					<DefaultMainMenuContent />
+				</DefaultMainMenu>
+			),
+			// All default tldraw tools, plus the node-template picker.
+			Toolbar: () => (
+				<DefaultToolbar>
+					<DefaultToolbarContent />
+					<TemplatePicker />
+				</DefaultToolbar>
+			),
+			SharePanel: () => <PanelToggles panels={panels} toggle={togglePanel} />,
+			HelperButtons: () =>
+				app && (
+					<TldrawAgentAppContextProvider app={app}>
+						<CustomHelperButtons />
+					</TldrawAgentAppContextProvider>
+				),
+		}),
+		[app, panels, togglePanel]
+	)
+
+	return (
+		<TldrawUiToastsProvider>
+			<div
+				className={
+					'app-layout' +
+					(panels.library ? '' : ' is-library-hidden') +
+					(panels.chat ? '' : ' is-chat-hidden')
+				}
+			>
+				<div className="image-pipeline-sidebar">
+					{editor ? <ImagePipelineSidebar editor={editor} /> : <div />}
+				</div>
+				<div className="app-canvas">
+					<Tldraw
+						persistenceKey="tldraw-ai-canvas"
+						assetUrls={assetUrls}
+						options={options}
+						overrides={overrides}
+						shapeUtils={shapeUtils}
+						bindingUtils={bindingUtils}
+						overlayUtils={overlayUtils}
+						tools={tools}
+						components={components}
+						onMount={(editor) => {
+							;(window as any).editor = editor
+							setEditor(editor)
+							const select = editor.getStateDescendant('select')!
+							if (!select.children?.[PointingPort.id]) select.addChild(PointingPort)
+							keepConnectionsAtBottom(editor)
+							disableTransparency(editor, ['connection'])
+						}}
+					>
+						<TldrawAgentAppProvider onMount={setApp} onUnmount={handleUnmount} />
+					</Tldraw>
+				</div>
+				<ProvidersModal editor={editor} />
+				<div className="chat-panel-wrapper">
+					<ErrorBoundary fallback={ChatPanelFallback}>
+						{app && (
+							<TldrawAgentAppContextProvider app={app}>
+								<ChatPanel />
+							</TldrawAgentAppContextProvider>
+						)}
+					</ErrorBoundary>
+				</div>
+			</div>
+		</TldrawUiToastsProvider>
+	)
+}
+
+/** The AI providers dialog, over the whole window (not just the canvas column). */
+function ProvidersModal({ editor }: { editor: Editor | null }) {
+	const open = useValue('providers dialog open', () => $providersDialogOpen.get(), [])
+	const isDark = useValue('dark mode', () => editor?.user.getIsDarkMode() ?? false, [editor])
+	const close = useCallback(() => $providersDialogOpen.set(false), [])
+	if (!open) return null
+	return (
+		<div
+			className={`ai-modal-backdrop tl-container ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}
+			onPointerDown={(e) => e.target === e.currentTarget && close()}
+		>
+			<AIProvidersDialog onClose={close} />
+		</div>
+	)
+}
+
+/** Shown until at least one model is set up, or when the server is down. */
+function SetupBanner() {
+	const editor = useEditor()
+	const config = useValue('ai config', () => $aiConfig.get(), [])
+	const error = useValue('ai config error', () => $aiConfigError.get(), [])
+	const isReadonly = useValue('readonly', () => editor.getIsReadonly(), [editor])
+	const [dismissed, setDismissed] = useState(false)
+	if (dismissed || isReadonly) return null
+	if (error) {
+		return (
+			<div className="app-banner">
+				<span>{error}. Start it with “npm run dev”.</span>
+				<TldrawUiButton type="normal" onClick={() => refreshAIConfig()}>
+					<TldrawUiButtonLabel>Retry</TldrawUiButtonLabel>
+				</TldrawUiButton>
+			</div>
+		)
+	}
+	if (!config || config.models.length > 0) return null
+	return (
+		<div className="app-banner">
+			<span>No AI models yet. Drawing works now; add a provider for AI features.</span>
+			<TldrawUiButton type="primary" onClick={() => openProvidersDialog()}>
+				<TldrawUiButtonLabel>Set up AI providers</TldrawUiButtonLabel>
+			</TldrawUiButton>
+			<TldrawUiButton type="icon" title="Hide" onClick={() => setDismissed(true)}>
+				<TldrawUiButtonLabel>×</TldrawUiButtonLabel>
+			</TldrawUiButton>
+		</div>
+	)
+}
+
+function PanelToggles({
+	panels,
+	toggle,
+}: {
+	panels: { library: boolean; chat: boolean }
+	toggle(panel: 'library' | 'chat'): void
+}) {
+	return (
+		<div className="app-panel-toggles tlui-style-panel__wrapper">
+			<TldrawUiButton
+				type="normal"
+				isActive={panels.library}
+				title="Show/hide node library (Shift+N)"
+				onClick={() => toggle('library')}
+			>
+				<TldrawUiButtonLabel>Nodes</TldrawUiButtonLabel>
+			</TldrawUiButton>
+			<TldrawUiButton
+				type="normal"
+				isActive={panels.chat}
+				title="Show/hide agent chat (Shift+A)"
+				onClick={() => toggle('chat')}
+			>
+				<TldrawUiButtonLabel>Agent</TldrawUiButtonLabel>
+			</TldrawUiButton>
+		</div>
+	)
+}
+
+export default App
