@@ -29,6 +29,24 @@ npm start            # app + API on http://127.0.0.1:8790
 
 Then open **AI providers** (chat panel header, main menu, or any model dropdown).
 
+### Desktop app (offline)
+
+The desktop app is built by GitHub Actions (`.github/workflows/desktop.yml`), not on your machine:
+
+- every push to `main` and every pull request: type check, tests, then installers as build artifacts
+- a tag like `v0.1.0` (must match `package.json`): the same, plus a **GitHub release** with the files
+
+| System | Files |
+| --- | --- |
+| Windows x64 | `ai-canvas-<v>-windows-x64-setup.exe`, `ai-canvas-<v>-windows-x64-portable.exe` |
+| Linux x64 / arm64 | `.AppImage`, `.deb` |
+
+The app starts the same local server inside itself on a free `127.0.0.1` port and keeps its data
+in the user-data folder (Help → Open data folder). Local AI servers (Ollama, LM Studio, Magpie,
+a System One API) work without internet; network tools use the system `ping`, `dig`, etc.
+
+To release: bump `version` in `package.json`, commit, then `git tag v<version> && git push --tags`.
+
 ## AI providers
 
 You define the providers. Keys stay on this machine in `data/ai-config.json` (mode 600). The page

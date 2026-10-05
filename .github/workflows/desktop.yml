@@ -1,0 +1,114 @@
+name: Desktop app
+
+# Builds the offline desktop app (Electron) for Linux and Windows.
+# A pushed tag like v0.1.0 also publishes a GitHub release with the installers.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Type check, tests, web build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build:desktop
+
+  package:
+    name: Package ${{ matrix.name }}
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+            args: --linux --x64
+          - name: Linux arm64
+            os: ubuntu-24.04-arm
+            args: --linux --arm64
+          - name: Windows x64
+            os: windows-latest
+            args: --win --x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install fpm (arm64 .deb builds need the system one)
+        if: matrix.name == 'Linux arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev rpm
+          sudo gem install fpm --no-document
+      - run: npm ci
+      - run: npm run build:desktop
+      - name: Package
+        run: npx electron-builder ${{ matrix.args }} --publish never
+        env:
+          USE_SYSTEM_FPM: ${{ matrix.name == 'Linux arm64' && 'true' || 'false' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-canvas-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.exe
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match package.json version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "v$version" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} != package.json v$version"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - run: ls -la artifacts
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: AI Canvas ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            Offline desktop app: tldraw canvas + AI agent + node workflows.
+
+            | System | File |
+            | --- | --- |
+            | Windows x64 | `…-windows-x64-setup.exe` (installer) or `…-windows-x64-portable.exe` |
+            | Linux x64 | `…-linux-x86_64.AppImage` or `…-linux-amd64.deb` |
+            | Linux arm64 | `…-linux-arm64.AppImage` or `…-linux-arm64.deb` |
+
+            The builds are not code-signed: Windows SmartScreen may ask "Run anyway".
+            On Linux: `chmod +x *.AppImage` and run it.
+            Your settings and data are kept in the app's user-data folder (Help → Open data folder).
+          files: artifacts/*

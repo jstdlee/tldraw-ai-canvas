@@ -11,9 +11,12 @@
 		"build": "vite build",
 		"start": "NODE_ENV=production tsx server/index.ts",
 		"typecheck": "tsc --noEmit -p tsconfig.json",
-		"test": "vitest run"
+		"test": "vitest run",
+		"build:desktop": "vite build && node scripts/build-electron.mjs",
+		"desktop": "npm run build:desktop && electron .",
+		"dist": "npm run build:desktop && electron-builder --publish never"
 	},
-	"dependencies": {
+	"devDependencies": {
 		"@ai-sdk/anthropic": "^2.0.80",
 		"@ai-sdk/google": "^2.0.74",
 		"@ai-sdk/openai": "^2.0.106",
@@ -22,10 +25,18 @@
 		"@hono/node-server": "^1.19.0",
 		"@tldraw/assets": "5.5.2",
 		"@tldraw/tlschema": "5.5.2",
+		"@types/node": "^22.15.31",
 		"@types/qrcode": "^1.5.6",
+		"@types/react": "^19.2.7",
+		"@types/react-dom": "^19.2.3",
+		"@vitejs/plugin-react": "^6.0.1",
 		"ai": "^5.0.194",
 		"best-effort-json-parser": "^1.1.3",
 		"classnames": "^2.5.1",
+		"concurrently": "^9.2.0",
+		"electron": "^44.5.1",
+		"electron-builder": "^26.15.3",
+		"esbuild": "^0.28.2",
 		"hono": "^4.9.0",
 		"mermaid": "^12.1.0",
 		"qrcode": "^1.5.4",
@@ -37,16 +48,12 @@
 		"sucrase": "^3.35.1",
 		"tldraw": "5.5.2",
 		"tsx": "^4.20.0",
-		"zod": "^4.1.8"
-	},
-	"devDependencies": {
-		"@types/node": "^22.15.31",
-		"@types/react": "^19.2.7",
-		"@types/react-dom": "^19.2.3",
-		"@vitejs/plugin-react": "^6.0.1",
-		"concurrently": "^9.2.0",
 		"typescript": "^5.8.3",
 		"vite": "^8.0.16",
-		"vitest": "^4.0.0"
-	}
+		"vitest": "^4.0.0",
+		"zod": "^4.1.8"
+	},
+	"main": "dist-electron/main.cjs",
+	"author": "jstdlee",
+	"homepage": "https://github.com/jstdlee/tldraw-ai-canvas"
 }

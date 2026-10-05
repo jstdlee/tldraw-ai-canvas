@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { generateText, ModelMessage, smoothStream, streamText, UserContent } from 'ai'
 import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { PublicAIConfig } from '../shared/aiConfig'
@@ -330,8 +331,11 @@ app.get('/api/images/:imageId/data-url', (c) => {
 // --- Static app (production) -----------------------------------------------
 
 if (PROD) {
-	app.use('/*', serveStatic({ root: './dist' }))
-	const index = existsSync('dist/index.html') ? readFileSync('dist/index.html', 'utf8') : null
+	// STATIC_DIR is set by the desktop app (Electron); `npm start` serves ./dist.
+	const staticDir = process.env.STATIC_DIR ?? './dist'
+	app.use('/*', serveStatic({ root: staticDir }))
+	const indexPath = join(staticDir, 'index.html')
+	const index = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : null
 	app.get('*', (c) => (index ? c.html(index) : c.text('Run "npm run build" first.', 500)))
 }
 
@@ -354,12 +358,30 @@ function stripThink(text: string) {
 }
 
 
-serve({ fetch: app.fetch, port: PORT, hostname: HOST }, () => {
-	console.log(`AI canvas server on http://${HOST}:${PORT}${PROD ? '' : ' (API only; open the Vite URL)'}`)
-	// Warn early when nothing is configured yet.
-	try {
-		resolveModel(null, 'chat')
-	} catch {
-		console.log('No chat model configured yet: open "AI providers" in the app.')
-	}
-})
+/**
+ * Start the HTTP server. Port 0 picks a free port (the desktop app does this).
+ * Resolves with the port in use.
+ */
+export function startServer(port = PORT, hostname = HOST): Promise<number> {
+	return new Promise((resolve, reject) => {
+		const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
+			console.log(`AI canvas server on http://${hostname}:${info.port}${PROD ? '' : ' (API only; open the Vite URL)'}`)
+			// Warn early when nothing is configured yet.
+			try {
+				resolveModel(null, 'chat')
+			} catch {
+				console.log('No chat model configured yet: open "AI providers" in the app.')
+			}
+			resolve(info.port)
+		})
+		server.on('error', reject)
+	})
+}
+
+// `npm run dev` / `npm start` run this file directly; the desktop app starts it itself.
+if (process.env.AI_CANVAS_EMBEDDED !== '1') {
+	startServer().catch((e) => {
+		console.error(e)
+		process.exit(1)
+	})
+}
