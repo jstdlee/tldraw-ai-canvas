@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { Box, T, useEditor, useValue } from 'tldraw'
 import { CaptureIcon } from '../../components/icons/CaptureIcon'
 import {
@@ -31,7 +32,7 @@ export class CaptureNodeDefinition extends NodeDefinition<CaptureNode> {
 	title = 'Capture'
 	heading = 'Capture'
 	icon = <CaptureIcon />
-	category = 'input'
+	category = categoryOf('capture')
 	resultKeys = ['lastCaptureUrl'] as const
 	override canResizeNode = true
 

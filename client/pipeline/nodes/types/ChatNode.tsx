@@ -1,8 +1,9 @@
-import classNames from 'classnames'
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { useCallback } from 'react'
 import { Editor, T, useEditor, useValue } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiChatStream, ChatMessage } from '../../api/pipelineApi'
+import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
 	NODE_HEADER_HEIGHT_PX,
@@ -13,6 +14,7 @@ import {
 import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues, getNodePortConnections, NodePortConnection } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
+import { NodeTextResult } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	LlmSettingsFields,
@@ -68,7 +70,7 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 	title = 'Chat message'
 	heading = 'Chat'
 	icon = <GenerateTextIcon />
-	category = 'text'
+	category = categoryOf('chat')
 	resultKeys = ['assistantMessage', 'error'] as const
 	getDefault(): ChatNode {
 		return {
@@ -195,11 +197,16 @@ export async function sendChat(
 			if (!latest) return
 			updateNode<ChatNode>(editor, latest, (n) => ({ ...n, assistantMessage: text }))
 		})
+		const usage = reply.usage ? formatLlmUsage(reply.usage) : ''
 		const latest = editor.getShape<NodeShape>(shape.id)
 		if (latest) {
-			updateNode<ChatNode>(editor, latest, (n) => ({ ...n, assistantMessage: reply }), false)
+			updateNode<ChatNode>(editor, latest, (n) => ({
+				...n,
+				assistantMessage: reply.text,
+				lastUsage: usage || undefined,
+			}), false)
 		}
-		return reply
+		return reply.text
 	} catch (e) {
 		const latest = editor.getShape<NodeShape>(shape.id)
 		if (latest) {
@@ -266,7 +273,7 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
 			<div className="ChatNode-compose" style={{ height: MESSAGE_HEIGHT_PX }}>
 				<textarea
-					className="ChatNode-input"
+					className="ChatNode-input NodeScroll"
 					placeholder="Message… (Ctrl+Enter to send)"
 					value={node.userMessage}
 					onPointerDown={editor.markEventAsHandled}
@@ -294,24 +301,13 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 					)}
 				</button>
 			</div>
-			<div
-				className={classNames('GenerateTextNode-result', 'ChatNode-reply', {
-					'GenerateTextNode-result_loading': busy,
-				})}
-				style={{ height: REPLY_HEIGHT_PX - 8 }}
-				onPointerDown={(e) => e.stopPropagation()}
-				onWheel={(e) => e.stopPropagation()}
-			>
-				{node.error ? (
-					<div className="GenerateTextNode-result-text ChatNode-error">{node.error}</div>
-				) : node.assistantMessage ? (
-					<div className="GenerateTextNode-result-text">{node.assistantMessage}</div>
-				) : (
-					<div className="GenerateTextNode-result-empty">
-						<span>The reply appears here</span>
-					</div>
-				)}
-			</div>
+			<NodeTextResult
+				text={node.assistantMessage || null}
+				error={node.error}
+				loading={busy}
+				empty="The reply appears here"
+				height={REPLY_HEIGHT_PX}
+			/>
 		</>
 	)
 }

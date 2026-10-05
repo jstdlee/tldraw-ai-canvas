@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, TldrawUiButton, TLShapeId, useEditor } from 'tldraw'
 import { TemplateIcon } from '../../components/icons/TemplateIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX, PortDataType } from '../../constants'
@@ -64,7 +65,7 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 	title = 'Packed group'
 	heading = 'Packed'
 	icon = <TemplateIcon />
-	category = 'logic'
+	category = categoryOf('subgraph')
 	override hidden = true
 	resultKeys = ['lastOutputs', 'error'] as const
 	getDefault(): SubgraphNode {

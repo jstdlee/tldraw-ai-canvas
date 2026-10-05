@@ -8,6 +8,9 @@ import {
 import { NodeShape } from '../nodes/NodeShapeUtil'
 import { executeNode } from '../nodes/nodeTypes'
 import { ExecutionResult, PipelineValue, STOP_EXECUTION } from '../nodes/types/shared'
+import { missingRunInput } from '../../../shared/runIssue'
+import { spillUnconnectedOutput } from '../autoSpill'
+import { setNodeRun } from './nodeRunState'
 import { getArrowInputs, writeArrowOutputs } from './arrows'
 
 export interface ExecutionGraphOptions {
@@ -167,17 +170,43 @@ export class ExecutionGraph {
 		if (this.state !== 'executing') return
 		if (this.nodesById.get(nodeId)?.state !== 'waiting') return
 
+		const issue = missingRunInput(node.shape.props.node as { type: string }, inputs)
+		if (issue) {
+			setNodeRun(this.editor, nodeId, { status: 'missing', message: issue, ms: 0 })
+			const stopped = Object.fromEntries(
+				Object.values(getNodePorts(this.editor, nodeId))
+					.filter((port) => port.terminal === 'start')
+					.map((port) => [port.id, STOP_EXECUTION])
+			) as ExecutionResult
+			this.nodesById.set(nodeId, { ...node, state: 'executed', outputs: stopped })
+			return
+		}
+
 		this.nodesById.set(nodeId, {
 			...node,
 			state: 'executing',
 		})
+		setNodeRun(this.editor, nodeId, { status: 'running' })
+		const started = performance.now()
 
 		this.editor.updateShape({
 			id: nodeId,
 			type: node.shape.type,
 			props: { isOutOfDate: true },
 		})
-		const outputs = await executeNode(this.editor, node.shape, inputs)
+		let outputs: ExecutionResult
+		let caught = false
+		try {
+			outputs = await executeNode(this.editor, node.shape, inputs)
+		} catch (error) {
+			caught = true
+			outputs = { output: STOP_EXECUTION }
+			setNodeRun(this.editor, nodeId, {
+				status: 'error',
+				message: (error as Error).message,
+				ms: Math.round(performance.now() - started),
+			})
+		}
 		this.editor.updateShape({
 			id: nodeId,
 			type: node.shape.type,
@@ -189,6 +218,32 @@ export class ExecutionGraph {
 			state: 'executed',
 			outputs,
 		})
+
+		const fresh = this.editor.getShape(nodeId)
+		const nodeError =
+			fresh && this.editor.isShapeOfType(fresh, 'node')
+				? (fresh.props.node as { error?: string | null }).error
+				: null
+		const failed =
+			!!nodeError ||
+			(Object.keys(outputs).length > 0 && Object.values(outputs).every((value) => value === STOP_EXECUTION))
+		const ms = Math.round(performance.now() - started)
+		if (!caught) {
+			setNodeRun(this.editor, nodeId, {
+				status: failed ? 'error' : 'ok',
+				message: nodeError || undefined,
+				ms,
+			})
+		}
+
+		if (!failed) {
+			const shapeNow = this.editor.getShape(nodeId)
+			if (shapeNow && this.editor.isShapeOfType(shapeNow, 'node')) {
+				await spillUnconnectedOutput(this.editor, shapeNow, outputs).catch((error) =>
+					console.warn('Placing the node output failed:', error)
+				)
+			}
+		}
 
 		// Results to the canvas through tldraw arrows (node → shape).
 		await writeArrowOutputs(this.editor, nodeId, outputs).catch((e) =>

@@ -1,6 +1,8 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiGenerateText } from '../../api/pipelineApi'
+import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
 	NODE_HEADER_HEIGHT_PX,
@@ -94,7 +96,7 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 	title = 'AI text'
 	heading = 'AI text'
 	icon = <GenerateTextIcon />
-	category = 'text'
+	category = categoryOf('text_ai')
 	resultKeys = ['lastResultText', 'error'] as const
 	getDefault(): TextAINode {
 		return {
@@ -138,7 +140,13 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 				model: node.model || undefined,
 				...llmRequestSettings(node),
 			})
-			updateNode<TextAINode>(this.editor, shape, (n) => ({ ...n, lastResultText: result.text, error: null }))
+			const usage = result.usage ? formatLlmUsage(result.usage) : ''
+			updateNode<TextAINode>(this.editor, shape, (n) => ({
+				...n,
+				lastResultText: result.text,
+				lastUsage: usage || undefined,
+				error: null,
+			}))
 			return { output: result.text }
 		} catch (e) {
 			updateNode<TextAINode>(this.editor, shape, (n) => ({ ...n, error: (e as Error).message }), false)

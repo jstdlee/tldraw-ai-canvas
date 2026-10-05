@@ -37,7 +37,13 @@ import { getNodeDefinition, getNodeHeightPx, getNodeWidthPx, NodeBody, NodeType 
 import { resizeNode } from './resizeNode'
 import { unpack } from '../subgraph'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../placeOnCanvas'
-import { NodeValue, STOP_EXECUTION } from './types/shared'
+import { formatRunMs } from '../../../shared/llmUsage'
+import { pastePatch } from '../../../shared/pasteTarget'
+import { openFillAssist } from '../assist'
+import { readClipboard } from '../clipboard'
+import { apiImportImage } from '../api/pipelineApi'
+import { clearNodeRun, nodeRunState } from '../execution/nodeRunState'
+import { STOP_EXECUTION } from './types/shared'
 
 const NODE_TYPE = 'node'
 
@@ -52,6 +58,12 @@ declare module 'tldraw' {
 			extraH?: number
 			/** Show only the header and footer. */
 			collapsed?: boolean
+			/** Freeze position and size. */
+			pinned?: boolean
+			/** Refuse deletion. */
+			deleteLocked?: boolean
+			/** Text or image shape that shows an unconnected output. */
+			spillId?: string
 		}
 	}
 }
@@ -66,6 +78,9 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		w: T.number.optional(),
 		extraH: T.number.optional(),
 		collapsed: T.boolean.optional(),
+		pinned: T.boolean.optional(),
+		deleteLocked: T.boolean.optional(),
+		spillId: T.string.optional(),
 	}
 
 	getDefaultProps(): NodeShape['props'] {
@@ -83,7 +98,7 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		if (shape.props.node.type === 'subgraph') unpack(this.editor, shape.id)
 	}
 	override canResize(shape: NodeShape) {
-		return !shape.props.collapsed
+		return !shape.props.collapsed && !shape.props.pinned
 	}
 	override hideResizeHandles(shape: NodeShape) {
 		return !this.canResize(shape)
@@ -220,14 +235,27 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 		[editor]
 	)
 
+	const run = useValue('node run', () => nodeRunState.get(editor)[shape.id], [editor, shape.id])
+
 	const nodeDefinition = getNodeDefinition(editor, shape.props.node)
+	const runClass =
+		isExecuting || run?.status === 'running'
+			? 'NodeShape_running'
+			: run?.status === 'ok'
+				? 'NodeShape_ok'
+				: run?.status === 'missing'
+					? 'NodeShape_missing'
+					: run?.status === 'error'
+						? 'NodeShape_error'
+						: undefined
 
 	return (
 		<HTMLContainer
-			className={classNames('NodeShape', {
+			className={classNames('NodeShape', runClass, {
 				NodeShape_executing: isExecuting,
 				NodeShape_capture: shape.props.node.type === 'capture',
 				NodeShape_collapsed: !!shape.props.collapsed,
+				NodeShape_pinned: !!shape.props.pinned,
 			})}
 			onContextMenu={(e) => {
 				const target = e.target as HTMLElement
@@ -240,22 +268,12 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 			<div className="NodeShape-heading">
 				<div className="NodeShape-icon">{nodeDefinition.icon}</div>
 				<div className="NodeShape-label">{nodeDefinition.heading ?? nodeDefinition.title}</div>
-				{output !== undefined && (
-					<>
-						<div className="NodeShape-output">
-							<NodeValue
-								value={
-									output.isOutOfDate
-										? STOP_EXECUTION
-										: output.multi
-											? output.value[0]
-											: output.value
-								}
-							/>
-						</div>
-						<Port shapeId={shape.id} portId="output" />
-					</>
+				{(run?.status === 'missing' || run?.status === 'error') && run.message && (
+					<div className="NodeShape-issue" title={run.message}>
+						{run.message}
+					</div>
 				)}
+				{output !== undefined && <Port shapeId={shape.id} portId="output" />}
 			</div>
 			<NodeBody shape={shape} />
 			<div className="NodeShape-footer">
@@ -273,7 +291,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 					}}
 				>
 					{isExecuting ? <StopIcon /> : <PlayIcon />}
-					<span>{isExecuting ? 'Stop' : 'Play from here'}</span>
+					<span>{isExecuting ? 'Stop' : run?.ms != null ? formatRunMs(run.ms) : 'Run'}</span>
 				</button>
 				<NodeFooterTools shape={shape} />
 				<NodeFooterMenu shape={shape} />
@@ -320,8 +338,72 @@ function NodeFooterTools({ shape }: { shape: NodeShape }) {
 		[editor, shape.id]
 	)
 	const collapsed = !!shape.props.collapsed
+	const pinned = !!shape.props.pinned
+	const deleteLocked = !!shape.props.deleteLocked
+	const clearOutput = () => {
+		const definition = getNodeDefinition(editor, shape.props.node)
+		const defaults = definition.getDefault() as unknown as Record<string, unknown>
+		const node = { ...(shape.props.node as unknown as Record<string, unknown>) }
+		for (const key of definition.resultKeys ?? []) node[key] = defaults[key]
+		if (shape.props.spillId) {
+			const spill = editor.getShape(shape.props.spillId as typeof shape.id)
+			if (spill) editor.deleteShapes([spill.id])
+		}
+		editor.updateShape<NodeShape>({
+			id: shape.id,
+			type: 'node',
+			props: { node: node as NodeShape['props']['node'], spillId: undefined, isOutOfDate: true },
+		})
+		clearNodeRun(editor, shape.id)
+	}
+	const paste = async () => {
+		const data = await readClipboard()
+		const patch = pastePatch(shape.props.node as unknown as { type: string }, data)
+		if (!patch) return
+		let next = { ...(shape.props.node as unknown as Record<string, unknown>), ...patch }
+		if (next.type === 'load_image' && typeof next.source === 'string' && next.source && !data.imageUrl) {
+			try {
+				next = { ...next, imageUrl: await apiImportImage(next.source) }
+			} catch {
+				// Keep the path or URL. Run reports it if the file cannot be read.
+			}
+		}
+		editor.updateShape<NodeShape>({
+			id: shape.id,
+			type: 'node',
+			props: { node: next as NodeShape['props']['node'], isOutOfDate: true },
+		})
+	}
 	return (
 		<div className="NodeFooterTools" onPointerDown={(e) => e.stopPropagation()}>
+			<button className="NodeFooterTools-button" title="Fill this node with AI" onClick={() => openFillAssist(shape.id)}>
+				✦
+			</button>
+			<button className="NodeFooterTools-button" title="Paste text or an image" onClick={() => void paste()}>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+					<path d="M8 4h8a2 2 0 0 1 2 2v14H6V6a2 2 0 0 1 2-2z" />
+					<path d="M9 4V3h6v1" />
+				</svg>
+			</button>
+			<button
+				className={'NodeFooterTools-button' + (pinned ? ' is-on' : '')}
+				title={pinned ? 'Unpin' : 'Pin. Freeze position and size.'}
+				onClick={() => editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { pinned: !pinned } })}
+			>
+				📌
+			</button>
+			<button
+				className={'NodeFooterTools-button' + (deleteLocked ? ' is-on' : '')}
+				title={deleteLocked ? 'Allow delete' : 'Lock delete'}
+				onClick={() =>
+					editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { deleteLocked: !deleteLocked } })
+				}
+			>
+				⌫
+			</button>
+			<button className="NodeFooterTools-button" title="Clear output" onClick={clearOutput}>
+				×
+			</button>
 			<button
 				className="NodeFooterTools-button"
 				title={value ? 'Copy output' : 'No output yet'}

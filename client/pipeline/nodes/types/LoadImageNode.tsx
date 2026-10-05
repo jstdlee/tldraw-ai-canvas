@@ -1,5 +1,8 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { useCallback, useState } from 'react'
 import { T, useEditor } from 'tldraw'
+import { apiImportImage } from '../../api/pipelineApi'
+import { FieldMax, ImageZoom } from '../../editors/LargeEditor'
 import { LoadImageIcon } from '../../components/icons/LoadImageIcon'
 import {
 	NODE_HEADER_HEIGHT_PX,
@@ -24,6 +27,8 @@ export type LoadImageNode = T.TypeOf<typeof LoadImageNode>
 export const LoadImageNode = T.object({
 	type: T.literal('load_image'),
 	imageUrl: T.string.nullable(),
+	/** A URL or a file path. Play copies it into the image store. */
+	source: T.string.optional(),
 })
 
 export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
@@ -32,15 +37,16 @@ export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
 	title = 'Load image'
 	heading = 'Image'
 	icon = <LoadImageIcon />
-	category = 'input'
+	category = categoryOf('load_image')
 	getDefault(): LoadImageNode {
 		return {
 			type: 'load_image',
 			imageUrl: null,
+			source: '',
 		}
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX + NODE_IMAGE_PREVIEW_HEIGHT_PX
+		return NODE_ROW_HEIGHT_PX * 2 + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
@@ -53,9 +59,15 @@ export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
 			},
 		}
 	}
-	async execute(_shape: NodeShape, node: LoadImageNode): Promise<ExecutionResult> {
-		await sleep(300)
-		return { output: node.imageUrl }
+	async execute(shape: NodeShape, node: LoadImageNode): Promise<ExecutionResult> {
+		const source = (node.source ?? '').trim()
+		let imageUrl = node.imageUrl
+		if (source) {
+			imageUrl = await apiImportImage(source)
+			updateNode<LoadImageNode>(this.editor, shape, (n) => ({ ...n, imageUrl }))
+		}
+		await sleep(200)
+		return { output: imageUrl }
 	}
 	getOutputInfo(shape: NodeShape, node: LoadImageNode): InfoValues {
 		return {
@@ -114,12 +126,14 @@ function selectImageFile(): Promise<File | null> {
 function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNode>) {
 	const editor = useEditor()
 	const [isDragOver, setIsDragOver] = useState(false)
+	const [zoom, setZoom] = useState(false)
+	const [loadError, setLoadError] = useState<string | null>(null)
 
 	const handleFile = useCallback(
 		async (file: File) => {
 			if (!file.type.startsWith('image/')) return
 			const dataUrl = await readFileAsDataUrl(file)
-			updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl: dataUrl }))
+			updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl: dataUrl, source: '' }))
 		},
 		[editor, shape]
 	)
@@ -152,8 +166,33 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 		setIsDragOver(false)
 	}, [])
 
+	const loadSource = useCallback(async () => {
+		const source = (node.source ?? '').trim()
+		if (!source) return
+		setLoadError(null)
+		try {
+			const imageUrl = await apiImportImage(source)
+			updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl }))
+		} catch (e) {
+			setLoadError((e as Error).message)
+		}
+	}, [editor, node.source, shape])
+
 	return (
 		<>
+			<NodeRow>
+				<input
+					className="NodeField-input"
+					placeholder="Image URL or file path"
+					value={node.source ?? ''}
+					onPointerDown={(e) => e.stopPropagation()}
+					onKeyDown={(e) => e.stopPropagation()}
+					onChange={(e) => updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, source: e.target.value }))}
+				/>
+				<button className="LoadImageNode-browse" onPointerDown={(e) => e.stopPropagation()} onClick={() => void loadSource()}>
+					Load
+				</button>
+			</NodeRow>
 			<NodeRow>
 				<button
 					className="LoadImageNode-browse"
@@ -166,7 +205,7 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 					<button
 						className="LoadImageNode-clear"
 						onClick={() =>
-							updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl: null }))
+							updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl: null, source: '' }))
 						}
 						onPointerDown={(e) => e.stopPropagation()}
 						title="Clear image"
@@ -182,13 +221,17 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 				onDragLeave={handleDragLeave}
 			>
 				{node.imageUrl ? (
-					<NodeImage src={node.imageUrl} alt="Loaded" />
+					<>
+						<NodeImage src={node.imageUrl} alt="Loaded" />
+						<FieldMax title="Open the image" onClick={() => setZoom(true)} />
+					</>
 				) : (
 					<div className="NodeImagePreview-empty">
-						<span>{isDragOver ? 'Drop image here' : 'Drop or browse for an image'}</span>
+						<span>{isDragOver ? 'Drop image here' : loadError ?? 'Drop, browse, paste, or enter a URL'}</span>
 					</div>
 				)}
 			</div>
+			{zoom && node.imageUrl && <ImageZoom src={node.imageUrl} onClose={() => setZoom(false)} />}
 		</>
 	)
 }

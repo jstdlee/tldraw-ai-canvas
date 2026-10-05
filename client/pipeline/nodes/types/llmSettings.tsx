@@ -14,6 +14,8 @@ export const LlmSettingsFields = {
 	maxTokens: T.number.nullable().optional(),
 	showSettings: T.boolean.optional(),
 	thinking: T.string.optional(),
+	/** Last call: tokens, time, and tokens per second. */
+	lastUsage: T.string.optional(),
 }
 
 export interface LlmSettings {
@@ -23,6 +25,7 @@ export interface LlmSettings {
 	showSettings?: boolean
 	/** '' = model default, 'none' | 'low' | 'medium' | 'high'. */
 	thinking?: string
+	lastUsage?: string
 }
 
 export const DEFAULT_LLM_SETTINGS: Required<LlmSettings> = {
@@ -31,6 +34,7 @@ export const DEFAULT_LLM_SETTINGS: Required<LlmSettings> = {
 	maxTokens: null,
 	showSettings: false,
 	thinking: '',
+	lastUsage: '',
 }
 
 /** Height of the open settings panel (closed: one row for the toggle). */
@@ -71,7 +75,8 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 				onClick={() => set({ showSettings: !node.showSettings })}
 			>
 				{node.showSettings ? '▾' : '▸'} Model settings
-				{!node.showSettings && (node.system || node.temperature != null || node.maxTokens != null || node.thinking) && (
+				{node.lastUsage && <span className="LlmSettings-usage">{node.lastUsage}</span>}
+				{!node.showSettings && !node.lastUsage && (node.system || node.temperature != null || node.maxTokens != null || node.thinking) && (
 					<span className="LlmSettings-badge">custom</span>
 				)}
 			</button>

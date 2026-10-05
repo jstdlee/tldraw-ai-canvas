@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { TLShapeId, useEditor, useValue } from 'tldraw'
+import { FieldMax, LargeEditor } from '../../editors/LargeEditor'
 import { PortDataType } from '../../constants'
 import { Port } from '../../ports/Port'
 import { getNodeInputPortValues } from '../nodePorts'
@@ -80,13 +82,15 @@ export function NodeTextResult({
 	empty: string
 	height: number
 }) {
+	const [open, setOpen] = useState(false)
+	const body = error || text || ''
 	return (
 		<div
-			className={'GenerateTextNode-result' + (loading ? ' GenerateTextNode-result_loading' : '')}
+			className={'GenerateTextNode-result NodeScroll' + (loading ? ' GenerateTextNode-result_loading' : '')}
 			style={{ height: height - 8 }}
 			onPointerDown={stopEvent}
-			onWheel={stopEvent}
 		>
+			{body && <FieldMax title="Open this text" onClick={() => setOpen(true)} />}
 			{error ? (
 				<div className="GenerateTextNode-result-text ChatNode-error">{error}</div>
 			) : text ? (
@@ -95,6 +99,16 @@ export function NodeTextResult({
 				<div className="GenerateTextNode-result-empty">
 					<span>{empty}</span>
 				</div>
+			)}
+			{open && (
+				<LargeEditor
+					title={error ? 'Error' : 'Output'}
+					value={body}
+					lang="text"
+					readOnly
+					onChange={() => {}}
+					onClose={() => setOpen(false)}
+				/>
 			)}
 		</div>
 	)

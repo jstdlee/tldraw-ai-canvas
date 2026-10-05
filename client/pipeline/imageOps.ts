@@ -3,6 +3,11 @@
  * the local image store (/api/images/…), so documents stay small.
  */
 
+import { FILTER_PRESETS, type ImageFilter, NO_FILTER } from '../../shared/imageFilters'
+
+export type { ImageFilter } from '../../shared/imageFilters'
+export { applyPreset, FILTER_PRESETS, matchPreset, NO_FILTER } from '../../shared/imageFilters'
+
 export function loadImageElement(src: string): Promise<HTMLImageElement> {
 	return new Promise((resolve, reject) => {
 		const img = new Image()
@@ -106,46 +111,6 @@ export async function resizeImage(
 	return canvasToStoredUrl(canvas)
 }
 
-export interface ImageFilter {
-	brightness: number
-	contrast: number
-	saturate: number
-	hue: number
-	grayscale: number
-	sepia: number
-	invert: number
-	blur: number
-	rotate: number
-	flipX: boolean
-	flipY: boolean
-}
-
-export const NO_FILTER: ImageFilter = {
-	brightness: 100,
-	contrast: 100,
-	saturate: 100,
-	hue: 0,
-	grayscale: 0,
-	sepia: 0,
-	invert: 0,
-	blur: 0,
-	rotate: 0,
-	flipX: false,
-	flipY: false,
-}
-
-export const FILTER_PRESETS: Record<string, Partial<ImageFilter>> = {
-	None: {},
-	'B & W': { grayscale: 100, contrast: 115 },
-	Vivid: { saturate: 160, contrast: 110 },
-	Warm: { sepia: 35, saturate: 120 },
-	Cool: { hue: 190, saturate: 80 },
-	Faded: { contrast: 80, brightness: 110, saturate: 70 },
-	Sketch: { grayscale: 100, contrast: 180, brightness: 120 },
-	Negative: { invert: 100 },
-	Soft: { blur: 2, brightness: 105 },
-}
-
 export function cssFilter(f: ImageFilter) {
 	return [
 		`brightness(${f.brightness}%)`,
@@ -189,6 +154,7 @@ export const IMAGE_TOOLS = [
 	{ id: 'watermark', label: 'Watermark text', a: 'text', b: 'position: br, bl, tr, tl, center' },
 	{ id: 'square', label: 'Pad to square', b: 'colour (#ffffff)' },
 	{ id: 'data_url', label: 'To data URL (base64 text)' },
+	{ id: 'look', label: 'Look (film preset)', a: 'JP 90s, Kodak Gold, Noir…' },
 ] as const
 
 async function blobInfo(src: string) {
@@ -209,6 +175,10 @@ export async function imageTool(src: string, tool: string, a: string, b: string)
 		canvas.height = ch
 	}
 	switch (tool) {
+		case 'look': {
+			const preset = FILTER_PRESETS[a.trim()] ?? FILTER_PRESETS['JP 90s'] ?? {}
+			return { image: await filterImage(src, { ...NO_FILTER, ...preset }) }
+		}
 		case 'info': {
 			draw(64, 64)
 			ctx.drawImage(img, 0, 0, 64, 64)

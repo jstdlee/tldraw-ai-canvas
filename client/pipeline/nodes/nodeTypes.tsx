@@ -27,6 +27,7 @@ import { removedNodeDefinition } from './types/RemovedNode'
 import { JevNodeDefinition } from './types/JevNode'
 import { NetToolNodeDefinition, RandomNodeDefinition, SummarizeNodeDefinition } from './types/UtilityNodes'
 import { DownloadNodeDefinition, HttpNodeDefinition, SaveNodeDefinition } from './types/WebNodes'
+import { PostgresNodeDefinition } from './types/PostgresNode'
 import { GenerateTextNodeDefinition } from './types/GenerateTextNode'
 import { LoadImageNodeDefinition } from './types/LoadImageNode'
 import { NumberNodeDefinition } from './types/NumberNode'
@@ -74,6 +75,7 @@ export const NodeDefinitions = {
 	http: HttpNodeDefinition,
 	download: DownloadNodeDefinition,
 	net_tool: NetToolNodeDefinition,
+	postgres: PostgresNodeDefinition,
 	// Output
 	output: OutputNodeDefinition,
 	save: SaveNodeDefinition,

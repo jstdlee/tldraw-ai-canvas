@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import classNames from 'classnames'
 import { T, useEditor, useValue } from 'tldraw'
 import { AdjustIcon } from '../../components/icons/AdjustIcon'
@@ -64,7 +65,7 @@ export class AdjustNodeDefinition extends NodeDefinition<AdjustNode> {
 	title = 'Adjust'
 	heading = 'Adjust'
 	icon = <AdjustIcon />
-	category = 'image'
+	category = categoryOf('adjust')
 	override hidden = true
 	resultKeys = ['lastResultUrl'] as const
 	getDefault(): AdjustNode {

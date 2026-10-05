@@ -39,6 +39,9 @@ import { ChatPanelFallback } from './components/ChatPanelFallback'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { ImagePipelineSidebar } from './pipeline/components/ImagePipelineSidebar'
+import { CanvasExtras } from './pipeline/components/CanvasExtras'
+import { installAltScroll } from './pipeline/altScroll'
+import { registerNodeGuards } from './pipeline/nodeGuards'
 import { OnCanvasNodePicker } from './pipeline/components/OnCanvasNodePicker'
 import { PipelineRegions } from './pipeline/components/PipelineRegions'
 import { TemplatePicker } from './pipeline/components/TemplatePicker'
@@ -84,7 +87,7 @@ const PANEL_KEY = 'tldraw-ai-canvas:panels'
 
 function loadPanels(): { library: boolean; chat: boolean } {
 	// On a narrow window start with only the agent panel, so the canvas has room.
-	const defaults = { library: window.innerWidth >= 1100, chat: true }
+	const defaults = { library: window.innerWidth >= 1100, chat: false }
 	try {
 		return { ...defaults, ...JSON.parse(localStorage.getItem(PANEL_KEY) ?? '{}') }
 	} catch {
@@ -259,11 +262,7 @@ function App() {
 	return (
 		<TldrawUiToastsProvider>
 			<div
-				className={
-					'app-layout' +
-					(panels.library ? '' : ' is-library-hidden') +
-					(panels.chat ? '' : ' is-chat-hidden')
-				}
+				className={'app-layout is-chat-hidden' + (panels.library ? '' : ' is-library-hidden')}
 			>
 				<div className="image-pipeline-sidebar">
 					{editor ? <ImagePipelineSidebar editor={editor} /> : <div />}
@@ -289,22 +288,33 @@ function App() {
 							disableTransparency(editor, ['connection'])
 							registerClipHandlers(editor)
 							watchPackedNodes(editor)
+							registerNodeGuards(editor)
+							installAltScroll()
 						}}
 					>
 						<TldrawAgentAppProvider onMount={setApp} onUnmount={handleUnmount} />
+						<CanvasExtras />
 					</Tldraw>
 				</div>
 				<ProvidersModal editor={editor} />
 				<ImageEditorModal editor={editor} />
-				<div className="chat-panel-wrapper">
-					<ErrorBoundary fallback={ChatPanelFallback}>
-						{app && (
+				{panels.chat && app && (
+					<div className="chat-float-modal" role="dialog" aria-label="Agent chat">
+						<button className="chat-float-close" type="button" title="Close" onClick={() => togglePanel('chat')}>
+							×
+						</button>
+						<ErrorBoundary fallback={ChatPanelFallback}>
 							<TldrawAgentAppContextProvider app={app}>
 								<ChatPanel />
 							</TldrawAgentAppContextProvider>
-						)}
-					</ErrorBoundary>
-				</div>
+						</ErrorBoundary>
+					</div>
+				)}
+				{!panels.chat && (
+					<button className="chat-float-button" type="button" title="Agent chat" onClick={() => togglePanel('chat')}>
+						✦
+					</button>
+				)}
 			</div>
 		</TldrawUiToastsProvider>
 	)

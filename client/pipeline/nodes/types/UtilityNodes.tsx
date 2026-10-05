@@ -1,7 +1,9 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { RANDOM_MODES, randomValue } from '../../../../shared/random'
 import { apiGenerateText, apiNetTool } from '../../api/pipelineApi'
+import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import { NumberIcon } from '../../components/icons/NumberIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
@@ -71,7 +73,7 @@ export class RandomNodeDefinition extends NodeDefinition<RandomNode> {
 	title = 'Random'
 	heading = 'Random'
 	icon = <NumberIcon />
-	category = 'input'
+	category = categoryOf('random')
 	resultKeys = ['lastValue'] as const
 	getDefault(): RandomNode {
 		return { type: 'random', mode: 'number', a: '1', b: '100', list: 'red\ngreen\nblue', lastValue: null }
@@ -191,7 +193,7 @@ export class NetToolNodeDefinition extends NodeDefinition<NetToolNode> {
 	title = 'Network tools'
 	heading = 'Network'
 	icon = <UpscaleIcon />
-	category = 'web'
+	category = categoryOf('net_tool')
 	resultKeys = ['lastOutput', 'lastMs', 'error'] as const
 	getDefault(): NetToolNode {
 		return { type: 'net_tool', tool: 'ping', target: '1.1.1.1', option: '', lastOutput: null, lastMs: null, error: null }
@@ -342,7 +344,7 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 	title = 'Summarize (text, URL, image, video)'
 	heading = 'Summarize'
 	icon = <GenerateTextIcon />
-	category = 'text'
+	category = categoryOf('summarize')
 	resultKeys = ['lastResultText', 'lastKind', 'error'] as const
 	getDefault(): SummarizeNode {
 		return {
@@ -385,15 +387,22 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 			(node.language ? ` Write in ${node.language}.` : '')
 		try {
 			const images = kind === 'video' ? await videoFrames(value) : undefined
-			const { text } = await apiGenerateText({
+			const result = await apiGenerateText({
 				input: kind === 'video' ? undefined : value,
 				images,
 				prompt,
 				model: node.model || undefined,
 				...llmRequestSettings(node),
 			})
-			updateNode<SummarizeNode>(this.editor, shape, (n) => ({ ...n, lastResultText: text, lastKind: kind, error: null }))
-			return { output: text }
+			const usage = result.usage ? formatLlmUsage(result.usage) : ''
+			updateNode<SummarizeNode>(this.editor, shape, (n) => ({
+				...n,
+				lastResultText: result.text,
+				lastKind: kind,
+				lastUsage: usage || undefined,
+				error: null,
+			}))
+			return { output: result.text }
 		} catch (e) {
 			updateNode<SummarizeNode>(this.editor, shape, (n) => ({ ...n, error: (e as Error).message }), false)
 			return { output: STOP_EXECUTION }

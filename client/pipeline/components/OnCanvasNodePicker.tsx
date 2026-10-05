@@ -18,6 +18,7 @@ import { getConnectionTerminals } from '../connection/ConnectionShapeUtil'
 import { NODE_WIDTH_PX } from '../constants'
 import { getNodeDefinitions, NodeType } from '../nodes/nodeTypes'
 import { NodeDefinition } from '../nodes/types/shared'
+import { NODE_GROUP_ORDER } from '../../../shared/nodeGroups'
 import { EditorAtom } from '../utils'
 
 export interface OnCanvasNodePickerState {
@@ -41,32 +42,27 @@ export function OnCanvasNodePicker() {
 		state.onClose()
 	}, [editor])
 	const nodeDefs = getNodeDefinitions(editor)
+	const grouped: Record<string, NodeDefinition<NodeType>[]> = {}
+	for (const def of Object.values(nodeDefs)) {
+		if (def.hidden) continue
+		const cat = def.category
+		if (!grouped[cat]) grouped[cat] = []
+		grouped[cat].push(def as NodeDefinition<NodeType>)
+	}
 
 	return (
 		<OnCanvasNodePickerDialog onClose={onClose}>
-			<TldrawUiMenuGroup id="inputs">
-				<OnCanvasNodePickerItem definition={nodeDefs.prompt} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.load_image} onClose={onClose} />
-			</TldrawUiMenuGroup>
-			<TldrawUiMenuGroup id="text">
-				<OnCanvasNodePickerItem definition={nodeDefs.text_ai} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.text_tool} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.chat} onClose={onClose} />
-			</TldrawUiMenuGroup>
-			<TldrawUiMenuGroup id="image">
-				<OnCanvasNodePickerItem definition={nodeDefs.crop} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.image_resize} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.image_filter} onClose={onClose} />
-			</TldrawUiMenuGroup>
-			<TldrawUiMenuGroup id="logic">
-				<OnCanvasNodePickerItem definition={nodeDefs.if} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.for_each} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.code} onClose={onClose} />
-			</TldrawUiMenuGroup>
-			<TldrawUiMenuGroup id="output">
-				<OnCanvasNodePickerItem definition={nodeDefs.output} onClose={onClose} />
-				<OnCanvasNodePickerItem definition={nodeDefs.save} onClose={onClose} />
-			</TldrawUiMenuGroup>
+			{NODE_GROUP_ORDER.map((cat) => {
+				const items = grouped[cat]
+				if (!items?.length) return null
+				return (
+					<TldrawUiMenuGroup key={cat} id={cat}>
+						{items.map((def) => (
+							<OnCanvasNodePickerItem key={def.type} definition={def} onClose={onClose} />
+						))}
+					</TldrawUiMenuGroup>
+				)
+			})}
 		</OnCanvasNodePickerDialog>
 	)
 }

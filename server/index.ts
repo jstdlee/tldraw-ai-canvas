@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { PublicAIConfig } from '../shared/aiConfig'
+import { normalizeLlmUsage } from '../shared/llmUsage'
 import { AgentPrompt } from '../shared/types/AgentPrompt'
 import { streamAgentActions } from './agent/AgentService'
 import {
@@ -17,7 +18,7 @@ import {
 	saveConfig,
 	toPublicConfig,
 } from './config'
-import { readImage, resolveImage, saveImage, toDataUrl } from './images'
+import { importLocalImage, importRemoteImage, readImage, resolveImage, saveImage, toDataUrl } from './images'
 import { downloadUrl, httpRequest, HttpRequestInput, saveContent, unfurl } from './http'
 import { deleteCustomNode, listCustomNodes, readCustomNode, saveCustomNode } from './customNodes'
 import { decide, JevRequest } from './jev'
@@ -204,6 +205,7 @@ app.post('/api/chat', async (c) => {
 	}
 	const messages = await inlineImages(body.messages)
 	const { model, provider } = resolveModel(body.model, hasImages(messages) ? 'vision' : 'chat')
+	const started = Date.now()
 	const result = streamText({
 		model: getLanguageModel(provider, model),
 		system: body.system || undefined,
@@ -222,6 +224,12 @@ app.post('/api/chat', async (c) => {
 				for await (const text of result.textStream) controller.enqueue(encoder.encode(text))
 			} catch (e) {
 				controller.enqueue(encoder.encode(`\n\n[error] ${errorMessage(e)}`))
+			}
+			try {
+				const usage = normalizeLlmUsage(await result.usage, Date.now() - started)
+				controller.enqueue(encoder.encode(`\n\n[usage] ${JSON.stringify(usage)}`))
+			} catch {
+				// A failed call may have no usage. The error line is enough.
 			}
 			controller.close()
 		},
@@ -266,7 +274,8 @@ app.post('/api/generate-text', async (c) => {
 	const content: UserContent = images.map((img) => ({ type: 'image' as const, image: img.bytes, mediaType: img.mime }))
 	content.push({ type: 'text', text: text ? `Input:\n${text}\n\n${body.prompt}` : body.prompt })
 	const { model, provider } = resolveModel(body.model, images.length ? 'vision' : 'chat')
-	const { text: reply } = await generateText({
+	const started = Date.now()
+	const generated = await generateText({
 		model: getLanguageModel(provider, model),
 		system: body.system || undefined,
 		messages: [{ role: 'user', content }],
@@ -274,7 +283,10 @@ app.post('/api/generate-text', async (c) => {
 		maxOutputTokens: body.maxTokens || model.maxOutputTokens || 4096,
 		providerOptions: getProviderOptions(provider, withThinking(model, body.thinking)),
 	})
-	return c.json({ text: stripThink(reply) })
+	return c.json({
+		text: stripThink(generated.text),
+		usage: normalizeLlmUsage(generated.usage, Date.now() - started),
+	})
 })
 
 // --- Custom nodes (saved packed groups) -------------------------------------
@@ -302,6 +314,18 @@ app.post('/api/nettool', async (c) => {
 })
 
 // --- Local image store -----------------------------------------------------
+
+app.post('/api/images/from-path', async (c) => {
+	const body = (await c.req.json()) as { path?: string }
+	if (!body.path?.trim()) throw new ConfigError('path is required')
+	return c.json({ imageUrl: importLocalImage(body.path) })
+})
+
+app.post('/api/images/from-url', async (c) => {
+	const body = (await c.req.json()) as { url?: string }
+	if (!body.url?.trim()) throw new ConfigError('url is required')
+	return c.json({ imageUrl: await importRemoteImage(body.url) })
+})
 
 app.post('/api/images/:imageId', async (c) => {
 	const mime = c.req.header('content-type') ?? 'image/png'

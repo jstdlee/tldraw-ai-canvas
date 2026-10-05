@@ -1,7 +1,8 @@
-import classNames from 'classnames'
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor, useValue } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiGenerateText } from '../../api/pipelineApi'
+import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
 	NODE_HEADER_HEIGHT_PX,
@@ -19,6 +20,7 @@ import {
 	llmRequestSettings,
 	llmSettingsHeight,
 } from './llmSettings'
+import { NodeTextResult } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -51,7 +53,7 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 	title = 'Generate text'
 	heading = 'Generate text'
 	icon = <GenerateTextIcon />
-	category = 'text'
+	category = categoryOf('generate_text')
 	resultKeys = ['lastResultText'] as const
 	getDefault(): GenerateTextNode {
 		return {
@@ -106,9 +108,11 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 			...llmRequestSettings(node),
 		})
 
+		const usage = result.usage ? formatLlmUsage(result.usage) : ''
 		updateNode<GenerateTextNode>(this.editor, shape, (n) => ({
 			...n,
 			lastResultText: result.text,
+			lastUsage: usage || undefined,
 		}))
 
 		return { output: result.text }
@@ -186,21 +190,12 @@ function GenerateTextNodeComponent({ shape, node }: NodeComponentProps<GenerateT
 				/>
 			</NodeRow>
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
-			<div
-				className={classNames('GenerateTextNode-result', {
-					'GenerateTextNode-result_loading': shape.props.isOutOfDate,
-				})}
-				onPointerDown={(e) => e.stopPropagation()}
-				onWheel={(e) => e.stopPropagation()}
-			>
-				{node.lastResultText ? (
-					<div className="GenerateTextNode-result-text">{node.lastResultText}</div>
-				) : (
-					<div className="GenerateTextNode-result-empty">
-						<span>Run to generate text</span>
-					</div>
-				)}
-			</div>
+			<NodeTextResult
+				text={node.lastResultText}
+				loading={shape.props.isOutOfDate}
+				empty="Run to generate text"
+				height={96}
+			/>
 		</>
 	)
 }

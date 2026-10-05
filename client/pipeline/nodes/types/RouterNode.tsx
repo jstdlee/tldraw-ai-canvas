@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T } from 'tldraw'
 import { RouterIcon } from '../../components/icons/RouterIcon'
 import {
@@ -31,7 +32,7 @@ export class RouterNodeDefinition extends NodeDefinition<RouterNode> {
 	heading = 'Router'
 	hidden = true as const
 	icon = <RouterIcon />
-	category = 'logic'
+	category = categoryOf('router')
 	getDefault(): RouterNode {
 		return {
 			type: 'router',

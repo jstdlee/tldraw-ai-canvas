@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { evaluateCondition, isTruthy, splitItems } from '../../../../shared/logic'
 import { IteratorIcon } from '../../components/icons/IteratorIcon'
@@ -68,7 +69,7 @@ export class IfNodeDefinition extends NodeDefinition<IfNode> {
 	title = 'If / else'
 	heading = 'If'
 	icon = <RouterIcon />
-	category = 'logic'
+	category = categoryOf('if')
 	resultKeys = ['lastResult', 'lastValue'] as const
 	getDefault(): IfNode {
 		return { type: 'if', condition: 'contains', operand: 'yes', lastResult: null, lastValue: null }
@@ -163,7 +164,7 @@ export class LogicNodeDefinition extends NodeDefinition<LogicNode> {
 	title = 'And / Or / Not'
 	heading = 'Logic'
 	icon = <RouterIcon />
-	category = 'logic'
+	category = categoryOf('logic')
 	resultKeys = ['lastResult'] as const
 	getDefault(): LogicNode {
 		return { type: 'logic', op: 'and', lastResult: null }
@@ -260,7 +261,7 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 	title = 'For each'
 	heading = 'For each'
 	icon = <IteratorIcon />
-	category = 'logic'
+	category = categoryOf('for_each')
 	resultKeys = ['progress', 'lastResults', 'error'] as const
 	getDefault(): ForEachNode {
 		return { type: 'for_each', split: 'lines', separator: ',', joiner: '\\n', progress: null, lastResults: null, error: null }

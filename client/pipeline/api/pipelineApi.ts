@@ -3,6 +3,8 @@
  * Model fields take a model key from the AI config; empty means the default.
  */
 
+import { LlmUsage, takeUsageTrailer } from '../../../shared/llmUsage'
+
 
 export interface LlmRequestSettings {
 	system?: string
@@ -23,6 +25,7 @@ export interface GenerateTextParams extends LlmRequestSettings {
 
 export interface GenerateTextResult {
 	text: string
+	usage?: LlmUsage
 }
 
 /**
@@ -61,15 +64,19 @@ export interface ChatMessage {
 	content: string | ChatContentPart[]
 }
 
+function visibleChat(raw: string) {
+	return stripThinking(takeUsageTrailer(raw).text)
+}
+
 /**
  * Stream a chat reply from /api/chat. `onText` gets the full text so far.
- * Resolves with the final text; rejects on an error.
+ * Resolves with the final text and token usage; rejects on an error.
  */
 export async function apiChatStream(
 	params: { model?: string; messages: ChatMessage[] } & LlmRequestSettings,
 	onText: (text: string) => void,
 	signal?: AbortSignal
-): Promise<string> {
+): Promise<{ text: string; usage?: LlmUsage }> {
 	const response = await fetch('/api/chat', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -87,11 +94,12 @@ export async function apiChatStream(
 		const { value, done } = await reader.read()
 		if (done) break
 		text += decoder.decode(value, { stream: true })
-		onText(stripThinking(text))
+		onText(visibleChat(text))
 	}
-	const errorAt = text.lastIndexOf('\n\n[error] ')
-	if (errorAt !== -1) throw new Error(text.slice(errorAt + 10))
-	return stripThinking(text)
+	const errorAt = takeUsageTrailer(text).text.lastIndexOf('\n\n[error] ')
+	if (errorAt !== -1) throw new Error(takeUsageTrailer(text).text.slice(errorAt + 10))
+	const done = takeUsageTrailer(text)
+	return { text: stripThinking(done.text), usage: done.usage }
 }
 
 /** Hide <think>…</think> blocks that some local models write into the text. */
@@ -119,6 +127,19 @@ export interface HttpResult {
 	text: string
 	imageUrl?: string
 	bytes: number
+	/** Response headers, one "name: value" line each. */
+	headers?: string
+	ms?: number
+}
+
+/** Copy a local image path, or fetch an image URL, into the image store. */
+export async function apiImportImage(source: string): Promise<string> {
+	const isUrl = /^https?:\/\//i.test(source.trim())
+	const data = await postJson<{ imageUrl: string }>(
+		isUrl ? '/api/images/from-url' : '/api/images/from-path',
+		isUrl ? { url: source.trim() } : { path: source.trim() }
+	)
+	return data.imageUrl
 }
 
 /** HTTP node: the local server makes the request (no CORS limits). */

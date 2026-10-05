@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { useState } from 'react'
 import { T, useEditor } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
@@ -56,7 +57,7 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 	title = 'JEV decision'
 	heading = 'JEV'
 	icon = <RouterIcon />
-	category = 'logic'
+	category = categoryOf('jev')
 	resultKeys = ['lastResult', 'lastFinal', 'error'] as const
 	getDefault(): JevNode {
 		return {

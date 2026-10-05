@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, TldrawUiSlider, useEditor } from 'tldraw'
 import { NumberIcon } from '../../components/icons/NumberIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
@@ -26,7 +27,7 @@ export class NumberNodeDefinition extends NodeDefinition<NumberNode> {
 	heading = 'Number'
 	hidden = true as const
 	icon = <NumberIcon />
-	category = 'input'
+	category = categoryOf('number')
 	getDefault(): NumberNode {
 		return {
 			type: 'number',

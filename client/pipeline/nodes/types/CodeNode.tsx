@@ -1,7 +1,11 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
+import { DEFAULT_PYTHON } from '../../../../shared/pythonSource'
 import { useState } from 'react'
 import { T, TldrawUiButton, useEditor } from 'tldraw'
 import { apiGenerateText } from '../../api/pipelineApi'
 import { extractCode, runCode } from '../../codeRunner'
+import { CodeArea, TextAreaField } from '../../editors/CodeArea'
+import { runPython } from '../../pythonRunner'
 import { NumberIcon } from '../../components/icons/NumberIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
@@ -61,10 +65,10 @@ const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 	static type = 'code'
 	static validator = CodeNode
-	title = 'Code (TS / JS)'
+	title = 'Code'
 	heading = 'Code'
 	icon = <NumberIcon />
-	category = 'logic'
+	category = categoryOf('code')
 	resultKeys = ['lastOutputs', 'logs', 'error'] as const
 	getDefault(): CodeNode {
 		return {
@@ -114,7 +118,10 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 		}
 		const outputIds = OUTPUT_IDS.slice(0, node.outputCount)
 		try {
-			const { outputs, logs } = await runCode(node.code, node.lang === 'js' ? 'js' : 'ts', args, outputIds)
+			const { outputs, logs } =
+				node.lang === 'py'
+					? await runPython(node.code, args, outputIds)
+					: await runCode(node.code, node.lang === 'js' ? 'js' : 'ts', args, outputIds)
 			updateNode<CodeNode>(this.editor, shape, (n) => ({
 				...n,
 				lastOutputs: JSON.stringify(outputs),
@@ -155,20 +162,25 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 		if (!node.request.trim()) return
 		setBusy('Writing code…')
 		try {
+			const python = node.lang === 'py'
 			const { text } = await apiGenerateText({
-				system:
-					'You write one self-contained TypeScript function for a node in a visual workflow. ' +
-					`Signature: export default async function run({ ${inputs.join(', ')} }: Record<string, string>) . ` +
-					'Inputs are strings (may be null; images are URLs or data URLs; JSON arrives as text). ' +
-					(node.outputCount > 1
-						? `Return an object with keys ${OUTPUT_IDS.slice(0, node.outputCount).join(', ')}. `
-						: 'Return one value (string, number or JSON-serialisable object). ') +
-					'No imports. fetch() is available. Return only the code in one ```ts block.',
+				system: python
+					? 'You write Python for a node in a visual workflow. ' +
+						`Read strings from inputs["${inputs.join('"], inputs["')}"]. ` +
+						`Assign ${OUTPUT_IDS.slice(0, node.outputCount).join(', ')}. ` +
+						'print() is the log. No imports. Return only the code in one ```py block.'
+					: 'You write one self-contained TypeScript function for a node in a visual workflow. ' +
+						`Signature: export default async function run({ ${inputs.join(', ')} }: Record<string, string>) . ` +
+						'Inputs are strings (may be null; images are URLs or data URLs; JSON arrives as text). ' +
+						(node.outputCount > 1
+							? `Return an object with keys ${OUTPUT_IDS.slice(0, node.outputCount).join(', ')}. `
+							: 'Return one value (string, number or JSON-serialisable object). ') +
+						'No imports. fetch() is available. Return only the code in one ```ts block.',
 				prompt: `Task: ${node.request}\n\nCurrent code (change it as needed):\n${node.code}`,
 				input: undefined,
 				temperature: 0.2,
 			})
-			set({ code: extractCode(text), lang: 'ts' })
+			set({ code: extractCode(text), lang: python ? 'py' : 'ts' })
 		} catch (e) {
 			set({ error: (e as Error).message }, false)
 		} finally {
@@ -212,9 +224,21 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 				</div>
 			))}
 			<NodeRow>
-				<select className="NodeField-select" value={node.lang} onPointerDown={stopEvent} onChange={(e) => set({ lang: e.target.value })}>
+				<select
+					className="NodeField-select"
+					value={node.lang}
+					onPointerDown={stopEvent}
+					onChange={(e) => {
+						const lang = e.target.value
+						const patch: Partial<CodeNode> = { lang }
+						if (lang === 'py' && node.code === DEFAULT_CODE) patch.code = DEFAULT_PYTHON
+						if (lang !== 'py' && node.code === DEFAULT_PYTHON) patch.code = DEFAULT_CODE
+						set(patch)
+					}}
+				>
 					<option value="ts">TypeScript</option>
 					<option value="js">JavaScript</option>
+					<option value="py">Python</option>
 				</select>
 				<label className="NodeField-inline" title="Number of inputs">
 					<span>in</span>
@@ -238,13 +262,12 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 			</NodeRow>
 			{node.showAI && (
 				<div className="NodeField-block" style={{ height: AI_HEIGHT_PX }}>
-					<textarea
-						className="NodeField-textarea"
-						placeholder="Describe what the code should do, e.g. “parse the CSV in a and return the average of column 2”"
+					<TextAreaField
+						title="Code request"
+						height={72}
+						placeholder="Describe what the code should do, e.g. parse the CSV in a and return the average of column 2"
 						value={node.request}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ request: e.target.value }, false)}
+						onChange={(request) => set({ request }, false)}
 					/>
 					<div className="CodeNode-aiButtons">
 						<TldrawUiButton type="primary" disabled={!!busy || !node.request.trim()} onPointerDown={stopEvent} onClick={aiWrite}>
@@ -257,27 +280,7 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 					</div>
 				</div>
 			)}
-			<div className="NodeField-block NodeGrow" style={{ height: CODE_HEIGHT_PX }}>
-				<textarea
-					className="NodeField-textarea CodeNode-editor"
-					spellCheck={false}
-					value={node.code}
-					onPointerDown={stopEvent}
-					onWheel={stopEvent}
-					onKeyDown={(e) => {
-						e.stopPropagation()
-						if (e.key === 'Tab') {
-							e.preventDefault()
-							const t = e.currentTarget
-							const { selectionStart: a, selectionEnd: b } = t
-							const code = node.code.slice(0, a) + '  ' + node.code.slice(b)
-							set({ code })
-							requestAnimationFrame(() => t.setSelectionRange(a + 2, a + 2))
-						}
-					}}
-					onChange={(e) => set({ code: e.target.value })}
-				/>
-			</div>
+			<CodeArea value={node.code} lang={node.lang} height={CODE_HEIGHT_PX} onChange={(code) => set({ code })} />
 			<NodeTextResult
 				text={node.description && !result ? node.description : [result, node.logs && `— log —\n${node.logs}`, node.description && `— about —\n${node.description}`].filter(Boolean).join('\n\n') || null}
 				error={node.error}

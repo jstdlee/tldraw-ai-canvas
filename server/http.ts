@@ -28,6 +28,9 @@ export interface HttpResult {
 	/** Set when the body is an image: stored locally and served from here. */
 	imageUrl?: string
 	bytes: number
+	/** Response headers, one "name: value" line each. */
+	headers: string
+	ms: number
 }
 
 function checkUrl(url: string) {
@@ -90,6 +93,7 @@ export async function httpRequest(input: HttpRequestInput): Promise<HttpResult> 
 	if (hasBody && !Object.keys(headers).some((h) => h.toLowerCase() === 'content-type')) {
 		headers['Content-Type'] = /^\s*[[{]/.test(input.body!) ? 'application/json' : 'text/plain'
 	}
+	const started = Date.now()
 	const res = await fetch(input.url, {
 		method,
 		headers,
@@ -98,6 +102,11 @@ export async function httpRequest(input: HttpRequestInput): Promise<HttpResult> 
 		signal: AbortSignal.timeout(60_000),
 	})
 	const contentType = res.headers.get('content-type')?.split(';')[0].trim() ?? ''
+	const responseHeaders = [...res.headers.entries()]
+		.slice(0, 40)
+		.map(([key, value]) => `${key}: ${value}`)
+		.join('\n')
+	const ms = Date.now() - started
 	const bytes = await readLimited(res)
 	if (contentType.startsWith('image/')) {
 		return {
@@ -107,6 +116,8 @@ export async function httpRequest(input: HttpRequestInput): Promise<HttpResult> 
 			text: '',
 			imageUrl: saveImage(bytes, contentType),
 			bytes: bytes.byteLength,
+			headers: responseHeaders,
+			ms,
 		}
 	}
 	let text = isTextType(contentType) || !contentType ? new TextDecoder().decode(bytes) : ''
@@ -118,7 +129,7 @@ export async function httpRequest(input: HttpRequestInput): Promise<HttpResult> 
 		}
 	}
 	if (input.extractText && contentType.includes('html')) text = htmlToText(text)
-	return { status: res.status, ok: res.ok, contentType, text, bytes: bytes.byteLength }
+	return { status: res.status, ok: res.ok, contentType, text, bytes: bytes.byteLength, headers: responseHeaders, ms }
 }
 
 export function safeFileName(name: string, fallback: string) {

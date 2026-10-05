@@ -177,15 +177,37 @@ let renderCount = 0
 function getMermaid(dark: boolean) {
 	mermaidReady ??= import('mermaid').then((m) => m.default)
 	return mermaidReady.then((mermaid) => {
-		mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default', securityLevel: 'strict' })
+		mermaid.initialize({
+			startOnLoad: false,
+			theme: dark ? 'dark' : 'default',
+			securityLevel: 'strict',
+			suppressErrorRendering: true,
+		})
 		return mermaid
+	})
+}
+
+/** Mermaid inserts an error SVG on document.body. Remove those nodes. */
+function clearMermaidBombs() {
+	document.querySelectorAll('svg[id^="mermaid-clip-"], svg[id^="dmermaid-clip-"]').forEach((node) => {
+		if (node.parentElement === document.body) node.remove()
 	})
 }
 
 export async function renderMermaid(code: string, dark = false): Promise<string> {
 	const mermaid = await getMermaid(dark)
-	const { svg } = await mermaid.render(`mermaid-clip-${++renderCount}`, code)
-	return svg
+	const id = `mermaid-clip-${++renderCount}`
+	try {
+		await mermaid.parse(code)
+		const { svg } = await mermaid.render(id, code)
+		clearMermaidBombs()
+		return svg
+	} catch (error) {
+		document.getElementById(id)?.remove()
+		document.getElementById(`d${id}`)?.remove()
+		clearMermaidBombs()
+		throw error
+	}
 }
 
 export class MermaidShapeUtil extends BaseBoxShapeUtil<MermaidShape> {
@@ -236,8 +258,16 @@ function MermaidClip({ shape }: { shape: MermaidShape }) {
 		let cancelled = false
 		const t = setTimeout(() => {
 			renderMermaid(code, dark)
-				.then((s) => !cancelled && (setSvg(s), setError(null)))
-				.catch((e) => !cancelled && setError(String(e?.message ?? e).split('\n').slice(0, 3).join('\n')))
+				.then((s) => {
+					if (cancelled) return
+					setSvg(s)
+					setError(null)
+				})
+				.catch((e) => {
+					if (cancelled) return
+					setSvg(null)
+					setError(String(e?.message ?? e).split('\n').slice(0, 4).join('\n'))
+				})
 		}, 250)
 		return () => {
 			cancelled = true

@@ -1,5 +1,7 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { PromptIcon } from '../../components/icons/PromptIcon'
+import { TextAreaField } from '../../editors/CodeArea'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
@@ -25,7 +27,7 @@ export class PromptNodeDefinition extends NodeDefinition<PromptNode> {
 	title = 'Prompt'
 	heading = 'Prompt'
 	icon = <PromptIcon />
-	category = 'input'
+	category = categoryOf('prompt')
 	getDefault(): PromptNode {
 		return {
 			type: 'prompt',
@@ -66,23 +68,12 @@ function PromptNodeComponent({ shape, node }: NodeComponentProps<PromptNode>) {
 	const editor = useEditor()
 	return (
 		<NodeRow className="PromptNode-row">
-			<textarea
-				className="PromptNode-textarea"
-				value={node.text}
+			<TextAreaField
+				title="Prompt"
+				height={80}
 				placeholder="Enter your prompt..."
-				onChange={(e) =>
-					updateNode<PromptNode>(
-						editor,
-						shape,
-						(n) => ({
-							...n,
-							text: e.target.value,
-						}),
-						false
-					)
-				}
-				onPointerDown={(e) => e.stopPropagation()}
-				onFocus={() => editor.setSelectedShapes([shape.id])}
+				value={node.text}
+				onChange={(text) => updateNode<PromptNode>(editor, shape, (n) => ({ ...n, text }), false)}
 			/>
 		</NodeRow>
 	)

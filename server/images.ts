@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { extname, join, resolve } from 'node:path'
 import { ConfigError, DATA_DIR } from './config'
 
 export const IMAGE_DIR = join(DATA_DIR, 'images')
@@ -62,6 +62,37 @@ export async function resolveImage(url: string): Promise<{ bytes: Uint8Array; mi
 		bytes: new Uint8Array(await res.arrayBuffer()),
 		mime: res.headers.get('content-type')?.split(';')[0] ?? 'image/png',
 	}
+}
+
+const PATH_MIME: Record<string, string> = {
+	'.png': 'image/png',
+	'.jpg': 'image/jpeg',
+	'.jpeg': 'image/jpeg',
+	'.webp': 'image/webp',
+	'.gif': 'image/gif',
+}
+
+/** Read a png, jpeg, webp or gif from a path on this machine. */
+export function importLocalImage(filePath: string): string {
+	const full = resolve(filePath.trim())
+	let info: ReturnType<typeof statSync>
+	try {
+		info = statSync(full)
+	} catch {
+		throw new ConfigError('File not found')
+	}
+	if (!info.isFile()) throw new ConfigError('Path is not a file')
+	if (info.size > 25 * 1024 * 1024) throw new ConfigError('Image is larger than 25 MB')
+	const mime = PATH_MIME[extname(full).toLowerCase()]
+	if (!mime) throw new ConfigError('Use a png, jpeg, webp, or gif file')
+	return saveImage(readFileSync(full), mime)
+}
+
+/** Fetch an image URL and store it locally. */
+export async function importRemoteImage(url: string): Promise<string> {
+	const image = await resolveImage(url)
+	if (!image.mime.startsWith('image/')) throw new ConfigError('URL is not an image')
+	return saveImage(image.bytes, image.mime)
 }
 
 export function toDataUrl(image: { bytes: Uint8Array; mime: string }) {

@@ -292,6 +292,7 @@ body {
 /* ---- Image previews ---- */
 
 .NodeImagePreview {
+	position: relative;
 	margin: var(--tl-space-2) var(--tl-space-4);
 	height: 160px;
 	border-radius: var(--tl-radius-3);
@@ -412,9 +413,10 @@ body {
 	margin: var(--tl-space-2) var(--tl-space-4);
 	height: 88px;
 	border-radius: var(--tl-radius-3);
-	overflow: hidden;
+	overflow: auto;
 	background: var(--tl-color-muted-0);
 	border: 1px solid var(--tl-color-divider);
+	position: relative;
 }
 
 .GenerateTextNode-result_loading {
@@ -436,14 +438,15 @@ body {
 
 .GenerateTextNode-result-text {
 	width: 100%;
-	height: 100%;
+	min-height: 100%;
 	padding: var(--tl-space-3) var(--tl-space-4);
 	font-size: 11px;
 	line-height: 1.4;
 	color: var(--tl-color-text-1);
-	overflow-y: scroll;
+	overflow: visible;
 	white-space: pre-wrap;
 	word-break: break-word;
+	box-sizing: border-box;
 }
 
 .GenerateTextNode-result-empty {
@@ -893,6 +896,15 @@ body {
 	color: var(--tl-color-text-1);
 }
 
+.LlmSettings-usage {
+	margin-left: auto;
+	max-width: 68%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
 .LlmSettings-body {
 	display: flex;
 	flex-direction: column;
@@ -1020,8 +1032,8 @@ body {
 .NodeFooterTools-button {
 	all: unset;
 	cursor: pointer;
-	width: 26px;
-	height: 26px;
+	width: 22px;
+	height: 22px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1041,6 +1053,10 @@ body {
 
 .NodeFooterTools-button.is-done {
 	color: #22c55e;
+}
+
+.NodeFooterTools-button.is-on {
+	color: var(--tl-color-selected, #3b82f6);
 }
 
 /* Node body fills its (resizable) height; result areas take the free space. */
@@ -1200,6 +1216,351 @@ body {
 .NodeSlider-value {
 	text-align: right;
 	font-variant-numeric: tabular-nums;
+}
+
+/* Run state borders */
+
+@keyframes node-run-pulse {
+	50% {
+		outline-color: transparent;
+	}
+}
+
+.NodeShape_running {
+	outline: 2px solid #3b82f6;
+	outline-offset: 2px;
+	animation: node-run-pulse 1s ease-in-out infinite;
+}
+
+.NodeShape_ok {
+	outline: 2px solid #22c55e;
+	outline-offset: 2px;
+}
+
+.NodeShape_error,
+.NodeShape_missing {
+	outline: 2px solid #e03131;
+	outline-offset: 2px;
+}
+
+.NodeShape-issue {
+	font-size: 10px;
+	color: #e03131;
+	max-width: 90px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Large editors, code area, max button */
+
+.FieldMax {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	z-index: 2;
+	width: 22px;
+	height: 22px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 4px;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-2);
+	cursor: pointer;
+	pointer-events: all;
+	line-height: 1;
+}
+
+.TextAreaField {
+	position: relative;
+	margin: 0 var(--tl-space-4) 4px;
+	min-height: 0;
+}
+
+.TextAreaField .NodeField-textarea {
+	width: 100%;
+	height: 100%;
+	overflow: auto;
+	resize: none;
+	box-sizing: border-box;
+	padding-right: 28px;
+}
+
+.CodeArea {
+	position: relative;
+	display: flex;
+	margin: 0 var(--tl-space-4) 4px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-3);
+	background: var(--tl-color-muted-0);
+	overflow: hidden;
+	font-family: ui-monospace, monospace;
+	font-size: 11px;
+	line-height: 1.45;
+	pointer-events: all;
+}
+
+.CodeArea-gutter {
+	flex: 0 0 28px;
+	overflow: hidden;
+	padding: 6px 0;
+	text-align: right;
+	color: var(--tl-color-text-3);
+	background: var(--tl-color-muted-1, var(--tl-color-muted-0));
+	user-select: none;
+}
+
+.CodeArea-gutter span {
+	display: block;
+	padding-right: 6px;
+	height: 1.45em;
+}
+
+.CodeArea-main {
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+
+.CodeArea-highlight,
+.CodeArea-input {
+	margin: 0;
+	padding: 6px 8px;
+	font: inherit;
+	line-height: 1.45;
+	white-space: pre;
+	tab-size: 2;
+}
+
+.CodeArea-highlight {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+	color: var(--tl-color-text-1);
+}
+
+.CodeArea-input {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	border: none;
+	resize: none;
+	background: transparent;
+	color: transparent;
+	caret-color: var(--tl-color-text-1);
+	overflow: auto;
+}
+
+.CodeArea-tools {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	display: flex;
+	gap: 4px;
+	z-index: 2;
+}
+
+.CodeArea-tools button {
+	height: 22px;
+	padding: 0 6px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 4px;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-2);
+	cursor: pointer;
+	pointer-events: all;
+}
+
+.CodeArea-tools .FieldMax {
+	position: static;
+}
+
+.tok-key { color: #7c3aed; }
+.tok-str { color: #047857; }
+.tok-num { color: #b45309; }
+.tok-com { color: #6b7280; }
+
+.LargeEditor-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 800;
+	background: rgba(0, 0, 0, 0.45);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: all;
+}
+
+.LargeEditor {
+	width: min(960px, calc(100vw - 48px));
+	height: min(80vh, 720px);
+	display: flex;
+	flex-direction: column;
+	background: var(--tl-color-panel);
+	border-radius: 12px;
+	box-shadow: var(--tl-shadow-3);
+	overflow: hidden;
+}
+
+.LargeEditor-image {
+	width: min(1000px, calc(100vw - 48px));
+	height: auto;
+	max-height: 86vh;
+}
+
+.LargeEditor-image img {
+	max-width: 100%;
+	max-height: calc(86vh - 44px);
+	object-fit: contain;
+	background: #111;
+}
+
+.LargeEditor-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--tl-color-divider);
+}
+
+.LargeEditor-actions {
+	display: flex;
+	gap: 6px;
+}
+
+.LargeEditor-actions button,
+.LargeEditor-bar > button {
+	height: 28px;
+	padding: 0 10px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 6px;
+	background: var(--tl-color-panel);
+	cursor: pointer;
+}
+
+.LargeEditor-body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+}
+
+.LargeEditor-text,
+.LargeEditor .CodeArea-input,
+.LargeEditor .CodeArea-highlight {
+	flex: 1;
+	width: 100%;
+	height: 100%;
+	border: none;
+	resize: none;
+	font-family: ui-monospace, monospace;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.LargeEditor-text {
+	padding: 12px;
+	background: transparent;
+	color: var(--tl-color-text-1);
+}
+
+.SelectionAssist {
+	position: fixed;
+	left: 50%;
+	bottom: 24px;
+	transform: translateX(-50%);
+	z-index: 360;
+	height: 36px;
+	padding: 0 14px;
+	border: none;
+	border-radius: 999px;
+	background: #2563eb;
+	color: white;
+	font-size: 13px;
+	cursor: pointer;
+	box-shadow: var(--tl-shadow-2);
+	pointer-events: all;
+}
+
+.AssistDialog-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 700;
+	background: rgba(0, 0, 0, 0.35);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: all;
+}
+
+.AssistDialog {
+	width: min(480px, calc(100vw - 32px));
+	background: var(--tl-color-panel);
+	border-radius: 12px;
+	box-shadow: var(--tl-shadow-3);
+	padding: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.AssistDialog-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.AssistDialog textarea {
+	width: 100%;
+	min-height: 90px;
+	resize: vertical;
+	box-sizing: border-box;
+	font: inherit;
+	padding: 8px;
+}
+
+.AssistDialog-error {
+	margin: 0;
+	color: #e03131;
+	font-size: 12px;
+}
+
+.AssistDialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.ExamplesDialog {
+	width: min(560px, calc(100vw - 32px));
+	max-height: min(70vh, 640px);
+}
+
+.ExamplesDialog-list {
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.ExamplesDialog-item {
+	text-align: left;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 8px;
+	background: var(--tl-color-panel);
+	padding: 8px 10px;
+	cursor: pointer;
+}
+
+.ExamplesDialog-item strong {
+	display: block;
+}
+
+.ExamplesDialog-item span {
+	color: var(--tl-color-text-3);
+	font-size: 12px;
 }
 
 /* Code node */

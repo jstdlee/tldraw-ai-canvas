@@ -1,5 +1,9 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
+import { buildHttpRequest } from '../../../../shared/httpBuild'
+import { formatRunMs } from '../../../../shared/llmUsage'
 import { T, useEditor } from 'tldraw'
 import { apiDownload, apiHttp, apiSave } from '../../api/pipelineApi'
+import { TextAreaField } from '../../editors/CodeArea'
 import { LoadImageIcon } from '../../components/icons/LoadImageIcon'
 import { PromptIcon } from '../../components/icons/PromptIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
@@ -36,23 +40,6 @@ function formatBytes(n: number) {
 	return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-function parseHeaders(text: string): Record<string, string> {
-	const trimmed = text.trim()
-	if (!trimmed) return {}
-	if (trimmed.startsWith('{')) {
-		const parsed = JSON.parse(trimmed) as Record<string, unknown>
-		return Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, String(v)]))
-	}
-	// "Name: value" lines
-	return Object.fromEntries(
-		trimmed
-			.split(/\r?\n/)
-			.map((l) => l.match(/^\s*([^:]+):\s*(.*)$/))
-			.filter((m): m is RegExpMatchArray => !!m)
-			.map((m) => [m[1].trim(), m[2].trim()])
-	)
-}
-
 /** Shows the result: an image preview, or text. */
 function ResultView({
 	imageUrl,
@@ -86,18 +73,25 @@ export const HttpNode = T.object({
 	type: T.literal('http'),
 	method: T.string,
 	url: T.string,
+	query: T.string.optional(),
 	headers: T.string,
 	body: T.string,
+	auth: T.string.optional(),
+	authValue: T.string.optional(),
 	extractText: T.boolean,
 	lastStatus: T.string.nullable(),
 	lastText: T.string.nullable(),
 	lastImageUrl: T.string.nullable(),
+	lastHeaders: T.string.nullable().optional(),
+	lastMs: T.number.nullable().optional(),
 	error: T.string.nullable(),
 })
 
-const HTTP_HEADERS_HEIGHT_PX = 90
+const HTTP_WIDTH_PX = 400
+const HTTP_QUERY_HEIGHT_PX = 64
+const HTTP_HEADERS_HEIGHT_PX = 80
 const HTTP_BODY_HEIGHT_PX = 110
-const HTTP_RESULT_HEIGHT_PX = 140
+const HTTP_RESULT_HEIGHT_PX = 150
 
 export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 	static type = 'http'
@@ -105,30 +99,38 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 	title = 'HTTP request'
 	heading = 'HTTP'
 	icon = <UpscaleIcon />
-	category = 'web'
+	category = categoryOf('http')
 	resultKeys = ['lastStatus', 'lastText', 'lastImageUrl', 'error'] as const
 	getDefault(): HttpNode {
 		return {
 			type: 'http',
 			method: 'GET',
 			url: 'https://example.com',
+			query: '',
 			headers: '',
 			body: '',
+			auth: '',
+			authValue: '',
 			extractText: true,
 			lastStatus: null,
 			lastText: null,
 			lastImageUrl: null,
+			lastHeaders: null,
+			lastMs: null,
 			error: null,
 		}
 	}
+	override getWidthPx() {
+		return HTTP_WIDTH_PX
+	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 5 + HTTP_HEADERS_HEIGHT_PX + HTTP_BODY_HEIGHT_PX + HTTP_RESULT_HEIGHT_PX
+		return NODE_ROW_HEIGHT_PX * 4 + HTTP_QUERY_HEIGHT_PX + HTTP_HEADERS_HEIGHT_PX + HTTP_BODY_HEIGHT_PX + HTTP_RESULT_HEIGHT_PX + 72
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
 			url: { id: 'url', x: 0, y: portY(0), terminal: 'end', dataType: 'text' },
 			body: { id: 'body', x: 0, y: portY(1), terminal: 'end', dataType: 'any' },
-			output: { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'any' },
+			output: { id: 'output', x: HTTP_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'any' },
 		}
 	}
 	async execute(shape: NodeShape, node: HttpNode, inputs: InputValues): Promise<ExecutionResult> {
@@ -136,19 +138,34 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 		const bodyInput = getInput(inputs, 'body')
 		const body = bodyInput != null ? coerceToText(bodyInput) : node.body
 		try {
-			const result = await apiHttp({
+			const built = buildHttpRequest({
 				method: node.method,
 				url,
-				headers: parseHeaders(node.headers),
+				query: node.query ?? '',
+				headers: node.headers,
 				body,
+				auth: node.auth ?? '',
+				authValue: node.authValue ?? '',
+			})
+			const result = await apiHttp({
+				...built,
 				extractText: node.extractText,
 			})
-			const status = `${result.status} · ${result.contentType || 'no type'} · ${formatBytes(result.bytes)}`
+			const status = [
+				String(result.status),
+				result.contentType || 'no type',
+				formatBytes(result.bytes),
+				result.ms != null ? formatRunMs(result.ms) : '',
+			]
+				.filter(Boolean)
+				.join(' · ')
 			updateNode<HttpNode>(this.editor, shape, (n) => ({
 				...n,
 				lastStatus: status,
 				lastText: result.text,
 				lastImageUrl: result.imageUrl ?? null,
+				lastHeaders: result.headers || null,
+				lastMs: result.ms ?? null,
 				error: result.ok ? null : `HTTP ${result.status}`,
 			}))
 			if (!result.ok) return { output: STOP_EXECUTION }
@@ -175,9 +192,22 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 	const urlConnected = useInputConnected(shape.id, 'url')
 	const bodyConnected = useInputConnected(shape.id, 'body')
 	const set = (patch: Partial<HttpNode>) => updateNode<HttpNode>(editor, shape, (n) => ({ ...n, ...patch }))
-	const needsBody = !['GET', 'HEAD', 'DELETE'].includes(node.method)
+	const needsBody = !['GET', 'HEAD'].includes(node.method)
 	return (
 		<>
+			<NodeRow>
+				<span className="NodeInputRow-label">Method</span>
+				<select
+					className="NodeField-select"
+					value={node.method}
+					onPointerDown={stopEvent}
+					onChange={(e) => set({ method: e.target.value })}
+				>
+					{['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].map((m) => (
+						<option key={m}>{m}</option>
+					))}
+				</select>
+			</NodeRow>
 			{urlConnected ? (
 				<PortRow shapeId={shape.id} portId="url" label="URL" dataType="text" />
 			) : (
@@ -193,6 +223,45 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 					/>
 				</NodeRow>
 			)}
+			<TextAreaField
+				mono
+				height={HTTP_QUERY_HEIGHT_PX}
+				title="Query"
+				placeholder={'Query, one per line:\nq=cat\nlimit=10'}
+				value={node.query ?? ''}
+				onChange={(query) => set({ query })}
+			/>
+			<NodeRow>
+				<span className="NodeInputRow-label">Auth</span>
+				<select
+					className="NodeField-select"
+					value={node.auth ?? ''}
+					onPointerDown={stopEvent}
+					onChange={(e) => set({ auth: e.target.value })}
+				>
+					<option value="">None</option>
+					<option value="bearer">Bearer</option>
+					<option value="basic">Basic</option>
+				</select>
+				<input
+					className="NodeField-input"
+					placeholder={node.auth === 'basic' ? 'user:password' : 'token'}
+					value={node.authValue ?? ''}
+					disabled={!node.auth}
+					onPointerDown={stopEvent}
+					onKeyDown={stopEvent}
+					onChange={(e) => set({ authValue: e.target.value })}
+				/>
+			</NodeRow>
+			<TextAreaField
+				mono
+				lang="text"
+				height={HTTP_HEADERS_HEIGHT_PX}
+				title="Headers"
+				placeholder={'Headers, one per line:\nAccept: application/json'}
+				value={node.headers}
+				onChange={(headers) => set({ headers })}
+			/>
 			<PortRow
 				shapeId={shape.id}
 				portId="body"
@@ -200,40 +269,18 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 				dataType="any"
 				hint={bodyConnected ? '' : needsBody ? 'or type it below' : `not used by ${node.method}`}
 			/>
-			<NodeRow>
-				<span className="NodeInputRow-label">Method</span>
-				<select
-					className="NodeField-select"
-					value={node.method}
-					onPointerDown={stopEvent}
-					onChange={(e) => set({ method: e.target.value })}
-				>
-					{['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].map((m) => (
-						<option key={m}>{m}</option>
-					))}
-				</select>
-			</NodeRow>
-			<div className="NodeField-block" style={{ height: HTTP_HEADERS_HEIGHT_PX }}>
-				<textarea
-					className="NodeField-textarea is-mono"
-					placeholder={'Headers (optional), one per line:\nAuthorization: Bearer …\nAccept: application/json'}
-					value={node.headers}
-					onPointerDown={stopEvent}
-					onKeyDown={stopEvent}
-					onChange={(e) => set({ headers: e.target.value })}
-				/>
-			</div>
-			<div className="NodeField-block" style={{ height: HTTP_BODY_HEIGHT_PX }}>
-				<textarea
-					className="NodeField-textarea is-mono"
-					placeholder={needsBody ? 'Body (JSON or text), e.g.\n{\n  "q": "hello"\n}' : `${node.method} sends no body`}
-					disabled={!needsBody || bodyConnected}
-					value={bodyConnected ? '(from the Body input)' : node.body}
-					onPointerDown={stopEvent}
-					onKeyDown={stopEvent}
-					onChange={(e) => set({ body: e.target.value })}
-				/>
-			</div>
+			<TextAreaField
+				mono
+				lang="json"
+				height={HTTP_BODY_HEIGHT_PX}
+				title="Body"
+				placeholder={needsBody ? '{\n  "q": "hello"\n}' : `${node.method} sends no body`}
+				value={bodyConnected ? '(from the Body input)' : node.body}
+				onChange={(next) => {
+					if (!needsBody || bodyConnected) return
+					set({ body: next })
+				}}
+			/>
 			<NodeRow>
 				<label className="NodeField-check" onPointerDown={stopEvent}>
 					<input
@@ -245,10 +292,11 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 				</label>
 			</NodeRow>
 			<NodeRow>
-				<span className={'NodeStatus' + (node.error ? ' is-error' : '')} title={node.lastStatus ?? ''}>
+				<span className={'NodeStatus' + (node.error ? ' is-error' : '')} title={node.lastHeaders ?? node.lastStatus ?? ''}>
 					{node.error ?? node.lastStatus ?? 'Not run yet'}
 				</span>
 			</NodeRow>
+			<NodeTextResult text={node.lastHeaders ?? null} empty="Response headers" height={64} />
 			<ResultView
 				imageUrl={node.lastImageUrl}
 				text={node.lastText}
@@ -284,7 +332,7 @@ export class DownloadNodeDefinition extends NodeDefinition<DownloadNode> {
 	title = 'Download URL'
 	heading = 'Download'
 	icon = <LoadImageIcon />
-	category = 'web'
+	category = categoryOf('download')
 	resultKeys = ['lastPath', 'lastInfo', 'lastText', 'lastImageUrl', 'error'] as const
 	getDefault(): DownloadNode {
 		return {
@@ -408,7 +456,7 @@ export class SaveNodeDefinition extends NodeDefinition<SaveNode> {
 	title = 'Save to file'
 	heading = 'Save'
 	icon = <PromptIcon />
-	category = 'output'
+	category = categoryOf('save')
 	resultKeys = ['lastPath', 'lastPreview', 'error'] as const
 	getDefault(): SaveNode {
 		return { type: 'save', fileName: 'canvas-{{date}}', lastPath: null, lastPreview: null, error: null }

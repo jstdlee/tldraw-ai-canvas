@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor, useValue } from 'tldraw'
 import { PromptConcatIcon } from '../../components/icons/PromptConcatIcon'
 import {
@@ -41,7 +42,7 @@ export class PromptConcatNodeDefinition extends NodeDefinition<PromptConcatNode>
 	title = 'Concat'
 	heading = 'Prompt concat'
 	icon = <PromptConcatIcon />
-	category = 'text'
+	category = categoryOf('prompt_concat')
 	getDefault(): PromptConcatNode {
 		return {
 			type: 'prompt_concat',

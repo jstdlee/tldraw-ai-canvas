@@ -9,18 +9,9 @@ import {
 } from 'tldraw'
 import { getNodeDefinitions, NodeType } from '../nodes/nodeTypes'
 import { $customNodes, addCustomNodeToCanvas, deleteCustomNode, refreshCustomNodes } from '../customNodes'
+import { NODE_GROUP_LABELS, NODE_GROUP_ORDER } from '../../../shared/nodeGroups'
+import { $examplesOpen } from './CanvasExtras'
 import { useEffect } from 'react'
-
-const CATEGORY_LABELS: Record<string, string> = {
-	input: 'Input',
-	text: 'Text & AI',
-	image: 'Image',
-	logic: 'Logic & code',
-	web: 'Web',
-	output: 'Output',
-}
-
-const CATEGORY_ORDER = ['input', 'text', 'image', 'logic', 'web', 'output']
 
 const DRAG_DISTANCE_SQ = 36 // 6px
 
@@ -163,16 +154,18 @@ export function ImagePipelineSidebar({ editor }: { editor: Editor }) {
 		<div className={`ImagePipelineSidebar ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}>
 			<div className="ImagePipelineSidebar-header">
 				<span>Nodes</span>
-				<span className="ImagePipelineSidebar-hint">drag onto the canvas</span>
+				<button className="ImagePipelineSidebar-examples" type="button" onClick={() => $examplesOpen.set(true)}>
+					Examples
+				</button>
 			</div>
 			<div className="ImagePipelineSidebar-list">
 				<MyNodes editor={editor} />
-				{CATEGORY_ORDER.map((cat) => {
+				{NODE_GROUP_ORDER.map((cat) => {
 					const items = grouped[cat]
 					if (!items?.length) return null
 					return (
 						<div key={cat} className="ImagePipelineSidebar-group">
-							<div className="ImagePipelineSidebar-category">{CATEGORY_LABELS[cat] ?? cat}</div>
+							<div className="ImagePipelineSidebar-category">{NODE_GROUP_LABELS[cat] ?? cat}</div>
 							{items.map((def) => (
 								<SidebarItem
 									key={def.type}

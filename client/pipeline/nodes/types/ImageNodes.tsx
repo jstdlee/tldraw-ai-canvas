@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { useEffect, useRef, useState } from 'react'
 import { T, TldrawUiButton, useEditor } from 'tldraw'
 import { AdjustIcon } from '../../components/icons/AdjustIcon'
@@ -14,17 +15,20 @@ import {
 	canvasToStoredUrl,
 	centeredAspectRect,
 	cropImage,
+	applyPreset,
 	FILTER_PRESETS,
 	filterImage,
 	IMAGE_TOOLS,
 	ImageFilter,
 	imageTool,
 	loadImageElement,
+	matchPreset,
 	NO_FILTER,
 	resizeImage,
 } from '../../imageOps'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { ImageZoom } from '../../editors/LargeEditor'
 import { PortRow, stopEvent } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -53,18 +57,25 @@ const imageOut = (): ShapePort => ({
 })
 
 function Preview({ url, error, loading }: { url: string | null; error?: string | null; loading?: boolean }) {
+	const [open, setOpen] = useState(false)
 	return (
 		<div
-			className={'NodeImagePreview' + (loading ? ' NodeImagePreview_loading' : '')}
+			className={'NodeImagePreview NodeScroll' + (loading ? ' NodeImagePreview_loading' : '')}
 			style={{ height: NODE_IMAGE_PREVIEW_HEIGHT_PX - 8 }}
 		>
 			{error ? (
 				<span className="NodeStatus is-error">{error}</span>
 			) : url ? (
-				<NodeImage src={url} alt="result" />
+				<>
+					<NodeImage src={url} alt="result" />
+					<button className="FieldMax" type="button" title="Open the image" onPointerDown={stopEvent} onClick={() => setOpen(true)}>
+						⛶
+					</button>
+				</>
 			) : (
 				<span className="NodeRow-disconnected">Press ▶ Play</span>
 			)}
+			{open && url && <ImageZoom src={url} onClose={() => setOpen(false)} />}
 		</div>
 	)
 }
@@ -120,7 +131,7 @@ export class CameraNodeDefinition extends NodeDefinition<CameraNode> {
 	title = 'Camera'
 	heading = 'Camera'
 	icon = <CaptureIcon />
-	category = 'input'
+	category = categoryOf('camera')
 	resultKeys = ['lastResultUrl', 'error'] as const
 	getDefault(): CameraNode {
 		return { type: 'camera', lastResultUrl: null, error: null }
@@ -237,7 +248,7 @@ export class CropNodeDefinition extends NodeDefinition<CropNode> {
 	title = 'Crop'
 	heading = 'Crop'
 	icon = <CaptureIcon />
-	category = 'image'
+	category = categoryOf('crop')
 	resultKeys = ['lastResultUrl', 'error'] as const
 	getDefault(): CropNode {
 		return { type: 'crop', aspect: '1:1', x: 10, y: 10, w: 80, h: 80, lastResultUrl: null, error: null }
@@ -342,7 +353,7 @@ export class ImageResizeNodeDefinition extends NodeDefinition<ImageResizeNode> {
 	title = 'Resize'
 	heading = 'Resize'
 	icon = <UpscaleIcon />
-	category = 'image'
+	category = categoryOf('image_resize')
 	resultKeys = ['lastResultUrl', 'error'] as const
 	getDefault(): ImageResizeNode {
 		return { type: 'image_resize', mode: 'fit', value: 1024, value2: 1024, lastResultUrl: null, error: null }
@@ -443,7 +454,7 @@ export class ImageFilterNodeDefinition extends NodeDefinition<ImageFilterNode> {
 	title = 'Filter'
 	heading = 'Filter'
 	icon = <AdjustIcon />
-	category = 'image'
+	category = categoryOf('image_filter')
 	resultKeys = ['lastResultUrl', 'error'] as const
 	getDefault(): ImageFilterNode {
 		return { type: 'image_filter', ...NO_FILTER, lastResultUrl: null, error: null }
@@ -474,13 +485,18 @@ function ImageFilterNodeComponent({ shape, node }: NodeComponentProps<ImageFilte
 				<span className="NodeInputRow-label">Preset</span>
 				<select
 					className="NodeField-select"
-					value=""
+					value={matchPreset(node)}
 					onPointerDown={stopEvent}
-					onChange={(e) => e.target.value && set({ ...NO_FILTER, rotate: node.rotate, flipX: node.flipX, flipY: node.flipY, ...FILTER_PRESETS[e.target.value] })}
+					onChange={(e) => {
+						if (e.target.value === 'Custom') return
+						set(applyPreset(e.target.value, { rotate: node.rotate, flipX: node.flipX, flipY: node.flipY }))
+					}}
 				>
-					<option value="">Choose…</option>
+					<option value="Custom">Custom</option>
 					{Object.keys(FILTER_PRESETS).map((p) => (
-						<option key={p}>{p}</option>
+						<option key={p} value={p}>
+							{p}
+						</option>
 					))}
 				</select>
 			</NodeRow>
@@ -510,7 +526,7 @@ function ImageFilterNodeComponent({ shape, node }: NodeComponentProps<ImageFilte
 					{node.flipY ? '⇵ on' : '⇵'}
 				</TldrawUiButton>
 				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ ...NO_FILTER })}>
-					Reset
+					Restore default
 				</TldrawUiButton>
 			</NodeRow>
 			<Preview url={node.lastResultUrl} error={node.error} />
@@ -539,7 +555,7 @@ export class ImageToolNodeDefinition extends NodeDefinition<ImageToolNode> {
 	title = 'Image tools'
 	heading = 'Image tools'
 	icon = <AdjustIcon />
-	category = 'image'
+	category = categoryOf('image_tool')
 	resultKeys = ['lastResultUrl', 'lastText', 'error'] as const
 	getDefault(): ImageToolNode {
 		return { type: 'image_tool', tool: 'info', a: '', b: '', lastResultUrl: null, lastText: null, error: null }
@@ -585,22 +601,49 @@ function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNod
 		<>
 			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
 			<NodeRow>
-				<select className="NodeField-select" value={node.tool} onPointerDown={stopEvent} onChange={(e) => set({ tool: e.target.value, a: '', b: '' })}>
+				<select
+					className="NodeField-select"
+					value={node.tool}
+					onPointerDown={stopEvent}
+					onChange={(e) => set({ tool: e.target.value, a: e.target.value === 'look' ? 'JP 90s' : '', b: '' })}
+				>
 					{IMAGE_TOOLS.map((t) => (
 						<option key={t.id} value={t.id}>
 							{t.label}
 						</option>
 					))}
 				</select>
+				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ tool: 'info', a: '', b: '' })}>
+					Restore default
+				</TldrawUiButton>
 			</NodeRow>
 			<NodeRow>
-				{'a' in tool && (
-					<input className="NodeField-input" placeholder={tool.a} value={node.a} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ a: e.target.value })} />
+				{node.tool === 'look' ? (
+					<select
+						className="NodeField-select"
+						value={FILTER_PRESETS[node.a] ? node.a : 'JP 90s'}
+						onPointerDown={stopEvent}
+						onChange={(e) => set({ a: e.target.value })}
+					>
+						{Object.keys(FILTER_PRESETS)
+							.filter((name) => name !== 'None')
+							.map((name) => (
+								<option key={name} value={name}>
+									{name}
+								</option>
+							))}
+					</select>
+				) : (
+					<>
+						{'a' in tool && (
+							<input className="NodeField-input" placeholder={tool.a} value={node.a} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ a: e.target.value })} />
+						)}
+						{'b' in tool && (
+							<input className="NodeField-input" placeholder={tool.b} value={node.b} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ b: e.target.value })} />
+						)}
+						{!('a' in tool) && !('b' in tool) && <span className="NodeRow-disconnected">no options</span>}
+					</>
 				)}
-				{'b' in tool && (
-					<input className="NodeField-input" placeholder={tool.b} value={node.b} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ b: e.target.value })} />
-				)}
-				{!('a' in tool) && !('b' in tool) && <span className="NodeRow-disconnected">no options</span>}
 			</NodeRow>
 			{node.lastText && !node.error ? (
 				<div className="NodeOutputView NodeGrow" style={{ height: NODE_IMAGE_PREVIEW_HEIGHT_PX - 8 }}>

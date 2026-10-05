@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { runTextTool, TEXT_TOOL_OPS, TextToolOp } from '../../../../shared/textTools'
 import { PromptConcatIcon } from '../../components/icons/PromptConcatIcon'
@@ -48,7 +49,7 @@ export class TextToolNodeDefinition extends NodeDefinition<TextToolNode> {
 	title = 'Text tools'
 	heading = 'Text tools'
 	icon = <PromptConcatIcon />
-	category = 'text'
+	category = categoryOf('text_tool')
 	resultKeys = ['lastResultText', 'error'] as const
 	getDefault(): TextToolNode {
 		return { type: 'text_tool', op: 'template', a: '{{input}}', b: '', lastResultText: null, error: null }

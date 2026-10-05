@@ -1,3 +1,4 @@
+import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { ContentKind } from '../../../../shared/contentKind'
 import { PreviewIcon } from '../../components/icons/PreviewIcon'
@@ -48,7 +49,7 @@ export class OutputNodeDefinition extends NodeDefinition<OutputNode> {
 	title = 'Output'
 	heading = 'Output'
 	icon = <PreviewIcon />
-	category = 'output'
+	category = categoryOf('output')
 	resultKeys = ['lastValue'] as const
 	getDefault(): OutputNode {
 		return { type: 'output', kind: 'auto', lastValue: null }
