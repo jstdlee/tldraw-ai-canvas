@@ -1,4 +1,5 @@
 import { Editor, renderPlaintextFromRichText, TLAsset, TLShape } from 'tldraw'
+import { concatMemberText } from '../../shared/groupText'
 
 /** Plain text of one shape (text, note, geo label, arrow label, clips, nodes). */
 export function shapeText(editor: Editor, shape: TLShape): string {
@@ -10,6 +11,14 @@ export function shapeText(editor: Editor, shape: TLShape): string {
 		const asset = props.assetId ? (editor.getAsset(props.assetId) as TLAsset | undefined) : undefined
 		const p = asset?.props as Record<string, string> | undefined
 		return [p?.title, p?.description, props.url].filter(Boolean).join('\n')
+	}
+	if (shape.type === 'group') {
+		return concatMemberText(
+			editor.getSortedChildIdsForParent(shape.id).map((id) => {
+				const child = editor.getShape(id)
+				return child && child.id !== shape.id ? shapeText(editor, child) : ''
+			})
+		)
 	}
 	if (shape.type === 'node') {
 		const node = props.node ?? {}

@@ -10,7 +10,7 @@ import { NumberIcon } from '../../components/icons/NumberIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { NodeTextResult, PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -93,8 +93,7 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 		return (
 			NODE_ROW_HEIGHT_PX * (portRows + 1) +
 			CODE_HEIGHT_PX +
-			(node.showAI ? AI_HEIGHT_PX : 0) +
-			RESULT_HEIGHT_PX
+			(node.showAI ? AI_HEIGHT_PX : 0)
 		)
 	}
 	getPorts(_shape: NodeShape, node: CodeNode): Record<string, ShapePort> {
@@ -281,12 +280,6 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 				</div>
 			)}
 			<CodeArea value={node.code} lang={node.lang} height={CODE_HEIGHT_PX} onChange={(code) => set({ code })} />
-			<NodeTextResult
-				text={node.description && !result ? node.description : [result, node.logs && `— log —\n${node.logs}`, node.description && `— about —\n${node.description}`].filter(Boolean).join('\n\n') || null}
-				error={node.error}
-				empty="Press ▶ Play to run"
-				height={RESULT_HEIGHT_PX}
-			/>
 		</>
 	)
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { atom, useEditor, useValue } from 'tldraw'
 import { EXAMPLES } from '../../../shared/examples'
+import { catalogPrompt } from '../../../shared/nodeCatalog'
 import { $assist, runCompose, runFill } from '../assist'
 import { loadExample } from '../loadExample'
 
@@ -60,6 +61,7 @@ function AssistDialog({
 	const [text, setText] = useState('')
 	const [error, setError] = useState<string | null>(null)
 	const [busy, setBusy] = useState(false)
+	const [abilities, setAbilities] = useState(false)
 	return (
 		<div className="AssistDialog-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
 			<div className="AssistDialog" role="dialog" aria-label={title}>
@@ -69,7 +71,11 @@ function AssistDialog({
 						×
 					</button>
 				</div>
-				<p>{hint}</p>
+				<p>{hint} The model reads a static catalog of this version, plus the selection text. It does not call MCP.</p>
+				<button type="button" onClick={() => setAbilities((open) => !open)}>
+					{abilities ? 'Hide abilities' : 'Show abilities'}
+				</button>
+				{abilities && <pre className="AbilityList">{catalogPrompt()}</pre>}
 				<textarea
 					value={text}
 					autoFocus

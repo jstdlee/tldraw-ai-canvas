@@ -45,6 +45,20 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	subgraph: { inn: [], out: [] },
 	output: { inn: ['input'], out: ['output'] },
 	save: { inn: ['input'], out: ['output'] },
+	table: { inn: ['data', 'extra'], out: ['output'] },
+	chart: { inn: ['data'], out: ['output'] },
+	sqlite_in: { inn: ['input'], out: ['output'] },
+	openrouter: { inn: [], out: ['output'] },
+	opencode_go: { inn: [], out: ['output'] },
+	model_pick: { inn: [], out: ['output'] },
+	hf: { inn: ['input'], out: ['output'] },
+	video: { inn: ['url'], out: ['output'] },
+	emoji: { inn: ['input'], out: ['output'] },
+	motion: { inn: ['input'], out: ['output'] },
+	local_tool: { inn: ['stdin'], out: ['output'] },
+	terminal: { inn: ['stdin'], out: ['output'] },
+	agent_run: { inn: ['prompt'], out: ['output'] },
+	sleep: { inn: ['input'], out: ['output'] },
 }
 
 describe('llm usage', () => {
@@ -136,9 +150,10 @@ describe('examples', () => {
 		expect(NODE_CATEGORY.prompt_concat).toBe('text')
 	})
 
-	it('uses real ports and includes one long workflow', () => {
-		const desk = EXAMPLES.find((example) => example.id === 'article-desk')
-		expect(desk && desk.nodes.length >= 10).toBe(true)
+	it('uses real ports and includes two long workflows', () => {
+		const long = EXAMPLES.filter((example) => example.nodes.length >= 12)
+		expect(long.length).toBeGreaterThanOrEqual(2)
+		expect(EXAMPLES.find((example) => example.id === 'article-desk')?.nodes.length).toBeGreaterThanOrEqual(12)
 		for (const example of EXAMPLES) {
 			const byId = new Map(example.nodes.map((node) => [node.id, node]))
 			for (const wire of example.wires) {

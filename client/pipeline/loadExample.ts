@@ -51,6 +51,24 @@ export function loadExample(editor: Editor, example: CanvasExample, origin: VecM
 				props: { terminal: 'end', portId: wire.toPort, order: 1 },
 			})
 		}
+		if (example.groupIds && example.groupIds.length >= 2) {
+			const members = example.groupIds
+				.map((id) => ids.get(id))
+				.filter((id): id is TLShapeId => Boolean(id))
+			if (members.length >= 2) {
+				editor.groupShapes(members)
+				const parent = editor.getShape(editor.getShape(members[0])?.parentId ?? members[0])
+				if (parent?.type === 'group') {
+					editor.updateShape({
+						id: parent.id,
+						type: 'group',
+						meta: { label: example.groupLabel || 'Group' },
+					})
+					editor.select(parent.id)
+					return
+				}
+			}
+		}
 		editor.select(...[...ids.values()])
 	})
 }

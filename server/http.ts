@@ -89,7 +89,7 @@ export async function httpRequest(input: HttpRequestInput): Promise<HttpResult> 
 	checkUrl(input.url)
 	const method = (input.method ?? 'GET').toUpperCase()
 	const hasBody = !['GET', 'HEAD'].includes(method) && input.body != null && input.body !== ''
-	const headers: Record<string, string> = { 'User-Agent': 'tldraw-ai-canvas/0.1', ...(input.headers ?? {}) }
+	const headers: Record<string, string> = { 'User-Agent': 'oh-my-tldraw/0.1', ...(input.headers ?? {}) }
 	if (hasBody && !Object.keys(headers).some((h) => h.toLowerCase() === 'content-type')) {
 		headers['Content-Type'] = /^\s*[[{]/.test(input.body!) ? 'application/json' : 'text/plain'
 	}
@@ -281,7 +281,7 @@ export async function unfurl(url: string): Promise<LinkPreview> {
 	checkUrl(url)
 	const res = await fetch(url, {
 		redirect: 'follow',
-		headers: { 'User-Agent': 'Mozilla/5.0 (compatible; tldraw-ai-canvas link preview)' },
+		headers: { 'User-Agent': 'Mozilla/5.0 (compatible; oh-my-tldraw link preview)' },
 		signal: AbortSignal.timeout(15_000),
 	})
 	const type = res.headers.get('content-type') ?? ''

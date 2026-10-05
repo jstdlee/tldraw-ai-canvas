@@ -1,5 +1,5 @@
 import classNames from 'classnames'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import {
 	Circle2d,
 	Group2d,
@@ -64,6 +64,8 @@ declare module 'tldraw' {
 			deleteLocked?: boolean
 			/** Text or image shape that shows an unconnected output. */
 			spillId?: string
+			/** Name drawn on the top edge. */
+			label?: string
 		}
 	}
 }
@@ -81,6 +83,7 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		pinned: T.boolean.optional(),
 		deleteLocked: T.boolean.optional(),
 		spillId: T.string.optional(),
+		label: T.string.optional(),
 	}
 
 	getDefaultProps(): NodeShape['props'] {
@@ -238,6 +241,8 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 	const run = useValue('node run', () => nodeRunState.get(editor)[shape.id], [editor, shape.id])
 
 	const nodeDefinition = getNodeDefinition(editor, shape.props.node)
+	const [naming, setNaming] = useState(false)
+	const edgeLabel = shape.props.label || nodeDefinition.heading || nodeDefinition.title
 	const runClass =
 		isExecuting || run?.status === 'running'
 			? 'NodeShape_running'
@@ -256,6 +261,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				NodeShape_capture: shape.props.node.type === 'capture',
 				NodeShape_collapsed: !!shape.props.collapsed,
 				NodeShape_pinned: !!shape.props.pinned,
+				NodeShape_emoji: shape.props.node.type === 'emoji',
 			})}
 			onContextMenu={(e) => {
 				const target = e.target as HTMLElement
@@ -265,6 +271,24 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				}
 			}}
 		>
+			{shape.props.node.type !== 'emoji' &&
+				(naming ? (
+					<input
+						className="NodeShape-edgeLabel NodeShape-edgeLabel-input"
+						autoFocus
+						defaultValue={edgeLabel}
+						onPointerDown={(event) => event.stopPropagation()}
+						onKeyDown={(event) => event.stopPropagation()}
+						onBlur={(event) => {
+							editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { label: event.target.value } })
+							setNaming(false)
+						}}
+					/>
+				) : (
+					<button type="button" className="NodeShape-edgeLabel" title="Rename" onPointerDown={(event) => event.stopPropagation()} onDoubleClick={() => setNaming(true)}>
+						{edgeLabel}
+					</button>
+				))}
 			<div className="NodeShape-heading">
 				<div className="NodeShape-icon">{nodeDefinition.icon}</div>
 				<div className="NodeShape-label">{nodeDefinition.heading ?? nodeDefinition.title}</div>
@@ -273,7 +297,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 						{run.message}
 					</div>
 				)}
-				{output !== undefined && <Port shapeId={shape.id} portId="output" />}
+				{output !== undefined && shape.props.node.type !== 'subgraph' && <Port shapeId={shape.id} portId="output" />}
 			</div>
 			<NodeBody shape={shape} />
 			<div className="NodeShape-footer">

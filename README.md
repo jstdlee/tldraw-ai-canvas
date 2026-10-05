@@ -1,4 +1,4 @@
-# AI Canvas
+# Oh My tldraw
 
 One infinite canvas for drawing **and** AI workflows. It is built on [tldraw](https://tldraw.dev) 5.5
 and merges four official tldraw starter kits into one app:
@@ -38,10 +38,10 @@ The desktop app is built by GitHub Actions (`.github/workflows/desktop.yml`), no
 
 | System | Files |
 | --- | --- |
-| Windows x64 | `ai-canvas-<v>-windows-x64-setup.exe`, `ai-canvas-<v>-windows-x64-portable.exe` |
+| Windows x64 | `oh-my-tldraw-<v>-windows-x64-setup.exe`, `oh-my-tldraw-<v>-windows-x64-portable.exe` |
 | Linux x64 / arm64 | `.AppImage`, `.deb` |
 
-The same build also ships as a [MyGo](https://mygo.egoist.dev/) app. MyGo uses the system webview and starts the same Node server beside it. `npm run build:mygo` writes that package under `mygo/out/`. Actions uploads it with the Electron installers. Linux gets a `.deb` and a `.tar.gz`. Windows gets `AI Canvas Setup <version>.exe`.
+The same build also ships as a [MyGo](https://mygo.egoist.dev/) app. MyGo uses the system webview and starts the same Node server beside it. `npm run build:mygo` writes that package under `mygo/out/`. Actions uploads one installer per system: a Linux `.deb` for amd64, a Linux `.deb` for arm64, and a Windows setup `.exe`.
 
 The app starts the same local server inside itself on a free `127.0.0.1` port and keeps its data
 in the user-data folder (Help → Open data folder). Local AI servers (Ollama, LM Studio, Magpie,

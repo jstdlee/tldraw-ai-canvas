@@ -34,6 +34,20 @@ import { NumberNodeDefinition } from './types/NumberNode'
 import { PromptConcatNodeDefinition } from './types/PromptConcatNode'
 import { PromptNodeDefinition } from './types/PromptNode'
 import { RouterNodeDefinition } from './types/RouterNode'
+import { ChartNodeDefinition, SqliteNodeDefinition, TableNodeDefinition } from './types/DataNodes'
+import {
+	AgentNodeDefinition,
+	EmojiNodeDefinition,
+	HfNodeDefinition,
+	LocalToolNodeDefinition,
+	ModelPickNodeDefinition,
+	MotionNodeDefinition,
+	OpenCodeNodeDefinition,
+	OpenRouterNodeDefinition,
+	SleepNodeDefinition,
+	TerminalNodeDefinition,
+	VideoNodeDefinition,
+} from './types/ToolNodes'
 import {
 	ExecutionResult,
 	InfoValues,
@@ -79,6 +93,20 @@ export const NodeDefinitions = {
 	// Output
 	output: OutputNodeDefinition,
 	save: SaveNodeDefinition,
+	table: TableNodeDefinition,
+	chart: ChartNodeDefinition,
+	sqlite_in: SqliteNodeDefinition,
+	openrouter: OpenRouterNodeDefinition,
+	opencode_go: OpenCodeNodeDefinition,
+	model_pick: ModelPickNodeDefinition,
+	hf: HfNodeDefinition,
+	video: VideoNodeDefinition,
+	emoji: EmojiNodeDefinition,
+	motion: MotionNodeDefinition,
+	local_tool: LocalToolNodeDefinition,
+	terminal: TerminalNodeDefinition,
+	agent_run: AgentNodeDefinition,
+	sleep: SleepNodeDefinition,
 } satisfies Record<string, NodeDefinitionConstructor<any>>
 
 /**

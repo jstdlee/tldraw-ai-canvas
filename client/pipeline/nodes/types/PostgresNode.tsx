@@ -6,7 +6,7 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } fro
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { CodeArea } from '../../editors/CodeArea'
-import { NodeTextResult, PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -16,6 +16,7 @@ import {
 	InputValues,
 	NodeComponentProps,
 	NodeDefinition,
+	NodeRow,
 	STOP_EXECUTION,
 	updateNode,
 } from './shared'
@@ -54,7 +55,7 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 		return WIDTH
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX + SQL_HEIGHT + RESULT_HEIGHT
+		return NODE_ROW_HEIGHT_PX + SQL_HEIGHT
 	}
 	getPorts(): Record<string, ShapePort> {
 		const y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + NODE_ROW_HEIGHT_PX * 0.5
@@ -96,7 +97,11 @@ function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>
 			<div onPointerDown={stopEvent}>
 				<CodeArea lang="sql" height={SQL_HEIGHT} value={node.sql} onChange={(sql) => set({ sql })} />
 			</div>
-			<NodeTextResult text={node.lastText} error={node.error} empty="Press Run. The first time loads PGlite." height={RESULT_HEIGHT} />
+			{node.error && (
+				<NodeRow>
+					<span className="NodeStatus is-error">{node.error}</span>
+				</NodeRow>
+			)}
 		</>
 	)
 }

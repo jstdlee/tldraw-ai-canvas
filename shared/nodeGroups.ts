@@ -2,9 +2,12 @@
 
 export const NODE_GROUPS = [
 	{ id: 'text', label: 'Text' },
+	{ id: 'data', label: 'Data' },
 	{ id: 'net', label: 'Net' },
 	{ id: 'llm', label: 'LLM' },
 	{ id: 'image', label: 'Image' },
+	{ id: 'media', label: 'Media' },
+	{ id: 'tools', label: 'Tools' },
 	{ id: 'logic', label: 'Logic & code' },
 	{ id: 'input', label: 'Input' },
 	{ id: 'output', label: 'Output' },
@@ -50,6 +53,20 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	subgraph: 'logic',
 	output: 'output',
 	save: 'output',
+	table: 'data',
+	chart: 'data',
+	sqlite_in: 'data',
+	openrouter: 'llm',
+	opencode_go: 'llm',
+	model_pick: 'llm',
+	hf: 'llm',
+	video: 'media',
+	emoji: 'media',
+	motion: 'media',
+	local_tool: 'tools',
+	terminal: 'tools',
+	agent_run: 'tools',
+	sleep: 'logic',
 }
 
 export function categoryOf(type: string): string {

@@ -5,7 +5,9 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE
 import { ExecutionGraph } from '../../execution/ExecutionGraph'
 import { ShapePort } from '../../ports/Port'
 import { unpack } from '../../subgraph'
-import { ValuePreview } from '../../ValuePreview'
+import { shapeText } from '../../../clips/shapeText'
+import { concatMemberText } from '../../../../shared/groupText'
+import { Port } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { PortRow, stopEvent } from './fields'
 import {
@@ -78,18 +80,23 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 		return Math.max(node.inputs.length, node.outputs.length - 1, 0)
 	}
 	getBodyHeightPx(_shape: NodeShape, node: SubgraphNode) {
-		return NODE_ROW_HEIGHT_PX * (this.rows(node) + 1) + THUMB_PX + RESULT_PX
+		return NODE_ROW_HEIGHT_PX * (Math.max(this.rows(node), 1) + 1) + THUMB_PX
 	}
 	getPorts(_shape: NodeShape, node: SubgraphNode): Record<string, ShapePort> {
 		const ports: Record<string, ShapePort> = {}
-		node.inputs.forEach((p, i) => {
+		const inputs = node.inputs.length ? node.inputs : [{ id: 'input', label: 'In', dataType: 'any' as const, nodeId: '', portId: 'input' }]
+		const outputs = node.outputs.length ? node.outputs : [{ id: 'output', label: 'Out', dataType: 'any' as const, nodeId: '', portId: 'output' }]
+		inputs.forEach((p, i) => {
 			ports[p.id] = { id: p.id, x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * (i + 0.5), terminal: 'end', dataType: p.dataType }
 		})
-		node.outputs.forEach((p, i) => {
-			ports[p.id] =
-				i === 0
-					? { id: p.id, x: this.getWidthPx(), y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: p.dataType }
-					: { id: p.id, x: this.getWidthPx(), y: BASE_Y + NODE_ROW_HEIGHT_PX * (i - 0.5), terminal: 'start', dataType: p.dataType }
+		outputs.forEach((p, i) => {
+			ports[p.id] = {
+				id: p.id,
+				x: this.getWidthPx(),
+				y: BASE_Y + NODE_ROW_HEIGHT_PX * (i + 0.5),
+				terminal: 'start',
+				dataType: p.dataType,
+			}
 		})
 		return ports
 	}
@@ -105,10 +112,20 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 			await graph.execute()
 			const result: ExecutionResult = {}
 			const saved: Record<string, string | null> = {}
+			const members = concatMemberText(
+				node.innerIds.map((id) => {
+					const child = this.editor.getShape(id as TLShapeId)
+					return child ? shapeText(this.editor, child) : ''
+				})
+			)
 			for (const p of node.outputs) {
 				const v = graph.getOutputs(p.nodeId as TLShapeId)?.[p.portId]
 				result[p.id] = v === undefined ? STOP_EXECUTION : v
 				saved[p.id] = v == null || v === STOP_EXECUTION ? null : String(v)
+			}
+			if (!node.outputs.length) {
+				result.output = members
+				saved.output = members
 			}
 			updateNode<SubgraphNode>(this.editor, shape, (n) => ({ ...n, lastOutputs: JSON.stringify(saved), error: null }))
 			return result
@@ -120,26 +137,25 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 	getOutputInfo(shape: NodeShape, node: SubgraphNode, inputs: InfoValues): InfoValues {
 		const last = node.lastOutputs ? (JSON.parse(node.lastOutputs) as Record<string, string | null>) : {}
 		const isOutOfDate = areAnyInputsOutOfDate(inputs) || shape.props.isOutOfDate
-		return Object.fromEntries(node.outputs.map((p) => [p.id, { value: last[p.id] ?? null, isOutOfDate, dataType: p.dataType }]))
+		const outputs = node.outputs.length ? node.outputs : [{ id: 'output', dataType: 'text' as const }]
+		return Object.fromEntries(outputs.map((p) => [p.id, { value: last[p.id] ?? null, isOutOfDate, dataType: p.dataType }]))
 	}
 	Component = SubgraphNodeComponent
 }
 
 function SubgraphNodeComponent({ shape, node }: NodeComponentProps<SubgraphNode>) {
 	const editor = useEditor()
-	const rows = Math.max(node.inputs.length, node.outputs.length - 1, 0)
-	const last = node.lastOutputs ? (JSON.parse(node.lastOutputs) as Record<string, string | null>) : {}
-	const firstValue = node.outputs.map((p) => last[p.id]).find((v) => v)
+	const inputs = node.inputs.length ? node.inputs : [{ id: 'input', label: 'In', dataType: 'any' as const }]
+	const outputs = node.outputs.length ? node.outputs : [{ id: 'output', label: 'Out', dataType: 'any' as const }]
 	return (
 		<>
-			{Array.from({ length: rows }, (_, i) => (
-				<div key={i} className="CodeNode-portRow">
-					{node.inputs[i] ? (
-						<PortRow shapeId={shape.id} portId={node.inputs[i].id} label={node.inputs[i].label} dataType={node.inputs[i].dataType} hint="" />
-					) : (
-						<NodeRow>{null}</NodeRow>
-					)}
-					{node.outputs[i + 1] && <span className="CodeNode-outLabel">{node.outputs[i + 1].label} →</span>}
+			{inputs.map((port) => (
+				<PortRow key={port.id} shapeId={shape.id} portId={port.id} label={port.label} dataType={port.dataType} hint="" />
+			))}
+			{outputs.map((port) => (
+				<div key={port.id} className="NodeRow NodeRow-right">
+					<span className="CodeNode-outLabel">{port.label} →</span>
+					<Port shapeId={shape.id} portId={port.id} />
 				</div>
 			))}
 			<div className="Subgraph-thumb NodeGrow" style={{ height: THUMB_PX }} onDoubleClick={() => unpack(editor, shape.id)} title="Double-click to unpack">
@@ -157,15 +173,7 @@ function SubgraphNodeComponent({ shape, node }: NodeComponentProps<SubgraphNode>
 					Unpack
 				</TldrawUiButton>
 			</NodeRow>
-			<div className="NodeOutputView" style={{ height: RESULT_PX - 8 }}>
-				{node.error ? (
-					<span className="NodeStatus is-error">{node.error}</span>
-				) : firstValue ? (
-					<ValuePreview value={firstValue} />
-				) : (
-					<span className="NodeRow-disconnected">{node.outputs.length ? `Out: ${node.outputs[0].label}` : 'No outputs'}</span>
-				)}
-			</div>
+			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
 		</>
 	)
 }

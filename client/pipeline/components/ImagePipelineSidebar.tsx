@@ -11,6 +11,7 @@ import { getNodeDefinitions, NodeType } from '../nodes/nodeTypes'
 import { $customNodes, addCustomNodeToCanvas, deleteCustomNode, refreshCustomNodes } from '../customNodes'
 import { NODE_GROUP_LABELS, NODE_GROUP_ORDER } from '../../../shared/nodeGroups'
 import { $examplesOpen } from './CanvasExtras'
+import { $libraryRail } from '../../shell/shellState'
 import { useEffect } from 'react'
 
 const DRAG_DISTANCE_SQ = 36 // 6px
@@ -154,6 +155,9 @@ export function ImagePipelineSidebar({ editor }: { editor: Editor }) {
 		<div className={`ImagePipelineSidebar ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}>
 			<div className="ImagePipelineSidebar-header">
 				<span>Nodes</span>
+				<button className="ImagePipelineSidebar-rail" type="button" title="Collapse (Shift+B)" onClick={() => $libraryRail.set(!$libraryRail.get())}>
+					◁
+				</button>
 				<button className="ImagePipelineSidebar-examples" type="button" onClick={() => $examplesOpen.set(true)}>
 					Examples
 				</button>

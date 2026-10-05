@@ -28,6 +28,7 @@ import {
 } from './canvasFeatures'
 import { $findOpen } from './FindBar'
 import { $imageEditorTarget } from './ImageEditor'
+import { diveGroup, groupSelection, leaveGroup, renameSelection } from '../pipeline/groups/groupActions'
 import { packSelection, unpack } from '../pipeline/subgraph'
 import {
 	exportCustomNodeFile,
@@ -134,6 +135,20 @@ export function canvasActionOverrides(
 				notify((e as Error).message, 'error')
 			}
 		}),
+		...a('group-shapes', 'Group selection', () => {
+			if (!groupSelection(editor)) notify('Select at least two shapes', 'warning')
+		}, '$!g'),
+		...a('rename-shape', 'Rename component or group', () => {
+			const name = window.prompt('Name on the top edge')
+			if (!name) return
+			if (!renameSelection(editor, name)) notify('Select one component or one group', 'warning')
+		}),
+		...a('dive-group', 'Dive into group', () => {
+			if (!diveGroup(editor)) notify('Select one group', 'warning')
+		}),
+		...a('leave-group', 'Back from group', () => {
+			if (!leaveGroup(editor)) notify('You are not inside a group', 'warning')
+		}),
 		...a('unpack-node', 'Unpack', () => {
 			const s = editor.getOnlySelectedShape()
 			if (s?.type === 'node' && (s.props as any).node?.type === 'subgraph') unpack(editor, s.id)
@@ -170,6 +185,14 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 			{hasText && (
 				<TldrawUiMenuGroup id="text-tools">
 					<TldrawUiMenuActionItem actionId="toggle-text-wrap" />
+				</TldrawUiMenuGroup>
+			)}
+			{hasSelection && (
+				<TldrawUiMenuGroup id="group-tools">
+					<TldrawUiMenuActionItem actionId="group-shapes" />
+					<TldrawUiMenuActionItem actionId="rename-shape" />
+					<TldrawUiMenuActionItem actionId="dive-group" />
+					<TldrawUiMenuActionItem actionId="leave-group" />
 				</TldrawUiMenuGroup>
 			)}
 			{(hasNodes || isPackedNode) && (

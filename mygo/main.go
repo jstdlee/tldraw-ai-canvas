@@ -1,4 +1,4 @@
-// AI Canvas desktop shell. MyGo opens the system webview. The existing
+// Oh My tldraw desktop shell. MyGo opens the system webview. The existing
 // Node server, the same bundle Electron runs, serves the page and the API.
 package main
 
@@ -12,6 +12,15 @@ import (
 
 	"github.com/egoist/mygo"
 )
+
+func init() {
+	// This NVIDIA box cannot create a GBM buffer. Software compositing
+	// keeps the webview from opening on a blank page.
+	if runtime.GOOS == "linux" {
+		_ = os.Setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+		_ = os.Setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+	}
+}
 
 var (
 	mainWindow *mygo.Window
@@ -97,14 +106,14 @@ func boot() error {
 	}
 	serverCmd = cmd
 	origin = strings.TrimRight(url, "/")
-	log.Println("AI Canvas", origin)
+	log.Println("Oh My tldraw", origin)
 	openWindow()
 	return nil
 }
 
 func openWindow() {
 	win := mygo.NewWindow(mygo.WindowOptions{
-		Title:           "AI Canvas",
+		Title:           "Oh My tldraw",
 		URL:             origin,
 		Width:           1440,
 		Height:          900,
@@ -112,7 +121,7 @@ func openWindow() {
 		MinHeight:       560,
 		BackgroundColor: "#f9fafb",
 		StateKey:        "main",
-		Hidden:          true,
+		Hidden:          false,
 	})
 	mainWindow = win
 	win.OnReadyToShow(win.Show)

@@ -10,7 +10,7 @@ import {
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { NodeTextResult, PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -55,7 +55,7 @@ export class TextToolNodeDefinition extends NodeDefinition<TextToolNode> {
 		return { type: 'text_tool', op: 'template', a: '{{input}}', b: '', lastResultText: null, error: null }
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 5 + TOOL_RESULT_HEIGHT_PX
+		return NODE_ROW_HEIGHT_PX * 5
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
@@ -136,12 +136,6 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 					)}
 				</NodeRow>
 			))}
-			<NodeTextResult
-				text={node.lastResultText}
-				error={node.error}
-				empty="Press ▶ Play to run"
-				height={TOOL_RESULT_HEIGHT_PX}
-			/>
 		</>
 	)
 }

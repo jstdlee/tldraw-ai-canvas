@@ -15,7 +15,7 @@ import {
 } from '../../constants'
 import { Port as PortDot, ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { isImageValue, NodeTextResult, PortRow, stopEvent, useInputConnected } from './fields'
+import { isImageValue, PortRow, stopEvent, useInputConnected } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -61,7 +61,7 @@ function ResultView({
 			</div>
 		)
 	}
-	return <NodeTextResult text={text} error={error} empty={empty} height={height} />
+	return null
 }
 
 // ---------------------------------------------------------------------------
@@ -123,8 +123,14 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 	override getWidthPx() {
 		return HTTP_WIDTH_PX
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 4 + HTTP_QUERY_HEIGHT_PX + HTTP_HEADERS_HEIGHT_PX + HTTP_BODY_HEIGHT_PX + HTTP_RESULT_HEIGHT_PX + 72
+	getBodyHeightPx(_shape: NodeShape, node: HttpNode) {
+		return (
+			NODE_ROW_HEIGHT_PX * 4 +
+			HTTP_QUERY_HEIGHT_PX +
+			HTTP_HEADERS_HEIGHT_PX +
+			HTTP_BODY_HEIGHT_PX +
+			(node.lastImageUrl ? HTTP_RESULT_HEIGHT_PX : 0)
+		)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
@@ -296,7 +302,6 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 					{node.error ?? node.lastStatus ?? 'Not run yet'}
 				</span>
 			</NodeRow>
-			<NodeTextResult text={node.lastHeaders ?? null} empty="Response headers" height={64} />
 			<ResultView
 				imageUrl={node.lastImageUrl}
 				text={node.lastText}
@@ -346,8 +351,8 @@ export class DownloadNodeDefinition extends NodeDefinition<DownloadNode> {
 			error: null,
 		}
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + DOWNLOAD_RESULT_HEIGHT_PX
+	getBodyHeightPx(_shape: NodeShape, node: DownloadNode) {
+		return NODE_ROW_HEIGHT_PX * 3 + (node.lastImageUrl ? DOWNLOAD_RESULT_HEIGHT_PX : 0)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
@@ -461,8 +466,8 @@ export class SaveNodeDefinition extends NodeDefinition<SaveNode> {
 	getDefault(): SaveNode {
 		return { type: 'save', fileName: 'canvas-{{date}}', lastPath: null, lastPreview: null, error: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + 120
+	getBodyHeightPx(_shape: NodeShape, node: SaveNode) {
+		return NODE_ROW_HEIGHT_PX * 3 + (isImageValue(node.lastPreview) ? 120 : 0)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {

@@ -3,14 +3,22 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ContentKind, detectContentKind } from '../../shared/contentKind'
 import { renderMermaid } from '../clips/ClipShapes'
+import { FieldMax, ImageZoom, LargeEditor } from './editors/LargeEditor'
 
 const stop = (e: React.SyntheticEvent) => e.stopPropagation()
 
 /** Shows any node value: text, image, Markdown, Mermaid, JSON or a link card. */
 export function ValuePreview({ value, kind = 'auto' }: { value: string; kind?: ContentKind | 'auto' }) {
 	const k = kind === 'auto' ? detectContentKind(value) : kind
+	const [open, setOpen] = useState(false)
+	const title = k === 'image' ? 'Image' : k === 'mermaid' ? 'Mermaid' : k === 'json' ? 'JSON' : k === 'markdown' ? 'Markdown' : 'Output'
 	return (
 		<div className={`ValuePreview ValuePreview_${k}`} onPointerDown={stop} onWheel={stop}>
+			<FieldMax title={`Open ${title}`} onClick={() => setOpen(true)} />
+			{open && k === 'image' && <ImageZoom src={value.trim()} onClose={() => setOpen(false)} />}
+			{open && k !== 'image' && (
+				<LargeEditor title={title} value={k === 'json' ? prettyJson(value) : value} lang={k === 'json' ? 'json' : 'text'} readOnly onChange={() => {}} onClose={() => setOpen(false)} />
+			)}
 			{k === 'image' && <img className="ValuePreview-image" src={value.trim()} alt="" draggable={false} />}
 			{k === 'url' && <LinkPreview url={value.trim()} />}
 			{k === 'mermaid' && <MermaidPreview code={value} />}

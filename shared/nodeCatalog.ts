@@ -37,6 +37,20 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	subgraph: { in: [], out: [], fields: ['title'] },
 	output: { in: ['input'], out: ['output'], fields: ['kind'] },
 	save: { in: ['input'], out: ['output'], fields: ['fileName'] },
+	table: { in: ['data', 'extra'], out: ['output'], fields: ['text', 'format', 'op', 'columns', 'column', 'expr', 'pattern', 'name'] },
+	chart: { in: ['data'], out: ['output'], fields: ['kind', 'xCol', 'yCol', 'text'] },
+	sqlite_in: { in: ['input'], out: ['output'], fields: ['path', 'sql', 'ask'] },
+	openrouter: { in: [], out: ['output'], fields: ['model'] },
+	opencode_go: { in: [], out: ['output'], fields: ['model'] },
+	model_pick: { in: [], out: ['output'], fields: ['task', 'band', 'model'] },
+	hf: { in: ['input'], out: ['output'], fields: ['task', 'model'] },
+	video: { in: ['url'], out: ['output'], fields: ['url', 'autoplay'] },
+	emoji: { in: ['input'], out: ['output'], fields: ['emoji'] },
+	motion: { in: ['input'], out: ['output'], fields: ['direction', 'speed', 'content'] },
+	local_tool: { in: ['stdin'], out: ['output'], fields: ['tool', 'args'] },
+	terminal: { in: ['stdin'], out: ['output'], fields: ['command', 'host'] },
+	agent_run: { in: ['prompt'], out: ['output'], fields: ['cli', 'prompt'] },
+	sleep: { in: ['input'], out: ['output'], fields: ['ms'] },
 }
 
 export function catalogPrompt(): string {

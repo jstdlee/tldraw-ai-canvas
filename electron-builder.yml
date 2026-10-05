@@ -1,6 +1,6 @@
 # Desktop builds run in GitHub Actions (.github/workflows/desktop.yml).
-appId: com.jstdlee.aicanvas
-productName: AI Canvas
+appId: dev.jstdlee.ohmytldraw
+productName: Oh My tldraw
 copyright: Copyright © 2026 jstdlee
 directories:
   output: release
@@ -13,7 +13,7 @@ files:
   - package.json
   - "!**/*.map"
 asar: true
-artifactName: ai-canvas-${version}-${os}-${arch}.${ext}
+artifactName: oh-my-tldraw-${version}-${os}-${arch}.${ext}
 
 linux:
   target:
@@ -33,10 +33,10 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  artifactName: ai-canvas-${version}-windows-${arch}-setup.${ext}
+  artifactName: oh-my-tldraw-${version}-windows-${arch}-setup.${ext}
 
 portable:
-  artifactName: ai-canvas-${version}-windows-${arch}-portable.${ext}
+  artifactName: oh-my-tldraw-${version}-windows-${arch}-portable.${ext}
 
 mac:
   target:

@@ -60,6 +60,10 @@ import { canvasActionOverrides, CanvasContextMenu, CanvasToolsMenuGroup, Markdow
 import { registerClipHandlers } from './clips/canvasFeatures'
 import { clipShapeUtils, clipTools } from './clips/ClipShapes'
 import { FindBar } from './clips/FindBar'
+import { installKeepGroup } from './pipeline/groups/KeepGroupShapeUtil'
+import { ShellChrome } from './shell/ShellChrome'
+import { $featuresOpen, $historyOpen, $libraryRail, $mapOpen } from './shell/shellState'
+import { loadBackup, saveBackup } from './shell/shellState'
 import { ImageEditorModal } from './clips/ImageEditor'
 import { RatioImageShapeUtil } from './clips/shapeOptions'
 
@@ -68,6 +72,8 @@ const assetUrls = getAssetUrlsByImport()
 
 // Pipeline nodes + wires (image pipeline / branching chat kits)
 // RatioImageShapeUtil replaces tldraw's image util (adds the keep-ratio switch).
+installKeepGroup()
+
 const shapeUtils = [NodeShapeUtil, ConnectionShapeUtil, ...clipShapeUtils, RatioImageShapeUtil]
 const bindingUtils = [ConnectionBindingUtil]
 // Agent highlight overlay + "insert node" handle on wires
@@ -210,6 +216,7 @@ function App() {
 					<OnCanvasNodePicker />
 					<PipelineRegions />
 					<FindBarHost />
+					<ShellChrome />
 					<SetupBanner />
 				</>
 			),
@@ -234,6 +241,13 @@ function App() {
 							kbd="shift+a"
 							onSelect={() => togglePanel('chat')}
 						/>
+						<TldrawUiMenuItem id="map-view" label="Map view" onSelect={() => { $mapOpen.set(!$mapOpen.get()) }} />
+						<TldrawUiMenuItem id="op-history" label="Operation history" onSelect={() => { $historyOpen.set(true) }} />
+						<TldrawUiMenuItem id="feature-list" label="Features vs tldraw" onSelect={() => { $featuresOpen.set(true) }} />
+						<TldrawUiMenuItem id="backup-15" label="Auto backup every 15 min" onSelect={() => saveBackup({ minutes: 15, target: 'folder' })} />
+						<TldrawUiMenuItem id="backup-off" label="Auto backup off" onSelect={() => saveBackup({ minutes: 0, target: 'folder' })} />
+						<TldrawUiMenuItem id="backup-s3" label="Backup target: S3-compatible" onSelect={() => saveBackup({ minutes: loadBackup().minutes || 15, target: 's3' })} />
+						<TldrawUiMenuItem id="backup-gdrive" label="Google Drive backup later (needs an application id)" onSelect={() => {}} />
 					</TldrawUiMenuGroup>
 					<DefaultMainMenuContent />
 				</DefaultMainMenu>
@@ -259,10 +273,15 @@ function App() {
 		[app, panels, togglePanel]
 	)
 
+	const rail = useValue('library rail', () => $libraryRail.get(), [])
 	return (
 		<TldrawUiToastsProvider>
 			<div
-				className={'app-layout is-chat-hidden' + (panels.library ? '' : ' is-library-hidden')}
+				className={
+					'app-layout is-chat-hidden' +
+					(panels.library ? '' : ' is-library-hidden') +
+					(rail ? ' is-library-rail' : '')
+				}
 			>
 				<div className="image-pipeline-sidebar">
 					{editor ? <ImagePipelineSidebar editor={editor} /> : <div />}

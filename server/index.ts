@@ -25,6 +25,7 @@ import { decide, JevRequest } from './jev'
 import { NET_TOOLS, NetTool, runNetTool } from './nettools'
 import { getLanguageModel, getProviderOptions, listProviderModels, ProviderModelInfo } from './llm'
 import { guessCapabilities, ModelCapability, ModelConfig } from '../shared/aiConfig'
+import { registerBatchRoutes } from './batchRoutes'
 
 const PORT = Number(process.env.API_PORT ?? 8790)
 const HOST = process.env.HOST ?? '127.0.0.1'
@@ -352,6 +353,8 @@ app.get('/api/images/:imageId/data-url', (c) => {
 	return c.text(toDataUrl(image))
 })
 
+registerBatchRoutes(app)
+
 // --- Static app (production) -----------------------------------------------
 
 if (PROD) {
@@ -389,7 +392,7 @@ function stripThink(text: string) {
 export function startServer(port = PORT, hostname = HOST): Promise<number> {
 	return new Promise((resolve, reject) => {
 		const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
-			console.log(`AI canvas server on http://${hostname}:${info.port}${PROD ? '' : ' (API only; open the Vite URL)'}`)
+			console.log(`Oh My tldraw server on http://${hostname}:${info.port}${PROD ? '' : ' (API only; open the Vite URL)'}`)
 			// Warn early when nothing is configured yet.
 			try {
 				resolveModel(null, 'chat')

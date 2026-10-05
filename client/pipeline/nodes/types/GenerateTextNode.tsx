@@ -20,7 +20,7 @@ import {
 	llmRequestSettings,
 	llmSettingsHeight,
 } from './llmSettings'
-import { NodeTextResult } from './fields'
+
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -65,7 +65,7 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 	}
 	getBodyHeightPx(_shape: NodeShape, node: GenerateTextNode) {
 		// input row + prompt row + model row (44 each) + settings + result area (88 + 8 margin)
-		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node) + 96
+		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node)
 	}
 	getPorts(_shape: NodeShape, _node: GenerateTextNode): Record<string, ShapePort> {
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
@@ -190,12 +190,6 @@ function GenerateTextNodeComponent({ shape, node }: NodeComponentProps<GenerateT
 				/>
 			</NodeRow>
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
-			<NodeTextResult
-				text={node.lastResultText}
-				loading={shape.props.isOutOfDate}
-				empty="Run to generate text"
-				height={96}
-			/>
 		</>
 	)
 }

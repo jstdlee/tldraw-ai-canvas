@@ -14,7 +14,7 @@ import {
 import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues, getNodePortConnections, NodePortConnection } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
-import { NodeTextResult } from './fields'
+
 import {
 	DEFAULT_LLM_SETTINGS,
 	LlmSettingsFields,
@@ -83,7 +83,7 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 		}
 	}
 	getBodyHeightPx(_shape: NodeShape, node: ChatNode) {
-		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node) + MESSAGE_HEIGHT_PX + REPLY_HEIGHT_PX
+		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node) + MESSAGE_HEIGHT_PX
 	}
 	getPorts(): Record<string, ShapePort> {
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
@@ -301,13 +301,6 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 					)}
 				</button>
 			</div>
-			<NodeTextResult
-				text={node.assistantMessage || null}
-				error={node.error}
-				loading={busy}
-				empty="The reply appears here"
-				height={REPLY_HEIGHT_PX}
-			/>
 		</>
 	)
 }

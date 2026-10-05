@@ -82,21 +82,29 @@ export async function packSelection(editor: Editor): Promise<TLShapeId | null> {
 		}
 	}
 
-	// Nothing wired out yet: expose the outputs of the last nodes in the chain.
-	if (outputs.length === 0) {
-		for (const id of nodeIds) {
-			const hasInnerDependents = getNodePortConnections(editor, id).some(
-				(c) => c.terminal === 'start' && nodeIds.has(c.connectedShapeId)
-			)
-			const node = editor.getShape<NodeShape>(id)!
-			const out = Object.values(getNodePorts(editor, node)).find((p) => p.terminal === 'start')
-			if (!hasInnerDependents && out && outputs.length < 3) {
+	// Every inner port that is not wired inside the pack stays on the packed node.
+	for (const id of nodeIds) {
+		const node = editor.getShape<NodeShape>(id)!
+		const connections = getNodePortConnections(editor, id)
+		for (const port of Object.values(getNodePorts(editor, node))) {
+			const inside = connections.some((c) => c.ownPortId === port.id && nodeIds.has(c.connectedShapeId))
+			if (inside) continue
+			if (port.terminal === 'end' && inputs.length < 8 && !inputs.some((p) => p.nodeId === id && p.portId === port.id)) {
+				inputs.push({
+					id: `in${inputs.length}`,
+					label: portLabel(editor, node, port.id),
+					dataType: port.dataType,
+					nodeId: id,
+					portId: port.id,
+				})
+			}
+			if (port.terminal === 'start' && outputs.length < 8 && !outputs.some((p) => p.nodeId === id && p.portId === port.id)) {
 				outputs.push({
 					id: outputs.length === 0 ? 'output' : `out${outputs.length}`,
-					label: portLabel(editor, node, out.id),
-					dataType: out.dataType,
+					label: portLabel(editor, node, port.id),
+					dataType: port.dataType,
 					nodeId: id,
-					portId: out.id,
+					portId: port.id,
 				})
 			}
 		}

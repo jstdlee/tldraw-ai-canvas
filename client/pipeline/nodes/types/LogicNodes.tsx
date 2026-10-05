@@ -7,7 +7,7 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE
 import { runLoopBody } from '../../execution/loop'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { NodeTextResult, PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -267,7 +267,7 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 		return { type: 'for_each', split: 'lines', separator: ',', joiner: '\\n', progress: null, lastResults: null, error: null }
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 6 + FOR_EACH_RESULT_PX
+		return NODE_ROW_HEIGHT_PX * 6 + 18
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
@@ -306,6 +306,13 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 		}
 	}
 	Component = ForEachNodeComponent
+}
+
+function forEachPercent(progress: string | null): number {
+	const match = /(\d+)\s*\/\s*(\d+)/.exec(progress ?? '')
+	if (match) return Math.round((Number(match[1]) / Math.max(1, Number(match[2]))) * 100)
+	if (progress?.includes('done')) return 100
+	return 0
 }
 
 function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) {
@@ -352,12 +359,10 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 					onChange={(e) => set({ joiner: e.target.value })}
 				/>
 			</NodeRow>
-			<NodeTextResult
-				text={node.lastResults}
-				error={node.error}
-				empty={node.progress ?? 'Wire: item → your nodes → Result. Then ▶ Play.'}
-				height={FOR_EACH_RESULT_PX}
-			/>
+			<div className="ProgressBar" title={node.progress ?? 'Wire item, then Result, then Play'}>
+				<span style={{ width: `${forEachPercent(node.progress)}%` }} />
+			</div>
+			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
 		</>
 	)
 }

@@ -1,6 +1,8 @@
 import { atom, createBindingId, createShapeId, Editor, TLShapeId } from 'tldraw'
 import { allowedProps, parseComposePlan, parseFillPlan } from '../../shared/nodeAssist'
 import { catalogPrompt } from '../../shared/nodeCatalog'
+import { featurePrompt } from '../../shared/featureList'
+import { shapeText } from '../clips/shapeText'
 import { apiGenerateText } from './api/pipelineApi'
 import { getNodeDefinition, NodeType } from './nodes/nodeTypes'
 import { NodeShape } from './nodes/NodeShapeUtil'
@@ -39,7 +41,7 @@ export async function runFill(editor: Editor, shapeId: TLShapeId, intent: string
 			'You set the fields of one workflow node. Reply with JSON only: {"props": { ...fields }}. ' +
 			'Do not change type. Use only fields that already exist. Leave result fields empty.\n\n' +
 			catalogPrompt(),
-		prompt: `Node:\n${JSON.stringify(nodeSummary(shape))}\n\nThe user wants: ${intent}`,
+		prompt: `Node:\n${JSON.stringify(nodeSummary(shape))}\n\nSelection text:\n${shapeText(editor, shape)}\n\nThe user wants: ${intent}`,
 	})
 	const plan = parseFillPlan(text)
 	const props = allowedProps(node, plan.props)
@@ -61,9 +63,15 @@ export async function runCompose(editor: Editor, shapeIds: TLShapeId[], intent: 
 		system:
 			'You wire workflow nodes so they do what the user asks. Reply with JSON only:\n' +
 			'{"updates":[{"id":"existing shape id","props":{}}],"add":[{"tempId":"n1","type":"prompt","props":{},"x":0,"y":0}],"connect":[{"from":"id or tempId","fromPort":"output","to":"id or tempId","toPort":"input"}]}\n' +
-			'Use existing ids for selected nodes. Add a node when one is missing. Use only the ports and fields listed.\n\n' +
-			catalogPrompt(),
-		prompt: `Selected nodes:\n${JSON.stringify(shapes.map(nodeSummary), null, 2)}\n\nThe user wants: ${intent}`,
+			'Use existing ids for selected nodes. Add a node when one is missing. Use only the ports and fields listed. ' +
+			'The catalog is a static list of this app. It is not a live MCP server.\n\n' +
+			catalogPrompt() +
+			'\n\nApp features:\n' +
+			featurePrompt(),
+		prompt: `Selected nodes:\n${JSON.stringify(shapes.map(nodeSummary), null, 2)}\n\nSelection text:\n${shapes
+			.map((shape) => shapeText(editor, shape))
+			.filter(Boolean)
+			.join('\n---\n')}\n\nThe user wants: ${intent}`,
 	})
 	const plan = parseComposePlan(text)
 	const ids = new Map<string, TLShapeId>()

@@ -10,7 +10,7 @@ import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { isImageValue, NodeTextResult, PortRow, stopEvent, useInputConnected } from './fields'
+import { isImageValue, PortRow, stopEvent, useInputConnected } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	LlmSettingsFields,
@@ -79,7 +79,7 @@ export class RandomNodeDefinition extends NodeDefinition<RandomNode> {
 		return { type: 'random', mode: 'number', a: '1', b: '100', list: 'red\ngreen\nblue', lastValue: null }
 	}
 	getBodyHeightPx(_s: NodeShape, node: RandomNode) {
-		return NODE_ROW_HEIGHT_PX * 3 + (node.mode === 'pick' || node.mode === 'shuffle' ? 80 : 0) + 60
+		return NODE_ROW_HEIGHT_PX * 3 + (node.mode === 'pick' || node.mode === 'shuffle' ? 80 : 0)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { list: { id: 'list', x: 0, y: portY(0), terminal: 'end', dataType: 'any' }, output: out() }
@@ -150,7 +150,6 @@ function RandomNodeComponent({ shape, node }: NodeComponentProps<RandomNode>) {
 					/>
 				</div>
 			)}
-			<NodeTextResult text={node.lastValue} empty="Press ▶ Play" height={60} />
 		</>
 	)
 }
@@ -202,7 +201,7 @@ export class NetToolNodeDefinition extends NodeDefinition<NetToolNode> {
 		return 340
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 4 + NET_RESULT_PX
+		return NODE_ROW_HEIGHT_PX * 4
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { target: { id: 'target', x: 0, y: portY(0), terminal: 'end', dataType: 'text' }, output: out('text', 340) }
@@ -273,15 +272,11 @@ function NetToolNodeComponent({ shape, node }: NodeComponentProps<NetToolNode>) 
 					<span className="NodeStatus">{node.lastMs != null ? `took ${node.lastMs} ms` : 'Runs on this machine'}</span>
 				)}
 			</NodeRow>
-			<div className="NodeOutputView NodeGrow" style={{ height: NET_RESULT_PX - 8 }}>
-				{node.error ? (
+			{node.error && (
+				<NodeRow>
 					<span className="NodeStatus is-error">{node.error}</span>
-				) : node.lastOutput ? (
-					<pre className="ValuePreview-text is-mono">{node.lastOutput}</pre>
-				) : (
-					<span className="NodeRow-disconnected">Press ▶ Play</span>
-				)}
-			</div>
+				</NodeRow>
+			)}
 		</>
 	)
 }
@@ -361,7 +356,7 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 		}
 	}
 	getBodyHeightPx(_s: NodeShape, node: SummarizeNode) {
-		return NODE_ROW_HEIGHT_PX * 5 + llmSettingsHeight(node) + SUM_RESULT_PX
+		return NODE_ROW_HEIGHT_PX * 5 + llmSettingsHeight(node)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { input: { id: 'input', x: 0, y: portY(0), terminal: 'end', dataType: 'any' }, output: out() }
@@ -446,7 +441,6 @@ function SummarizeNodeComponent({ shape, node }: NodeComponentProps<SummarizeNod
 				<span className="NodeStatus">{node.lastKind ? `Last input: ${node.lastKind}` : 'Videos: 6 frames are read'}</span>
 			</NodeRow>
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
-			<NodeTextResult text={node.lastResultText} error={node.error} empty="Press ▶ Play" height={SUM_RESULT_PX} />
 		</>
 	)
 }

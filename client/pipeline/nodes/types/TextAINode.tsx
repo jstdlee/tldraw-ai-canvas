@@ -12,7 +12,7 @@ import {
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { NodeTextResult, PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	LlmSettingsFields,
@@ -111,7 +111,7 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 		}
 	}
 	getBodyHeightPx(_shape: NodeShape, node: TextAINode) {
-		return NODE_ROW_HEIGHT_PX * 3 + OPTION_HEIGHT_PX + llmSettingsHeight(node) + RESULT_HEIGHT_PX
+		return NODE_ROW_HEIGHT_PX * 3 + OPTION_HEIGHT_PX + llmSettingsHeight(node)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
@@ -231,13 +231,6 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 				/>
 			</NodeRow>
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
-			<NodeTextResult
-				text={node.lastResultText}
-				error={node.error}
-				loading={shape.props.isOutOfDate && !node.error}
-				empty="Press ▶ Play to run"
-				height={RESULT_HEIGHT_PX}
-			/>
 		</>
 	)
 }

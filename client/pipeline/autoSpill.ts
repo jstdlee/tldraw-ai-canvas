@@ -52,7 +52,12 @@ export async function spillUnconnectedOutput(editor: Editor, shape: NodeShape, o
 		type: 'text',
 		x: (bounds?.maxX ?? shape.x) + 48,
 		y: bounds?.minY ?? shape.y,
-		props: { richText: toRichText(text), autoSize: false, w: 320 },
+		props: {
+			richText: toRichText(text),
+			autoSize: shape.props.node.type === 'emoji',
+			w: shape.props.node.type === 'emoji' ? 80 : 320,
+			size: shape.props.node.type === 'emoji' ? 'xl' : 'm',
+		},
 	})
 	editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { spillId: id } })
 }

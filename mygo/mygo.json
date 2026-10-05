@@ -1,6 +1,6 @@
 {
-  "name": "AI Canvas",
-  "identifier": "dev.jstdlee.aicanvas",
+  "name": "Oh My tldraw",
+  "identifier": "dev.jstdlee.ohmytldraw",
   "version": "0.1.0",
   "out": "out",
   "icon": "resources/icon.png",
@@ -8,6 +8,6 @@
     "comment": "Offline canvas with an AI agent and node workflows",
     "categories": ["Graphics", "Utility"],
     "maintainer": "jstdlee <302753485+jstdlee@users.noreply.github.com>",
-    "command": "ai-canvas"
+    "command": "oh-my-tldraw"
   }
 }

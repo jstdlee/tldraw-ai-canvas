@@ -38,7 +38,7 @@ async function createWindow() {
 		height: 900,
 		minWidth: 800,
 		minHeight: 560,
-		title: 'AI Canvas',
+		title: 'Oh My tldraw',
 		backgroundColor: '#f9fafb',
 		icon: join(__dirname, '..', 'build', 'icon.png'),
 		webPreferences: {

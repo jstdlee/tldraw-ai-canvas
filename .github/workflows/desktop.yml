@@ -101,13 +101,19 @@ jobs:
           MYGO_PLATFORMS: linux/amd64,linux/arm64,windows/amd64
       - uses: actions/upload-artifact@v4
         with:
-          name: ai-canvas-mygo
+          name: oh-my-tldraw-mygo-linux-amd64
           if-no-files-found: error
-          path: |
-            mygo/out/**/*.deb
-            mygo/out/**/*.tar.gz
-            mygo/out/**/*.exe
-            mygo/out/**/install.sh
+          path: mygo/out/linux-amd64/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oh-my-tldraw-mygo-linux-arm64
+          if-no-files-found: error
+          path: mygo/out/linux-arm64/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oh-my-tldraw-mygo-windows-amd64
+          if-no-files-found: error
+          path: mygo/out/windows-amd64/*Setup*.exe
 
   release:
     name: Publish release
@@ -130,20 +136,20 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          name: AI Canvas ${{ github.ref_name }}
+          name: Oh My tldraw ${{ github.ref_name }}
           generate_release_notes: true
           body: |
             Offline desktop app: tldraw canvas + AI agent + node workflows.
 
             | System | File |
             | --- | --- |
-            | Windows x64 | `…-windows-x64-setup.exe` (installer) or `…-windows-x64-portable.exe` |
-            | Linux x64 | `…-linux-x86_64.AppImage` or `…-linux-amd64.deb` |
-            | Linux arm64 | `…-linux-arm64.AppImage` or `…-linux-arm64.deb` |
+            | Windows x64 | `oh-my-tldraw-…-windows-x64-setup.exe` or the portable exe |
+            | Linux x64 | `oh-my-tldraw-…-linux-x86_64.AppImage` or the amd64 `.deb` |
+            | Linux arm64 | `oh-my-tldraw-…-linux-arm64.AppImage` or the arm64 `.deb` |
 
             The builds are not code-signed: Windows SmartScreen may ask "Run anyway".
             On Linux: `chmod +x *.AppImage` and run it.
 
-            MyGo packages use the system webview and the same server. Linux: `ai-canvas_*_amd64.deb` or `ai-canvas_*_arm64.deb`. Windows: `AI Canvas Setup *.exe`.
+            MyGo is one installer per system. Linux amd64: `oh-my-tldraw_*_amd64.deb`. Linux arm64: `oh-my-tldraw_*_arm64.deb`. Windows: `Oh My tldraw Setup *.exe`.
             Your settings and data are kept in the app's user-data folder (Help → Open data folder).
           files: artifacts/*
