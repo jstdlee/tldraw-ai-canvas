@@ -14,7 +14,8 @@
 		"test": "vitest run",
 		"build:desktop": "vite build && node scripts/build-electron.mjs",
 		"desktop": "npm run build:desktop && electron .",
-		"dist": "npm run build:desktop && electron-builder --publish never"
+		"dist": "npm run build:desktop && electron-builder --publish never",
+		"build:mygo": "vite build && node scripts/build-mygo.mjs"
 	},
 	"devDependencies": {
 		"@ai-sdk/anthropic": "^2.0.80",

@@ -1,6 +1,7 @@
 name: Desktop app
 
-# Builds the offline desktop app (Electron) for Linux and Windows.
+# Builds the offline desktop app for Linux and Windows.
+# Electron packages one set of installers. MyGo packages the same server and web build.
 # A pushed tag like v0.1.0 also publishes a GitHub release with the installers.
 
 on:
@@ -76,10 +77,42 @@ jobs:
             release/*.deb
             release/*.exe
 
+  package-mygo:
+    name: Package MyGo
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+      - name: Install NSIS
+        run: sudo apt-get update && sudo apt-get install -y nsis unzip
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Package MyGo for Linux and Windows
+        run: npm run build:mygo
+        env:
+          MYGO_PLATFORMS: linux/amd64,linux/arm64,windows/amd64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-canvas-mygo
+          if-no-files-found: error
+          path: |
+            mygo/out/**/*.deb
+            mygo/out/**/*.tar.gz
+            mygo/out/**/*.exe
+            mygo/out/**/install.sh
+
   release:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: package
+    needs: [package, package-mygo]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -110,5 +143,7 @@ jobs:
 
             The builds are not code-signed: Windows SmartScreen may ask "Run anyway".
             On Linux: `chmod +x *.AppImage` and run it.
+
+            MyGo packages use the system webview and the same server. Linux: `ai-canvas_*_amd64.deb` or `ai-canvas_*_arm64.deb`. Windows: `AI Canvas Setup *.exe`.
             Your settings and data are kept in the app's user-data folder (Help → Open data folder).
           files: artifacts/*

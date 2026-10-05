@@ -6,3 +6,12 @@ data/
 .env*
 dist-electron/
 release/
+mygo/out/
+mygo/.cache/
+mygo/resources/dist/
+mygo/resources/server.cjs
+mygo/resources/launcher.cjs
+mygo/resources/icon.png
+mygo/resources/linux-*/
+mygo/resources/windows-*/
+mygo/resources/darwin-*/

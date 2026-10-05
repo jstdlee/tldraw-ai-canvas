@@ -41,6 +41,8 @@ The desktop app is built by GitHub Actions (`.github/workflows/desktop.yml`), no
 | Windows x64 | `ai-canvas-<v>-windows-x64-setup.exe`, `ai-canvas-<v>-windows-x64-portable.exe` |
 | Linux x64 / arm64 | `.AppImage`, `.deb` |
 
+The same build also ships as a [MyGo](https://mygo.egoist.dev/) app. MyGo uses the system webview and starts the same Node server beside it. `npm run build:mygo` writes that package under `mygo/out/`. Actions uploads it with the Electron installers. Linux gets a `.deb` and a `.tar.gz`. Windows gets `AI Canvas Setup <version>.exe`.
+
 The app starts the same local server inside itself on a free `127.0.0.1` port and keeps its data
 in the user-data folder (Help → Open data folder). Local AI servers (Ollama, LM Studio, Magpie,
 a System One API) work without internet; network tools use the system `ping`, `dig`, etc.
