@@ -4,7 +4,9 @@ import { evaluateCondition, isTruthy, splitItems } from '../../../../shared/logi
 import { IteratorIcon } from '../../components/icons/IteratorIcon'
 import { RouterIcon } from '../../components/icons/RouterIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
-import { runLoopBody } from '../../execution/loop'
+import { executionGeneration } from '../../execution/executionState'
+import { loopBodyNodes, runLoopBody } from '../../execution/loop'
+import { clearNodeRun } from '../../execution/nodeRunState'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { PortRow, stopEvent } from './fields'
@@ -282,14 +284,30 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 		const items = splitItems(coerceToText(getInput(inputs, 'list')), node.split, node.separator)
 		const set = (patch: Partial<ForEachNode>, outOfDate = true) =>
 			updateNode<ForEachNode>(this.editor, this.editor.getShape<NodeShape>(shape.id) ?? shape, (n) => ({ ...n, ...patch }), outOfDate)
+		const generation = executionGeneration(this.editor)
+		const bodyNodes = loopBodyNodes(this.editor, shape.id, 'item')
+		const joinResults = (results: string[]) =>
+			node.split === 'json' ? JSON.stringify(results) : results.join(node.joiner.replace(/\\n/g, '\n'))
 		try {
 			const results: string[] = []
 			for (let i = 0; i < items.length; i++) {
+				// Stop pressed (or a new Play started): keep what finished and end cleanly.
+				if (executionGeneration(this.editor) !== generation) {
+					set({ progress: `stopped at ${i} / ${items.length}`, lastResults: joinResults(results) })
+					return { item: STOP_EXECUTION, output: results.length ? joinResults(results) : STOP_EXECUTION }
+				}
 				set({ progress: `${i + 1} / ${items.length}`, error: null })
-				const value = await runLoopBody(this.editor, shape.id, 'item', 'result', items[i])
-				results.push(value ?? items[i])
+				// Clear last item's body-node run state so only this item's failure counts.
+				for (const id of bodyNodes) clearNodeRun(this.editor, id)
+				const result = await runLoopBody(this.editor, shape.id, 'item', 'result', items[i])
+				if (result.error) {
+					// Surface the failure instead of passing the item through as if it worked.
+					set({ error: `Item ${i + 1} (${previewItem(items[i])}): ${result.error}`, progress: `failed at ${i + 1} / ${items.length}` }, false)
+					return { item: STOP_EXECUTION, output: results.length ? joinResults(results) : STOP_EXECUTION }
+				}
+				results.push(result.value ?? items[i])
 			}
-			const joined = node.split === 'json' ? JSON.stringify(results) : results.join(node.joiner.replace(/\\n/g, '\n'))
+			const joined = joinResults(results)
 			set({ lastResults: joined, progress: `${items.length} done` })
 			return { item: STOP_EXECUTION, output: joined }
 		} catch (e) {
@@ -306,6 +324,12 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 		}
 	}
 	Component = ForEachNodeComponent
+}
+
+/** A short, single-line preview of a loop item for error messages. */
+function previewItem(item: string): string {
+	const one = item.replace(/\s+/g, ' ').trim()
+	return one.length > 24 ? one.slice(0, 24) + '…' : one
 }
 
 function forEachPercent(progress: string | null): number {

@@ -35,17 +35,12 @@ import { PromptConcatNodeDefinition } from './types/PromptConcatNode'
 import { PromptNodeDefinition } from './types/PromptNode'
 import { RouterNodeDefinition } from './types/RouterNode'
 import { ChartNodeDefinition, SqliteNodeDefinition, TableNodeDefinition } from './types/DataNodes'
+import { FileInNodeDefinition, UrlInNodeDefinition } from './types/InputNodes'
+import { RawModelNodeDefinition } from './types/RawModelNode'
 import {
-	AgentNodeDefinition,
-	EmojiNodeDefinition,
-	HfNodeDefinition,
 	LocalToolNodeDefinition,
-	ModelPickNodeDefinition,
-	MotionNodeDefinition,
-	OpenCodeNodeDefinition,
 	OpenRouterNodeDefinition,
 	SleepNodeDefinition,
-	TerminalNodeDefinition,
 	VideoNodeDefinition,
 } from './types/ToolNodes'
 import {
@@ -97,15 +92,11 @@ export const NodeDefinitions = {
 	chart: ChartNodeDefinition,
 	sqlite_in: SqliteNodeDefinition,
 	openrouter: OpenRouterNodeDefinition,
-	opencode_go: OpenCodeNodeDefinition,
-	model_pick: ModelPickNodeDefinition,
-	hf: HfNodeDefinition,
+	raw_model: RawModelNodeDefinition,
 	video: VideoNodeDefinition,
-	emoji: EmojiNodeDefinition,
-	motion: MotionNodeDefinition,
+	file_in: FileInNodeDefinition,
+	url_in: UrlInNodeDefinition,
 	local_tool: LocalToolNodeDefinition,
-	terminal: TerminalNodeDefinition,
-	agent_run: AgentNodeDefinition,
 	sleep: SleepNodeDefinition,
 } satisfies Record<string, NodeDefinitionConstructor<any>>
 
@@ -124,6 +115,13 @@ const RemovedNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {
 	blend: removedNodeDefinition('blend', 'Blend'),
 	preview: removedNodeDefinition('preview', 'Preview'),
 	text_view: removedNodeDefinition('text_view', 'Text view'),
+	emoji: removedNodeDefinition('emoji', 'Emoji'),
+	motion: removedNodeDefinition('motion', 'Motion'),
+	hf: removedNodeDefinition('hf', 'Hugging Face'),
+	opencode_go: removedNodeDefinition('opencode_go', 'OpenCode Go'),
+	model_pick: removedNodeDefinition('model_pick', 'Pick a model'),
+	terminal: removedNodeDefinition('terminal', 'Terminal'),
+	agent_run: removedNodeDefinition('agent_run', 'Local agent'),
 }
 
 const AllNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {

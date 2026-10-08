@@ -45,11 +45,22 @@ app.use('*', async (c, next) => {
 		return c.text('Forbidden host', 403)
 	}
 	const origin = c.req.header('origin')
-	if (origin && origin !== 'null') {
-		const originHost = origin.replace(/^https?:\/\//, '')
-		if (!LOCAL_HOST.test(originHost) && !process.env.ALLOW_HOST?.split(',').includes(originHost)) {
-			return c.text('Forbidden origin', 403)
+	if (origin) {
+		// 'null' comes from sandboxed frames and file:// pages: never trusted with a mutating call.
+		if (origin === 'null') {
+			if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return c.text('Forbidden origin', 403)
+		} else {
+			const originHost = origin.replace(/^https?:\/\//, '')
+			if (!LOCAL_HOST.test(originHost) && !process.env.ALLOW_HOST?.split(',').includes(originHost)) {
+				return c.text('Forbidden origin', 403)
+			}
 		}
+	}
+	// A cross-site form can POST text/plain without a preflight; require real JSON for JSON routes.
+	if ((c.req.method === 'POST' || c.req.method === 'PUT') && c.req.path.startsWith('/api/')) {
+		const type = c.req.header('content-type') ?? ''
+		const raw = c.req.path.startsWith('/api/images/') // image uploads send raw bytes
+		if (!raw && !type.includes('application/json')) return c.text('Expected application/json', 415)
 	}
 	await next()
 })

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { detectContentKind } from '../shared/contentKind'
+import { detectContentKind, isFetchableUrl, normalizeUrl } from '../shared/contentKind'
 import { evaluateCondition, isTruthy, splitItems } from '../shared/logic'
 import { compileCode, extractCode } from '../client/pipeline/codeRunner'
 
@@ -40,6 +40,29 @@ describe('content kinds (Output node)', () => {
 		expect(detectContentKind('{"a": [1, 2]}')).toBe('json')
 		expect(detectContentKind('# Title\n- item')).toBe('markdown')
 		expect(detectContentKind('just words')).toBe('text')
+	})
+})
+
+describe('normalizeUrl (summarize / web nodes)', () => {
+	it('upgrades bare hosts to https', () => {
+		expect(normalizeUrl('www.wikipedia.com')).toBe('https://www.wikipedia.com')
+		expect(normalizeUrl('example.com/page?x=1')).toBe('https://example.com/page?x=1')
+		expect(normalizeUrl('en.m.wikipedia.org/wiki/Cat')).toBe('https://en.m.wikipedia.org/wiki/Cat')
+	})
+	it('leaves real URLs, api paths, and data URLs alone', () => {
+		expect(normalizeUrl('http://a.com')).toBe('http://a.com')
+		expect(normalizeUrl('https://a.com/x')).toBe('https://a.com/x')
+		expect(normalizeUrl('/api/images/img_1')).toBe('/api/images/img_1')
+		expect(normalizeUrl('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA')
+	})
+	it('does not upgrade plain words or sentences', () => {
+		expect(normalizeUrl('hello world')).toBe('hello world')
+		expect(normalizeUrl('localhost')).toBe('localhost')
+		expect(normalizeUrl('a.b')).toBe('a.b') // TLD too short
+	})
+	it('isFetchableUrl recognizes bare hosts after normalization', () => {
+		expect(isFetchableUrl('www.wikipedia.com')).toBe(true)
+		expect(isFetchableUrl('just text')).toBe(false)
 	})
 })
 

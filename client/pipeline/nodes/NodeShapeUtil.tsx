@@ -44,6 +44,7 @@ import { readClipboard } from '../clipboard'
 import { apiImportImage } from '../api/pipelineApi'
 import { clearNodeRun, nodeRunState } from '../execution/nodeRunState'
 import { STOP_EXECUTION } from './types/shared'
+import { $notesAll, $notesOpen, toggleNoteOpen } from '../../shell/shellState'
 
 const NODE_TYPE = 'node'
 
@@ -66,6 +67,10 @@ declare module 'tldraw' {
 			spillId?: string
 			/** Name drawn on the top edge. */
 			label?: string
+			/** Free text note kept with the node. */
+			note?: string
+			/** Text size inside the node, in px. Default 13. */
+			fontSize?: number
 		}
 	}
 }
@@ -84,6 +89,8 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		deleteLocked: T.boolean.optional(),
 		spillId: T.string.optional(),
 		label: T.string.optional(),
+		note: T.string.optional(),
+		fontSize: T.number.optional(),
 	}
 
 	getDefaultProps(): NodeShape['props'] {
@@ -242,7 +249,8 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 
 	const nodeDefinition = getNodeDefinition(editor, shape.props.node)
 	const [naming, setNaming] = useState(false)
-	const edgeLabel = shape.props.label || nodeDefinition.heading || nodeDefinition.title
+	const title = shape.props.label || nodeDefinition.heading || nodeDefinition.title
+	const fontSize = shape.props.fontSize
 	const runClass =
 		isExecuting || run?.status === 'running'
 			? 'NodeShape_running'
@@ -261,8 +269,9 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				NodeShape_capture: shape.props.node.type === 'capture',
 				NodeShape_collapsed: !!shape.props.collapsed,
 				NodeShape_pinned: !!shape.props.pinned,
-				NodeShape_emoji: shape.props.node.type === 'emoji',
+				NodeShape_fs: !!fontSize,
 			})}
+			style={fontSize ? ({ '--node-fs': `${fontSize}px` } as React.CSSProperties) : undefined}
 			onContextMenu={(e) => {
 				const target = e.target as HTMLElement
 				const tag = target.tagName
@@ -271,27 +280,32 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				}
 			}}
 		>
-			{shape.props.node.type !== 'emoji' &&
-				(naming ? (
+			<NodeNote shape={shape} />
+			<div className="NodeShape-heading">
+				<div className="NodeShape-icon">{nodeDefinition.icon}</div>
+				{naming ? (
 					<input
-						className="NodeShape-edgeLabel NodeShape-edgeLabel-input"
+						className="NodeShape-label NodeShape-label-input"
 						autoFocus
-						defaultValue={edgeLabel}
+						defaultValue={title}
 						onPointerDown={(event) => event.stopPropagation()}
-						onKeyDown={(event) => event.stopPropagation()}
+						onKeyDown={(event) => {
+							event.stopPropagation()
+							if (event.key === 'Enter') event.currentTarget.blur()
+							if (event.key === 'Escape') setNaming(false)
+						}}
 						onBlur={(event) => {
-							editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { label: event.target.value } })
+							const next = event.target.value.trim()
+							// An empty name goes back to the node type's own name.
+							editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { label: next || undefined } })
 							setNaming(false)
 						}}
 					/>
 				) : (
-					<button type="button" className="NodeShape-edgeLabel" title="Rename" onPointerDown={(event) => event.stopPropagation()} onDoubleClick={() => setNaming(true)}>
-						{edgeLabel}
-					</button>
-				))}
-			<div className="NodeShape-heading">
-				<div className="NodeShape-icon">{nodeDefinition.icon}</div>
-				<div className="NodeShape-label">{nodeDefinition.heading ?? nodeDefinition.title}</div>
+					<div className="NodeShape-label NodeShape-label-name" title="Double-click to rename" onDoubleClick={() => setNaming(true)}>
+						{title}
+					</div>
+				)}
 				{(run?.status === 'missing' || run?.status === 'error') && run.message && (
 					<div className="NodeShape-issue" title={run.message}>
 						{run.message}
@@ -364,6 +378,15 @@ function NodeFooterTools({ shape }: { shape: NodeShape }) {
 	const collapsed = !!shape.props.collapsed
 	const pinned = !!shape.props.pinned
 	const deleteLocked = !!shape.props.deleteLocked
+	const stepFont = (delta: number) => {
+		const current = shape.props.fontSize ?? DEFAULT_NODE_FONT_PX
+		const next = Math.max(MIN_NODE_FONT_PX, Math.min(MAX_NODE_FONT_PX, current + delta))
+		editor.updateShape<NodeShape>({
+			id: shape.id,
+			type: 'node',
+			props: { fontSize: next === DEFAULT_NODE_FONT_PX ? undefined : next },
+		})
+	}
 	const clearOutput = () => {
 		const definition = getNodeDefinition(editor, shape.props.node)
 		const defaults = definition.getDefault() as unknown as Record<string, unknown>
@@ -411,10 +434,13 @@ function NodeFooterTools({ shape }: { shape: NodeShape }) {
 			</button>
 			<button
 				className={'NodeFooterTools-button' + (pinned ? ' is-on' : '')}
-				title={pinned ? 'Unpin' : 'Pin. Freeze position and size.'}
+				title={pinned ? 'Unpin' : 'Pin. Freezes position and size, and keeps every wire on this node.'}
 				onClick={() => editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { pinned: !pinned } })}
 			>
-				📌
+				<svg width="14" height="14" viewBox="0 0 24 24" fill={pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+					<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z" />
+					<circle cx="12" cy="10" r="2.3" fill={pinned ? 'var(--tl-color-panel)' : 'none'} />
+				</svg>
 			</button>
 			<button
 				className={'NodeFooterTools-button' + (deleteLocked ? ' is-on' : '')}
@@ -423,7 +449,26 @@ function NodeFooterTools({ shape }: { shape: NodeShape }) {
 					editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { deleteLocked: !deleteLocked } })
 				}
 			>
-				⌫
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+					<rect x="5" y="11" width="14" height="9" rx="2" fill={deleteLocked ? 'currentColor' : 'none'} />
+					<path d={deleteLocked ? 'M8 11V8a4 4 0 0 1 8 0v3' : 'M8 11V8a4 4 0 0 1 7.5-2'} />
+				</svg>
+			</button>
+			<button
+				className="NodeFooterTools-button"
+				title="Smaller text"
+				disabled={(shape.props.fontSize ?? DEFAULT_NODE_FONT_PX) <= MIN_NODE_FONT_PX}
+				onClick={() => stepFont(-1)}
+			>
+				<span className="NodeFooterTools-font">A−</span>
+			</button>
+			<button
+				className="NodeFooterTools-button"
+				title="Larger text"
+				disabled={(shape.props.fontSize ?? DEFAULT_NODE_FONT_PX) >= MAX_NODE_FONT_PX}
+				onClick={() => stepFont(1)}
+			>
+				<span className="NodeFooterTools-font">A+</span>
 			</button>
 			<button className="NodeFooterTools-button" title="Clear output" onClick={clearOutput}>
 				×
@@ -588,5 +633,51 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 				</TldrawUiDropdownMenuContent>
 			</TldrawUiDropdownMenuRoot>
 		</div>
+	)
+}
+
+const DEFAULT_NODE_FONT_PX = 13
+const MIN_NODE_FONT_PX = 9
+const MAX_NODE_FONT_PX = 24
+
+/**
+ * A note kept with the node. The corner icon opens it. "Show all notes" in the menu opens every
+ * note in view; right-click Note opens a single one.
+ */
+function NodeNote({ shape }: { shape: NodeShape }) {
+	const editor = useEditor()
+	const all = useValue('notes all', () => $notesAll.get(), [])
+	const opened = useValue('note open', () => $notesOpen.get().includes(shape.id), [shape.id])
+	const note = shape.props.note ?? ''
+	const open = all ? note !== '' || opened : opened
+	return (
+		<>
+			<button
+				type="button"
+				className={'NodeShape-noteIcon' + (note ? ' has-note' : '') + (open ? ' is-open' : '')}
+				title={note ? 'Note' : 'Add a note'}
+				onPointerDown={(event) => event.stopPropagation()}
+				onClick={() => toggleNoteOpen(shape.id)}
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+					<circle cx="5" cy="12" r="1.2" fill="currentColor" />
+					<circle cx="12" cy="12" r="1.2" fill="currentColor" />
+					<circle cx="19" cy="12" r="1.2" fill="currentColor" />
+				</svg>
+			</button>
+			{open && (
+				<textarea
+					className="NodeShape-note"
+					autoFocus={opened}
+					placeholder="Note"
+					value={note}
+					onPointerDown={(event) => event.stopPropagation()}
+					onKeyDown={(event) => event.stopPropagation()}
+					onChange={(event) =>
+						editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { note: event.target.value || undefined } })
+					}
+				/>
+			)}
+		</>
 	)
 }

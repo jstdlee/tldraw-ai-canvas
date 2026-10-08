@@ -12,6 +12,25 @@ export const $assist = atom<{ mode: 'fill'; shapeId: TLShapeId } | { mode: 'comp
 	null
 )
 
+/**
+ * Draft text per node, so closing the AI-star card and reopening it brings back
+ * what you were typing. Keyed by shape id.
+ */
+export const $assistDrafts = atom<Record<string, string>>('assist drafts', {})
+
+export function assistDraft(shapeId: TLShapeId): string {
+	return $assistDrafts.get()[shapeId] ?? ''
+}
+
+export function setAssistDraft(shapeId: TLShapeId, text: string) {
+	$assistDrafts.update((drafts) => {
+		const next = { ...drafts }
+		if (text) next[shapeId] = text
+		else delete next[shapeId]
+		return next
+	})
+}
+
 export function openFillAssist(shapeId: TLShapeId) {
 	$assist.set({ mode: 'fill', shapeId })
 }

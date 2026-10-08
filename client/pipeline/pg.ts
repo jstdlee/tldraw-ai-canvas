@@ -1,4 +1,6 @@
-/** Postgres in the page, via PGlite. The first call loads the library (needs network once). */
+/** Postgres in the page, via PGlite. The first call opens (or creates) the database. */
+
+import { PGlite } from '@electric-sql/pglite'
 
 interface PgResult {
 	rows?: Record<string, unknown>[]
@@ -13,14 +15,12 @@ interface PgDb {
 let opening: Promise<PgDb> | null = null
 
 async function openDb(): Promise<PgDb> {
-	const spec = 'https://cdn.jsdelivr.net/npm/@electric-sql/pglite@0.3.14/dist/index.js'
-	const mod = (await import(/* @vite-ignore */ spec)) as { PGlite: new (dataDir?: string) => PgDb }
 	try {
-		const db = new mod.PGlite('idb://ai-canvas')
+		const db = new PGlite('idb://ai-canvas') as unknown as PgDb
 		await db.query('SELECT 1')
 		return db
 	} catch {
-		return new mod.PGlite()
+		return new PGlite() as unknown as PgDb
 	}
 }
 

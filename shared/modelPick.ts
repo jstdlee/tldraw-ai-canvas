@@ -16,14 +16,6 @@ export interface HubModel {
 	source: string
 }
 
-export interface ModelPick {
-	id: string
-	name: string
-	reason: string
-	promptPrice: number | null
-	reasoning: boolean
-}
-
 function num(value: unknown): number | null {
 	if (typeof value === 'number' && Number.isFinite(value)) return value
 	if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
@@ -93,46 +85,4 @@ export function modelsFromPayload(payload: unknown, source: string): HubModel[] 
 
 export function freeModels(models: HubModel[]): HubModel[] {
 	return models.filter((model) => model.free)
-}
-
-function taskMatch(model: HubModel, task: string): boolean {
-	const blob = `${model.id} ${model.name}`.toLowerCase()
-	if (task === 'vision') return model.input.some((item) => /image|vision/.test(item)) || /vision/.test(blob)
-	if (task === 'think') return model.reasoning
-	if (task === 'coding') return /code|coder|devstral|codestral/.test(blob)
-	if (task === 'daily' || task === 'chat') return model.input.length === 0 || model.input.includes('text')
-	return true
-}
-
-function priceOf(model: HubModel): number {
-	return model.promptPrice ?? Number.POSITIVE_INFINITY
-}
-
-/** Pick up to five models. Band is cheap, middle, or costly inside the task filter. */
-export function pickCandidates(models: HubModel[], task: string, band: string): ModelPick[] {
-	const matched = models.filter((model) => taskMatch(model, task))
-	const pool = matched.length ? matched : models
-	const sorted = [...pool].sort((a, b) => priceOf(a) - priceOf(b))
-	const third = Math.max(1, Math.ceil(sorted.length / 3))
-	const slice =
-		band === 'high' ? sorted.slice(-third) : band === 'medium' ? sorted.slice(third, third * 2) : sorted.slice(0, third)
-	const chosen = (slice.length ? slice : sorted).slice(0, 5)
-	return chosen.map((model) => {
-		const price = model.promptPrice == null ? 'price not listed' : model.promptPrice === 0 ? 'free' : `$${model.promptPrice}/token`
-		const kind = [
-			task === 'coding' ? 'name matches code' : null,
-			task === 'vision' ? 'image input' : null,
-			model.reasoning ? 'reasoning flag' : null,
-			`${band || 'low'} price third`,
-		]
-			.filter(Boolean)
-			.join(', ')
-		return {
-			id: model.id,
-			name: model.name,
-			promptPrice: model.promptPrice,
-			reasoning: model.reasoning,
-			reason: `${kind}. Source: ${model.source}. Not an IQ score.`,
-		}
-	})
 }

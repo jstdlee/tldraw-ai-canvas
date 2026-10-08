@@ -1,5 +1,15 @@
 import { T, useEditor } from 'tldraw'
 import { categoryOf } from '../../../../shared/nodeGroups'
+import {
+	describeSteps,
+	importSql,
+	makeRecipe,
+	parseCsv,
+	PG_TYPES,
+	PgImportRecipe,
+	PgType,
+	suggestColumns,
+} from '../../../../shared/pgImport'
 import { runSql } from '../../pg'
 import { NumberIcon } from '../../components/icons/NumberIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
@@ -22,7 +32,7 @@ import {
 } from './shared'
 
 const SQL_HEIGHT = 160
-const RESULT_HEIGHT = 110
+const CSV_HEIGHT = 80
 const WIDTH = 380
 
 export type PostgresNode = T.TypeOf<typeof PostgresNode>
@@ -31,6 +41,12 @@ export const PostgresNode = T.object({
 	sql: T.string,
 	lastText: T.string.nullable(),
 	error: T.string.nullable(),
+	/** Run SQL, or import CSV by a saved recipe. */
+	mode: T.string.optional(),
+	/** CSV used when nothing is wired into the input. */
+	csv: T.string.optional(),
+	/** The saved import steps (JSON). Reused on every run. */
+	recipe: T.string.optional(),
 })
 
 const DEFAULT_SQL = `CREATE TABLE IF NOT EXISTS notes (
@@ -39,6 +55,20 @@ const DEFAULT_SQL = `CREATE TABLE IF NOT EXISTS notes (
 );
 SELECT * FROM notes;
 `
+
+function readRecipe(node: PostgresNode): PgImportRecipe | null {
+	if (!node.recipe) return null
+	try {
+		const parsed = JSON.parse(node.recipe) as PgImportRecipe
+		return Array.isArray(parsed.columns) ? parsed : null
+	} catch {
+		return null
+	}
+}
+
+function withSteps(recipe: Omit<PgImportRecipe, 'steps'>): PgImportRecipe {
+	return { ...recipe, steps: describeSteps(recipe) }
+}
 
 export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 	static type = 'postgres'
@@ -49,13 +79,17 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 	category = categoryOf('postgres')
 	resultKeys = ['lastText', 'error'] as const
 	getDefault(): PostgresNode {
-		return { type: 'postgres', sql: DEFAULT_SQL, lastText: null, error: null }
+		return { type: 'postgres', sql: DEFAULT_SQL, lastText: null, error: null, mode: 'sql', csv: '', recipe: '' }
 	}
 	override getWidthPx() {
 		return WIDTH
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX + SQL_HEIGHT
+	getBodyHeightPx(_shape: NodeShape, node: PostgresNode) {
+		if (node.mode === 'import') {
+			const columns = readRecipe(node)?.columns.length ?? 0
+			return NODE_ROW_HEIGHT_PX * (3 + columns) + CSV_HEIGHT + 56
+		}
+		return NODE_ROW_HEIGHT_PX * 2 + SQL_HEIGHT
 	}
 	getPorts(): Record<string, ShapePort> {
 		const y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + NODE_ROW_HEIGHT_PX * 0.5
@@ -67,8 +101,25 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 	async execute(shape: NodeShape, node: PostgresNode, inputs: InputValues): Promise<ExecutionResult> {
 		const input = getInput(inputs, 'input')
 		try {
-			const text = await runSql(node.sql, input == null ? null : coerceToText(input))
-			updateNode<PostgresNode>(this.editor, shape, (n) => ({ ...n, lastText: text, error: null }))
+			let text: string
+			if (node.mode === 'import') {
+				const source = input == null ? (node.csv ?? '') : coerceToText(input)
+				if (!source.trim()) throw new Error('Wire CSV text into the input, or paste it in the node')
+				// The saved steps are reused. Without them, guess once and keep the guess.
+				const recipe = readRecipe(node) ?? makeRecipe(source, 'imported')
+				const { sql, rows, truncated } = importSql(source, recipe)
+				await runSql(sql, null)
+				const preview = await runSql(`SELECT * FROM "${recipe.table.replace(/"/g, '""')}" LIMIT 20;`, null)
+				text = `Imported ${rows} row${rows === 1 ? '' : 's'} into ${recipe.table}${truncated ? ' (cut at the row limit)' : ''}\n${preview}`
+				updateNode<PostgresNode>(
+					this.editor,
+					shape,
+					(n) => ({ ...n, recipe: n.recipe || JSON.stringify(recipe), lastText: text, error: null })
+				)
+			} else {
+				text = await runSql(node.sql, input == null ? null : coerceToText(input))
+				updateNode<PostgresNode>(this.editor, shape, (n) => ({ ...n, lastText: text, error: null }))
+			}
 			return { output: text }
 		} catch (error) {
 			const message = (error as Error).message
@@ -91,12 +142,95 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>) {
 	const editor = useEditor()
 	const set = (patch: Partial<PostgresNode>) => updateNode<PostgresNode>(editor, shape, (n) => ({ ...n, ...patch }))
+	const importing = node.mode === 'import'
+	const recipe = readRecipe(node)
+	const saveRecipe = (next: Omit<PgImportRecipe, 'steps'>) => set({ recipe: JSON.stringify(withSteps(next)) })
+	const guess = () => {
+		const csv = node.csv ?? ''
+		if (!csv.trim()) return
+		saveRecipe(makeRecipe(csv, recipe?.table || 'imported', recipe?.header ?? true, recipe?.skip ?? 0))
+	}
+	const setColumn = (index: number, patch: { name?: string; type?: PgType }) => {
+		if (!recipe) return
+		saveRecipe({ ...recipe, columns: recipe.columns.map((c, i) => (i === index ? { ...c, ...patch } : c)) })
+	}
+	const reshape = (patch: { header?: boolean; skip?: number }) => {
+		if (!recipe) return
+		const header = patch.header ?? recipe.header
+		const skip = Math.max(0, patch.skip ?? recipe.skip)
+		const rows = parseCsv(node.csv ?? '')
+		// Column names and types follow the new header and skip; the table name stays.
+		saveRecipe({ ...recipe, header, skip, columns: rows.length ? suggestColumns(rows, header, skip) : recipe.columns })
+	}
 	return (
 		<>
-			<PortRow shapeId={shape.id} portId="input" label="$1" dataType="text" hint="optional value" />
-			<div onPointerDown={stopEvent}>
-				<CodeArea lang="sql" height={SQL_HEIGHT} value={node.sql} onChange={(sql) => set({ sql })} />
-			</div>
+			<PortRow shapeId={shape.id} portId="input" label={importing ? 'CSV' : '$1'} dataType="text" hint={importing ? 'or paste below' : 'optional value'} />
+			<NodeRow>
+				<select className="NodeField-select" value={importing ? 'import' : 'sql'} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
+					<option value="sql">Run SQL</option>
+					<option value="import">Import CSV</option>
+				</select>
+			</NodeRow>
+			{!importing && (
+				<div onPointerDown={stopEvent}>
+					<CodeArea lang="sql" height={SQL_HEIGHT} value={node.sql} onChange={(sql) => set({ sql })} />
+				</div>
+			)}
+			{importing && (
+				<>
+					<textarea
+						className="NodeField-textarea"
+						style={{ height: CSV_HEIGHT }}
+						placeholder="name,score&#10;Ada,9"
+						value={node.csv ?? ''}
+						onPointerDown={stopEvent}
+						onKeyDown={stopEvent}
+						onChange={(e) => set({ csv: e.target.value })}
+					/>
+					<NodeRow>
+						<input
+							className="NodeField-input"
+							title="Table name"
+							placeholder="table"
+							value={recipe?.table ?? ''}
+							disabled={!recipe}
+							onPointerDown={stopEvent}
+							onKeyDown={stopEvent}
+							onChange={(e) => recipe && saveRecipe({ ...recipe, table: e.target.value })}
+						/>
+						<label className="NodeField-check" title="First row is the header" onPointerDown={stopEvent}>
+							<input type="checkbox" checked={recipe?.header ?? true} disabled={!recipe} onChange={(e) => reshape({ header: e.target.checked })} /> header
+						</label>
+						<input
+							className="NodeField-input"
+							type="number"
+							min={0}
+							title="Data rows to ignore"
+							value={recipe?.skip ?? 0}
+							disabled={!recipe}
+							onPointerDown={stopEvent}
+							onKeyDown={stopEvent}
+							onChange={(e) => reshape({ skip: Number(e.target.value) || 0 })}
+						/>
+						<button type="button" className="NodeField-button" title="Guess columns and types from the CSV" onPointerDown={stopEvent} onClick={guess}>
+							Guess
+						</button>
+					</NodeRow>
+					{recipe?.columns.map((column, index) => (
+						<NodeRow key={index}>
+							<input className="NodeField-input" value={column.name} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => setColumn(index, { name: e.target.value })} />
+							<select className="NodeField-select" value={column.type} onPointerDown={stopEvent} onChange={(e) => setColumn(index, { type: e.target.value as PgType })}>
+								{PG_TYPES.map((type) => (
+									<option key={type} value={type}>{type}</option>
+								))}
+							</select>
+						</NodeRow>
+					))}
+					<NodeRow>
+						<span className="NodeHint">{recipe ? 'These steps are saved on the node. Play loads again with them.' : 'Press Guess to set the steps.'}</span>
+					</NodeRow>
+				</>
+			)}
 			{node.error && (
 				<NodeRow>
 					<span className="NodeStatus is-error">{node.error}</span>

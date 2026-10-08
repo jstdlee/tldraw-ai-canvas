@@ -20,6 +20,8 @@ import {
 	useValue,
 	vecModelValidator,
 } from 'tldraw'
+import { isWireLocked } from '../nodeGuards'
+import { dropWireOnShape } from '../execution/arrows'
 import { onCanvasNodePickerState } from '../components/OnCanvasNodePicker'
 import { PORT_TYPE_COLORS, PortDataType } from '../constants'
 import {
@@ -128,6 +130,8 @@ export class ConnectionShapeUtil extends ShapeUtil<ConnectionShape> {
 	}
 
 	onHandleDrag(connection: ConnectionShape, { handle }: TLHandleDragInfo<ConnectionShape>) {
+		// A pinned node keeps its wires: the handle does not move while either end is pinned.
+		if (isWireLocked(this.editor, connection)) return connection
 		const existingBindings = getConnectionBindings(this.editor, connection)
 		const draggingTerminal = handle.id as 'start' | 'end'
 		const oppositeTerminal = draggingTerminal === 'start' ? 'end' : 'start'
@@ -199,7 +203,10 @@ export class ConnectionShapeUtil extends ShapeUtil<ConnectionShape> {
 		// Track the connection that would be replaced, but don't delete it yet.
 		// Multi-ports accept multiple connections, so skip replacement for them.
 		this.pendingReplacementId =
-			existingConnectionOnTarget && draggingTerminal === 'end' && !target.port.multi
+			existingConnectionOnTarget &&
+			draggingTerminal === 'end' &&
+			!target.port.multi &&
+			!isWireLocked(this.editor, this.editor.getShape(existingConnectionOnTarget.connectionId)!)
 				? existingConnectionOnTarget.connectionId
 				: null
 
@@ -233,6 +240,10 @@ export class ConnectionShapeUtil extends ShapeUtil<ConnectionShape> {
 		if (bindings[draggingTerminal]) {
 			return
 		}
+
+		// Released over a rectangle, circle, note, …: the output goes into that shape.
+		const releasePoint = this.editor.getShapePageTransform(connection).applyToPoint(handle)
+		if (dropWireOnShape(this.editor, connection.id, draggingTerminal, releasePoint)) return
 
 		if (isCreatingShape && draggingTerminal === 'end') {
 			this.editor.selectNone()

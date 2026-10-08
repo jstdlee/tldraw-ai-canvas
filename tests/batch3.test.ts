@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { chartOption } from '../shared/chartOption'
 import { FEATURE_ROWS } from '../shared/featureList'
 import { concatMemberText } from '../shared/groupText'
-import { freeModels, pickCandidates, type HubModel } from '../shared/modelPick'
+import { freeModels, type HubModel } from '../shared/modelPick'
 import { previewReplace, searchHits } from '../shared/searchOps'
 import { runTable, type TableJob } from '../shared/tableOps'
-import { s3Authorization } from '../server/batchRoutes'
 
 const CSV = 'name,score\nada,9\nbea,4'
 
@@ -49,6 +48,25 @@ describe('table operations', () => {
 		expect(runTable(CSV, job({ op: 'regexp', column: 'name', pattern: '^b' }))).not.toContain('ada')
 		expect(runTable('a\tb\n1\t2', job({ format: 'tsv', op: 'select', columns: 'b' }))).toBe('b\n2')
 	})
+
+	it('groups and aggregates (sum, count, avg)', () => {
+		const data = 'city,score\nParis,3\nOslo,5\nParis,7'
+		expect(runTable(data, job({ op: 'groupby', column: 'city', columns: 'score:sum' }))).toBe('city,sum_score\nParis,10\nOslo,5')
+		expect(runTable(data, job({ op: 'groupby', column: 'city', columns: '*:count' }))).toBe('city,count_*\nParis,2\nOslo,1')
+	})
+
+	it('pivots rows into columns', () => {
+		const data = 'name,q,score\nAda,q1,3\nAda,q2,5\nLin,q1,4'
+		const out = runTable(data, job({ op: 'pivot', column: 'name', columns: 'q', extra: 'score', as: 'sum' }))
+		expect(out.split('\n')[0]).toBe('name,q1,q2')
+		expect(out).toContain('Ada,3,5')
+		expect(out).toContain('Lin,4,')
+	})
+
+	it('dedupes and sorts', () => {
+		expect(runTable('n\na\nb\na', job({ op: 'dedupe', columns: 'n' }))).toBe('n\na\nb')
+		expect(runTable('n,s\na,2\nb,1', job({ op: 'sort', columns: 's', as: 'desc' }))).toBe('n,s\na,2\nb,1')
+	})
 })
 
 describe('search and group text', () => {
@@ -63,13 +81,9 @@ describe('search and group text', () => {
 	})
 })
 
-describe('model bands', () => {
-	it('uses a price third and says it is not an IQ score', () => {
-		const models = [hub('cheap', 0), hub('mid', 2), hub('costly', 9), hub('coder-a', 1, { name: 'coder-a' })]
-		const low = pickCandidates(models, 'chat', 'low')
-		expect(low[0]?.id).toBe('cheap')
-		expect(low[0]?.reason).toContain('Not an IQ score.')
-		expect(pickCandidates(models, 'coding', 'low').some((pick) => pick.id === 'coder-a')).toBe(true)
+describe('model lists', () => {
+	it('keeps only free models', () => {
+		const models = [hub('cheap', 0), hub('mid', 2), hub('costly', 9)]
 		expect(freeModels(models).map((model) => model.id)).toEqual(['cheap'])
 	})
 })
@@ -90,28 +104,7 @@ describe('feature list', () => {
 	it('compares this app with tldraw', () => {
 		expect(FEATURE_ROWS.length).toBeGreaterThan(10)
 		expect(FEATURE_ROWS.some((row) => /pandas/i.test(row.here))).toBe(true)
-		expect(FEATURE_ROWS.some((row) => /Google Drive/i.test(row.here))).toBe(true)
+		expect(FEATURE_ROWS.some((row) => /backup folder/i.test(row.here))).toBe(true)
 	})
 })
 
-describe('s3 signature', () => {
-	it('signs a put without sending the secret as a header value', () => {
-		const signed = s3Authorization(
-			{
-				endpoint: 'https://s3.example.com',
-				bucket: 'backups',
-				region: 'us-east-1',
-				accessKey: 'AKIA',
-				secretKey: 'secret-value',
-				prefix: '',
-			},
-			'canvas.json',
-			'{}',
-			new Date('2026-01-02T03:04:05.000Z')
-		)
-		expect(signed.url).toBe('https://s3.example.com/backups/canvas.json')
-		expect(signed.headers.Authorization).toContain('AWS4-HMAC-SHA256')
-		expect(signed.headers.Authorization).toContain('Credential=AKIA/')
-		expect(signed.headers.Authorization).not.toContain('secret-value')
-	})
-})

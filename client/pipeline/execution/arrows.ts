@@ -10,6 +10,8 @@ import {
 } from 'tldraw'
 import { detectContentKind } from '../../../shared/contentKind'
 import { shapeText } from '../../clips/shapeText'
+import { capTextForCanvas } from '../capOutput'
+import { getConnectionBindings } from '../connection/ConnectionBindingUtil'
 import { getNodePortConnections, getNodePorts } from '../nodes/nodePorts'
 import { NodeShape } from '../nodes/NodeShapeUtil'
 import { getNodeHeightPx } from '../nodes/nodeTypes'
@@ -136,6 +138,10 @@ async function imageSize(src: string): Promise<{ w: number; h: number }> {
 async function writeValueIntoShape(editor: Editor, target: TLShape, value: string) {
 	const kind = detectContentKind(value)
 	const props = target.props as Record<string, unknown>
+	if (target.type !== 'image' && kind !== 'image' && kind !== 'mermaid') {
+		// Long text is spilled to a file; the shape shows a preview plus the path.
+		value = (await capTextForCanvas(target.type, value)).text
+	}
 	if (target.type === 'image' && kind === 'image') {
 		const { w, h } = await imageSize(value)
 		const assetId = AssetRecordType.createId()
@@ -180,4 +186,58 @@ async function createShapeAtArrowEnd(editor: Editor, arrow: TLArrowShape, value:
 		toId: id,
 		props: { terminal: 'end', normalizedAnchor: { x: 0, y: 0.5 }, isExact: false, isPrecise: false },
 	} as any)
+}
+
+const DROP_TARGET_TYPES = new Set(['geo', 'text', 'note', 'frame', 'markdown', 'mermaid', 'image'])
+
+/**
+ * A node output wire released over a canvas shape (rectangle, circle, note, …) becomes a
+ * tldraw arrow bound to that shape. The next run writes the output into the shape.
+ * Returns true when the wire was replaced.
+ */
+export function dropWireOnShape(editor: Editor, wireId: TLShapeId, terminal: 'start' | 'end', pagePoint: { x: number; y: number }): boolean {
+	const wire = editor.getShape(wireId)
+	if (!wire || wire.type !== 'connection') return false
+	const bindings = getConnectionBindings(editor, wire.id)
+	const fixed = bindings[terminal === 'end' ? 'start' : 'end']
+	// Only an output (the start of a wire) can send its value to a shape.
+	if (terminal !== 'end' || !fixed) return false
+	const node = editor.getShape(fixed.toId)
+	if (!node || node.type !== 'node') return false
+	const target = editor.getShapeAtPoint(pagePoint, {
+		hitInside: true,
+		margin: 4,
+		filter: (shape) => DROP_TARGET_TYPES.has(shape.type),
+	})
+	if (!target) return false
+
+	const nodeBounds = editor.getShapePageBounds(node.id)
+	const targetBounds = editor.getShapePageBounds(target.id)
+	if (!nodeBounds || !targetBounds) return false
+	const arrowId = createShapeId()
+	editor.run(() => {
+		editor.deleteShapes([wire.id])
+		editor.createShape<TLArrowShape>({
+			id: arrowId,
+			type: 'arrow',
+			x: nodeBounds.maxX,
+			y: nodeBounds.minY + 20,
+			props: { start: { x: 0, y: 0 }, end: { x: targetBounds.midX - nodeBounds.maxX, y: targetBounds.midY - nodeBounds.minY - 20 } },
+		})
+		editor.createBindings([
+			{
+				type: 'arrow',
+				fromId: arrowId,
+				toId: node.id,
+				props: { terminal: 'start', normalizedAnchor: { x: 1, y: 0.5 }, isExact: false, isPrecise: false },
+			},
+			{
+				type: 'arrow',
+				fromId: arrowId,
+				toId: target.id,
+				props: { terminal: 'end', normalizedAnchor: { x: 0.5, y: 0.5 }, isExact: false, isPrecise: false },
+			},
+		] as any)
+	})
+	return true
 }

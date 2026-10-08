@@ -3,7 +3,8 @@ import { TLShapeId, useEditor, useValue } from 'tldraw'
 import { FieldMax, LargeEditor } from '../../editors/LargeEditor'
 import { PortDataType } from '../../constants'
 import { Port } from '../../ports/Port'
-import { getNodeInputPortValues } from '../nodePorts'
+import { getNodeInputPortValues, getNodePortConnections } from '../nodePorts'
+import { NodeShape } from '../NodeShapeUtil'
 import { NodePlaceholder, NodePortLabel, NodeRow, STOP_EXECUTION } from './shared'
 
 /** Keep pointer and key events inside form fields (not the canvas). */
@@ -43,12 +44,29 @@ export function PortRow({
 		shapeId,
 		portId,
 	])
+	// The node feeding this input, so a wired row shows where its value comes from.
+	const sourceName = useValue(
+		'port source ' + portId,
+		() => {
+			const connection = getNodePortConnections(editor, shapeId).find(
+				(c) => c.terminal === 'end' && c.ownPortId === portId
+			)
+			if (!connection) return null
+			const source = editor.getShape(connection.connectedShapeId)
+			if (!source || !editor.isShapeOfType<NodeShape>(source, 'node')) return null
+			const label: unknown = source.props.label
+			if (typeof label === 'string' && label.trim()) return label
+			return source.props.node.type
+		},
+		[editor, shapeId, portId]
+	)
 	return (
 		<NodeRow>
 			<Port shapeId={shapeId} portId={portId} />
 			<NodePortLabel dataType={dataType}>{label}</NodePortLabel>
 			{port ? (
-				<span className="NodeRow-connected-value" title={String(port.value ?? '')}>
+				<span className="NodeRow-connected-value" title={sourceName ? `from ${sourceName}` : String(port.value ?? '')}>
+					{sourceName && <span className="NodeRow-source">{sourceName} → </span>}
 					{port.isOutOfDate ? <NodePlaceholder /> : preview(port.value)}
 				</span>
 			) : (

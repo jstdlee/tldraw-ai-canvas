@@ -22,7 +22,13 @@ async function startLocalServer(): Promise<number> {
 	// Loaded after the environment is set: the server reads it at import time.
 	// eslint-disable-next-line @typescript-eslint/no-require-imports
 	const server = require('./server.cjs') as { startServer(port?: number, host?: string): Promise<number> }
-	return server.startServer(0, '127.0.0.1')
+	// A stable port keeps the window origin constant, so the canvas in IndexedDB
+	// (keyed by origin) survives restarts. Port 0 would pick a new one each launch.
+	try {
+		return await server.startServer(47201, '127.0.0.1')
+	} catch {
+		return server.startServer(0, '127.0.0.1')
+	}
 }
 
 function isAppUrl(url: string, origin: string) {

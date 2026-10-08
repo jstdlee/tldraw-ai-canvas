@@ -230,7 +230,7 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 		{ id: 'b', type: 'chart', x: 460, y: 0, props: { format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'data' }]),
-	step('sqlite-query', 'SQLite into PGlite', 'Put a .sqlite path on the node, or send text into Value. Ask writes SQL. Play runs it. Nothing runs until you press Play.', [
+	step('sqlite-query', 'SQLite into PGlite', 'Import a .sqlite or .db file (read in the browser, loaded into PGlite). Ask writes SQL. Play runs it. Nothing runs until you press Play.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'ready' } },
 		{ id: 'b', type: 'sqlite_in', x: 460, y: 0, props: { sql: "SELECT '$input' AS note;", ask: 'Show one note column' } },
 		{ id: 'c', type: 'output', x: 980, y: 0 },
@@ -246,10 +246,10 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'stdin' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
-	step('terminal-lines', 'Count lines', 'Terminal runs one allowlisted command. A host field runs one SSH command in batch mode.', [
-		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'one\ntwo\nthree' } },
-		{ id: 'b', type: 'terminal', x: 460, y: 0, props: { command: 'wc -l', host: '' } },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'stdin' }]),
+	step('url-summary', 'Summarize a page', 'Type www.wikipedia.org with no https. URL in adds it, fetches the page, and Summarize reads the text.', [
+		{ id: 'a', type: 'url_in', x: 0, y: 0, props: { url: 'www.wikipedia.org', fetchBody: true } },
+		{ id: 'b', type: 'summarize', x: 460, y: 0 },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
 	step('video-autoplay', 'Video link', 'The prompt is the video URL. Turn on autoplay on the video node. The browser mutes autoplay.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4' } },
 		{ id: 'b', type: 'video', x: 460, y: 0, props: { autoplay: true } },
@@ -262,18 +262,18 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
-	step('emoji-mark', 'Borderless emoji', 'Emoji has no card border. An unconnected output spills a large text shape.', [
-		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: '✨' } },
-		{ id: 'b', type: 'emoji', x: 460, y: 0, props: { emoji: '✨' } },
+	step('file-hash', 'Hash a file', 'File in reads a file you upload, or a path on the server. Choose SHA-256 to get its hash.', [
+		{ id: 'a', type: 'file_in', x: 0, y: 0, props: { mode: 'path', path: '/etc/hostname', action: 'sha256' } },
+		{ id: 'b', type: 'output', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
-	step('motion-slide', 'Move a mark', 'Motion slides the emoji up. Speed sets how fast. Direction can be up, down, left, or right.', [
-		{ id: 'a', type: 'emoji', x: 0, y: 0, props: { emoji: '✦' } },
-		{ id: 'b', type: 'motion', x: 460, y: 0, props: { direction: 'up', speed: 1, content: '✦' } },
+	step('url-in', 'A web address', 'URL in accepts www.example.com without https. Turn on Fetch to send the page text.', [
+		{ id: 'a', type: 'url_in', x: 0, y: 0, props: { url: 'www.example.com', fetchBody: true } },
+		{ id: 'b', type: 'summarize', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
-	step('hf-text', 'Hugging Face call', 'One inference call when the node has a token. This is not a full Hugging Face workflow.', [
-		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'A short caption of a paper notebook.' } },
-		{ id: 'b', type: 'hf', x: 460, y: 0, props: { task: 'text', model: '' } },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
+	step('raw-model', 'Raw model call', 'Every setting is on the card: URL, model id, key, system prompt, temperature, thinking, max tokens.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Say hello in one line.' } },
+		{ id: 'b', type: 'raw_model', x: 460, y: 0, props: { url: 'http://127.0.0.1:11434/v1', model: 'llama3.2' } },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'prompt' }]),
 	step('openrouter-free', 'OpenRouter free model', 'Play loads the free model list and writes the first id.', [
 		{ id: 'a', type: 'openrouter', x: 0, y: 0 },
 		{ id: 'b', type: 'text_tool', x: 460, y: 0, props: { op: 'trim' } },
@@ -282,18 +282,10 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
-	step('opencode-go-models', 'OpenCode Go models', 'Play loads the OpenCode Go model list. Free models are marked when the list says so.', [
-		{ id: 'a', type: 'opencode_go', x: 0, y: 0 },
-		{ id: 'b', type: 'output', x: 460, y: 0 },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
-	step('model-band', 'Pick a model by cost', 'The band is a price third inside the task. It is not an IQ score. Coding matches model names.', [
-		{ id: 'a', type: 'model_pick', x: 0, y: 0, props: { task: 'chat', band: 'low' } },
-		{ id: 'b', type: 'output', x: 460, y: 0 },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
-	step('agent-task', 'Local agent', 'The prompt is the task. grok, pi, or omp runs only when that program is installed. The bar shows progress.', [
-		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'List three files in this folder.' } },
-		{ id: 'b', type: 'agent_run', x: 460, y: 0, props: { cli: 'grok', prompt: '' } },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'prompt' }]),
+	step('local-wc', 'Count words', 'Local tool runs wc on the text. It runs on the server with no shell.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'one two three four' } },
+		{ id: 'b', type: 'local_tool', x: 460, y: 0, props: { tool: 'wc', args: '-w' } },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'stdin' }]),
 	{
 		id: 'group-label',
 		title: 'Group and rename',
@@ -345,30 +337,26 @@ export const EXAMPLES: CanvasExample[] = [
 	{
 		id: 'media-desk',
 		title: 'Media and models desk',
-		blurb: 'A page URL feeds video and HTTP. The body waits, then wc counts lines. A model pick feeds Hugging Face and an emoji. The emoji feeds motion. A task feeds the local agent. OpenCode Go sits at the end of the row.',
+		blurb: 'A page address feeds video and HTTP. The body waits, then wc counts lines. A file hash and a URL node sit beside a raw model call and a summary.',
 		nodes: [
 			{ id: 'url', type: 'prompt', x: 0, y: 0, props: { text: 'https://example.com' } },
 			{ id: 'clip', type: 'video', x: 460, y: 0, props: { autoplay: false } },
 			{ id: 'fetch', type: 'http', x: 980, y: 0, props: { method: 'GET', extractText: true } },
 			{ id: 'wait', type: 'sleep', x: 1500, y: 0, props: { ms: 100 } },
-			{ id: 'lines', type: 'terminal', x: 0, y: 420, props: { command: 'wc -l' } },
-			{ id: 'pick', type: 'model_pick', x: 460, y: 420, props: { task: 'chat', band: 'low' } },
-			{ id: 'hf', type: 'hf', x: 980, y: 420, props: { task: 'text' } },
+			{ id: 'lines', type: 'local_tool', x: 0, y: 420, props: { tool: 'wc', args: '-l' } },
+			{ id: 'site', type: 'url_in', x: 460, y: 420, props: { url: 'www.example.com', fetchBody: false } },
+			{ id: 'file', type: 'file_in', x: 980, y: 420, props: { mode: 'path', path: '/etc/hostname', action: 'sha256' } },
 			{ id: 'task', type: 'prompt', x: 1500, y: 420, props: { text: 'Say hello in one line.' } },
-			{ id: 'agent', type: 'agent_run', x: 0, y: 840, props: { cli: 'grok' } },
-			{ id: 'mark', type: 'emoji', x: 460, y: 840, props: { emoji: '◎' } },
-			{ id: 'move', type: 'motion', x: 980, y: 840, props: { direction: 'right', speed: 1, content: '◎' } },
-			{ id: 'go', type: 'opencode_go', x: 1500, y: 840 },
+			{ id: 'sum', type: 'summarize', x: 0, y: 840 },
+			{ id: 'raw', type: 'raw_model', x: 460, y: 840, props: { url: 'http://127.0.0.1:11434/v1', model: 'llama3.2' } },
 		],
 		wires: [
 			{ from: 'url', fromPort: 'output', to: 'clip', toPort: 'url' },
 			{ from: 'url', fromPort: 'output', to: 'fetch', toPort: 'url' },
 			{ from: 'fetch', fromPort: 'output', to: 'wait', toPort: 'input' },
 			{ from: 'wait', fromPort: 'output', to: 'lines', toPort: 'stdin' },
-			{ from: 'pick', fromPort: 'output', to: 'hf', toPort: 'input' },
-			{ from: 'task', fromPort: 'output', to: 'agent', toPort: 'prompt' },
-			{ from: 'pick', fromPort: 'output', to: 'mark', toPort: 'input' },
-			{ from: 'mark', fromPort: 'output', to: 'move', toPort: 'input' },
+			{ from: 'fetch', fromPort: 'output', to: 'sum', toPort: 'input' },
+			{ from: 'task', fromPort: 'output', to: 'raw', toPort: 'prompt' },
 		],
 	},
 ]

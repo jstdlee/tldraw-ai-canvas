@@ -5,81 +5,99 @@
 	overflow: visible;
 }
 
-.NodeShape-edgeLabel {
-	position: absolute;
-	top: -9px;
-	left: 12px;
-	z-index: 2;
-	max-width: 70%;
-	padding: 0 6px;
-	border: 1px solid var(--tl-color-divider);
-	border-radius: 4px;
-	background: var(--tl-color-panel);
-	color: var(--tl-color-text-1);
-	font-size: 11px;
-	line-height: 16px;
+.NodeShape-label-name {
+	cursor: text;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	text-align: left;
 }
 
-.NodeShape-edgeLabel-input {
+.NodeShape-label-input {
+	min-width: 0;
+	border: 1px solid var(--tl-color-selected);
+	border-radius: 4px;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	font: inherit;
+	font-weight: 500;
+	padding: 1px 4px;
+	outline: none;
 	pointer-events: all;
 }
 
-.NodeShape_emoji {
-	background: transparent;
-	box-shadow: none;
-}
-
-.NodeShape_emoji .NodeShape-heading,
-.NodeShape_emoji .NodeShape-footer {
-	display: none;
-}
-
-.EmojiNode {
-	font-size: 42px;
-	line-height: 1.1;
-	text-align: center;
-}
-
-.EmojiNode-input {
-	width: 100%;
-	border: none;
-	background: transparent;
-	text-align: center;
-	font-size: 42px;
-	color: inherit;
-}
-
-.MotionNode {
+.NodeShape-noteIcon {
+	all: unset;
+	position: absolute;
+	top: -10px;
+	right: 10px;
+	z-index: 2;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	height: 64px;
-	font-size: 28px;
+	width: 22px;
+	height: 16px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 8px;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-3);
+	cursor: pointer;
+	pointer-events: all;
 }
 
-.MotionNode img {
-	max-height: 56px;
-	max-width: 100%;
+.NodeShape-noteIcon.has-note,
+.NodeShape-noteIcon.is-open {
+	color: var(--tl-color-selected);
+	border-color: var(--tl-color-selected);
 }
 
-.MotionNode-up { animation: motion-up linear infinite; }
-.MotionNode-down { animation: motion-down linear infinite; }
-.MotionNode-left { animation: motion-left linear infinite; }
-.MotionNode-right { animation: motion-right linear infinite; }
+.NodeShape-note {
+	position: absolute;
+	top: -92px;
+	left: 0;
+	right: 0;
+	height: 76px;
+	z-index: 3;
+	box-sizing: border-box;
+	padding: 6px 8px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	background: var(--tl-color-panel);
+	box-shadow: var(--tl-shadow-1);
+	color: var(--tl-color-text-1);
+	font: inherit;
+	font-size: 12px;
+	resize: none;
+	pointer-events: all;
+}
 
-@keyframes motion-up { from { transform: translateY(8px); } to { transform: translateY(-8px); } }
-@keyframes motion-down { from { transform: translateY(-8px); } to { transform: translateY(8px); } }
-@keyframes motion-left { from { transform: translateX(8px); } to { transform: translateX(-8px); } }
-@keyframes motion-right { from { transform: translateX(-8px); } to { transform: translateX(8px); } }
+/* Per-node text size. Rows, fields and labels follow the node's own size. */
+.NodeShape_fs {
+	font-size: var(--node-fs);
+}
+
+.NodeShape_fs .NodeShape-label,
+.NodeShape_fs .NodeField-input,
+.NodeShape_fs .NodeField-select,
+.NodeShape_fs .NodeField-textarea,
+.NodeShape_fs .NodeField-button,
+.NodeShape_fs .NodeInputRow-label,
+.NodeShape_fs .NodePortLabel,
+.NodeShape_fs .NodeStatus,
+.NodeShape_fs .NodeHint,
+.NodeShape_fs .NodeRow-value,
+.NodeShape_fs .NodeRow-connected-value,
+.NodeShape_fs .NodeRow-disconnected {
+	font-size: var(--node-fs);
+}
+
+.NodeFooterTools-font {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
 
 @media (prefers-reduced-motion: reduce) {
-	.MotionNode-up,
-	.MotionNode-down,
-	.MotionNode-left,
-	.MotionNode-right,
 	.MapView-hit {
 		animation: none;
 	}
@@ -99,8 +117,10 @@
 	background: var(--tl-color-selected);
 }
 
+/* The chart fills the node body: it grows with the card and the node font does not change it. */
 .ChartNode-view {
-	height: 140px;
+	flex: 1 1 auto;
+	min-height: 140px;
 	margin: 4px 8px 8px;
 }
 
@@ -302,4 +322,16 @@
 	overflow: auto;
 	font-size: 11px;
 	white-space: pre-wrap;
+}
+
+.ChartNode {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+.ChartNode-view > div,
+.ChartNode-view canvas {
+	max-width: 100%;
 }

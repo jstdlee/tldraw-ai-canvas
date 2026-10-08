@@ -38,6 +38,14 @@ body {
 	height: fit-content;
 	display: flex;
 	flex-direction: column;
+	transition: box-shadow 120ms ease;
+
+	/* A slightly stronger shadow on hover, like tldraw's own cards. */
+	[data-state='select.idle'] &:hover {
+		box-shadow:
+			var(--node-shadow-border),
+			0 4px 14px rgba(0, 0, 0, 0.10);
+	}
 
 	.NodeShape-heading {
 		padding: 0 var(--tl-space-4);
@@ -264,6 +272,13 @@ body {
 	flex: 1 1 auto;
 	text-align: right;
 	font-style: italic;
+}
+
+.NodeRow-source {
+	font-style: normal;
+	font-weight: 500;
+	color: var(--tl-color-text-2);
+	opacity: 0.8;
 }
 
 .NodeRow-value {
@@ -723,9 +738,38 @@ body {
 	grid-area: sidebar;
 	background: var(--tl-color-panel);
 	border-right: 1px solid var(--tl-color-divider);
-	overflow: hidden;
+	overflow: visible;
 	display: flex;
 	flex-direction: column;
+	position: relative;
+}
+
+/* Mid-edge handle to collapse / expand the node library. */
+.SidebarEdgeHandle {
+	position: absolute;
+	top: 50%;
+	right: -14px;
+	transform: translateY(-50%);
+	z-index: 20;
+	width: 14px;
+	height: 48px;
+	padding: 0;
+	border: 1px solid var(--tl-color-divider);
+	border-left: none;
+	border-radius: 0 8px 8px 0;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-3);
+	cursor: pointer;
+	font-size: 12px;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.SidebarEdgeHandle:hover {
+	background: var(--tl-color-muted-2);
+	color: var(--tl-color-text-1);
 }
 
 /* ---- Sidebar node list ---- */
@@ -735,6 +779,8 @@ body {
 	flex-direction: column;
 	height: 100%;
 	overflow: hidden;
+	flex: 1 1 auto;
+	min-width: 0;
 }
 
 .ImagePipelineSidebar-header {
@@ -1533,6 +1579,54 @@ body {
 	gap: 8px;
 }
 
+/* AI-star chat card: anchored under the node, not a centered modal. */
+.FillChatCard {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 700;
+	width: min(360px, calc(100vw - 32px));
+	background: var(--tl-color-panel);
+	border-radius: 12px;
+	box-shadow: var(--tl-shadow-3);
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	pointer-events: all;
+}
+
+.FillChatCard textarea {
+	width: 100%;
+	min-height: 72px;
+	resize: vertical;
+	box-sizing: border-box;
+	font: inherit;
+	padding: 8px;
+}
+
+/* Dashed outline that blinks around the shape a search just jumped to. */
+.SearchBlink {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 600;
+	pointer-events: none;
+	border: 2px dashed var(--tl-color-selected);
+	border-radius: 6px;
+	animation: SearchBlink-pulse 0.6s ease-in-out 2;
+}
+
+@keyframes SearchBlink-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.2;
+	}
+}
+
 .ExamplesDialog {
 	width: min(560px, calc(100vw - 32px));
 	max-height: min(70vh, 640px);
@@ -1567,6 +1661,50 @@ body {
 
 .CodeNode-portRow {
 	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--tl-space-2);
+	height: 44px;
+	padding: var(--tl-space-2) var(--tl-space-4);
+}
+
+.CodeNode-portEdit {
+	display: flex;
+	align-items: center;
+	gap: var(--tl-space-3);
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.CodeNode-portEdit-out {
+	flex: 0 0 auto;
+	justify-content: flex-end;
+}
+
+.CodeNode-portName {
+	position: static;
+	transform: none;
+	flex: 0 0 auto;
+}
+
+.CodeNode-name {
+	flex: 0 1 auto !important;
+	width: 76px;
+	min-width: 56px;
+	padding: 0 6px !important;
+	font-size: 11px !important;
+	font-family: ui-monospace, Menlo, monospace;
+	align-self: center !important;
+}
+
+.CodeNode-count {
+	flex: 0 1 auto !important;
+	width: 52px;
+	min-width: 44px;
+	padding: 0 4px !important;
+	font-size: 12px !important;
+	align-self: center !important;
 }
 
 .CodeNode-outLabel {
@@ -1576,6 +1714,13 @@ body {
 	transform: translateY(-50%);
 	font-size: 11px;
 	color: var(--tl-color-text-3);
+}
+
+/* The out-name row keeps its label next to its input (not floating). */
+.CodeNode-portEdit-out .CodeNode-outLabel {
+	position: static;
+	transform: none;
+	flex: 0 0 auto;
 }
 
 .CodeNode-editor {
@@ -1779,4 +1924,17 @@ body {
 
 .ImagePipelineSidebar-mynode:hover .ImagePipelineSidebar-delete {
 	visibility: visible;
+}
+
+/* Video node: a fixed 16:9 frame so YouTube embeds and plain files both fit the card. */
+.VideoNode-player {
+	display: block;
+	width: calc(100% - 16px);
+	margin: 4px 8px 8px;
+	aspect-ratio: 16 / 9;
+	height: auto;
+	border: 0;
+	border-radius: var(--tl-radius-2);
+	background: #000;
+	object-fit: contain;
 }

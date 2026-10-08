@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { atom, Editor, TLShape, TLShapeId, useValue } from 'tldraw'
 import { assetOf, previewReplace, SearchQuery, searchHits } from '../../shared/searchOps'
 import { NODE_CATEGORY } from '../../shared/nodeGroups'
-import { $searchHits } from '../shell/shellState'
+import { $searchHits, blinkSearchHit } from '../shell/shellState'
 import { NodeShape } from '../pipeline/nodes/NodeShapeUtil'
 import { shapeText } from './shapeText'
 
@@ -69,6 +69,7 @@ function FindBarInner({ editor }: { editor: Editor }) {
 		setIndex(next)
 		const id = matches[next]
 		editor.select(id)
+		blinkSearchHit(id)
 		const bounds = editor.getShapePageBounds(id)
 		if (bounds) editor.zoomToBounds(bounds.clone().expandBy(120), { animation: { duration: 200 }, targetZoom: 1 })
 	}

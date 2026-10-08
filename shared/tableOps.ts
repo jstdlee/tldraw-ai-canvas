@@ -161,6 +161,73 @@ function splitArgs(body: string): string[] {
 	return args
 }
 
+/** Aggregate rows by a column: groupBy column + agg like "score:sum". Returns group + one column per agg. */
+export function aggregateTable(table: Table, groupBy: string, aggs: { column: string; fn: string; as?: string }[]): Table {
+	const groupIndex = indexOf(table, groupBy)
+	// "*:count" counts members without needing a real column.
+	const parsed = aggs.map((a) => ({ ...a, index: a.column === '*' ? -1 : indexOf(table, a.column) }))
+	const groups = new Map<string, string[][]>()
+	for (const row of table.rows) {
+		const key = row[groupIndex] ?? ''
+		if (!groups.has(key)) groups.set(key, [])
+		groups.get(key)!.push(row)
+	}
+	const headers = [groupBy, ...parsed.map((a) => a.as || `${a.fn}_${a.column}`)]
+	const rows = [...groups.entries()].map(([key, members]) => {
+		const cells = parsed.map((a) => {
+			const values = members.map((m) => m[a.index] ?? '')
+			const nums = values.map((v) => Number(v.replace(/,/g, ''))).filter((n) => Number.isFinite(n))
+			switch (a.fn) {
+				case 'count':
+					return String(members.length)
+				case 'sum':
+					return String(nums.reduce((s, n) => s + n, 0))
+				case 'avg':
+					return nums.length ? String(nums.reduce((s, n) => s + n, 0) / nums.length) : ''
+				case 'min':
+					return nums.length ? String(Math.min(...nums)) : ''
+				case 'max':
+					return nums.length ? String(Math.max(...nums)) : ''
+				case 'list':
+					return values.filter(Boolean).join(' | ')
+				default:
+					throw new Error(`Unknown aggregation ${a.fn}`)
+			}
+		})
+		return [key, ...cells]
+	})
+	return { headers, rows }
+}
+
+/** Pivot: rows become distinct index values, columns become distinct column values, cells aggregated. */
+export function pivotTable(table: Table, index: string, column: string, value: string, fn: string): Table {
+	const indexIndex = indexOf(table, index)
+	const columnIndex = indexOf(table, column)
+	const valueIndex = indexOf(table, value)
+	const columns = [...new Set(table.rows.map((row) => row[columnIndex] ?? ''))]
+	const buckets = new Map<string, Map<string, number[]>>()
+	for (const row of table.rows) {
+		const r = row[indexIndex] ?? ''
+		const c = row[columnIndex] ?? ''
+		const n = Number((row[valueIndex] ?? '').replace(/,/g, ''))
+		if (!buckets.has(r)) buckets.set(r, new Map())
+		const cell = buckets.get(r)!
+		if (!cell.has(c)) cell.set(c, [])
+		if (Number.isFinite(n)) cell.get(c)!.push(n)
+	}
+	const aggregate = (nums: number[]): string => {
+		if (fn === 'count') return String(nums.length)
+		if (!nums.length) return ''
+		if (fn === 'sum') return String(nums.reduce((s, n) => s + n, 0))
+		if (fn === 'avg') return String(nums.reduce((s, n) => s + n, 0) / nums.length)
+		if (fn === 'min') return String(Math.min(...nums))
+		if (fn === 'max') return String(Math.max(...nums))
+		throw new Error(`Unknown aggregation ${fn}`)
+	}
+	const rows = [...buckets.entries()].map(([r, cell]) => [r, ...columns.map((c) => aggregate(cell.get(c) ?? []))])
+	return { headers: [index, ...columns], rows }
+}
+
 function mapColumn(table: Table, name: string, fn: (value: string, row: string[], index: number) => string): Table {
 	const index = indexOf(table, name)
 	return {
@@ -233,6 +300,53 @@ export function runTable(text: string, job: TableJob): string {
 			const made = job.expr ? evalFormula(job.expr, record(table, row)) : (values[index] ?? '')
 			return [...row, made]
 		})
+	} else if (job.op === 'groupby') {
+		// Columns: "score:sum, score:avg, *:count". Column: the group key.
+		if (!job.column) throw new Error('Name the group column')
+		const aggs = splitList(job.columns || '*:count').map((spec) => {
+			const [column, fn] = spec.split(':').map((s) => s.trim())
+			if (!column || !fn) throw new Error('Aggregation looks like score:sum')
+			return { column, fn }
+		})
+		table = aggregateTable(table, job.column, aggs)
+	} else if (job.op === 'pivot') {
+		// Column: row key. Columns: the column whose values become headers. As: sum/avg/min/max/count. Extra: value column.
+		if (!job.column || !job.columns) throw new Error('Name the row and column fields')
+		const valueCol = job.extra || job.name
+		if (!valueCol) throw new Error('Name the value column (New name)')
+		table = pivotTable(table, job.column, splitList(job.columns)[0], valueCol, job.as || 'sum')
+	} else if (job.op === 'dedupe') {
+		const names = splitList(job.columns)
+		const indexes = (names.length ? names : table.headers).map((name) => indexOf(table, name))
+		const seen = new Set<string>()
+		table = {
+			headers: table.headers,
+			rows: table.rows.filter((row) => {
+				const key = indexes.map((index) => row[index] ?? '').join('')
+				if (seen.has(key)) return false
+				seen.add(key)
+				return true
+			}),
+		}
+	} else if (job.op === 'sort') {
+		const names = splitList(job.columns || job.column)
+		if (!names.length) throw new Error('Name the column to sort by')
+		const desc = /desc/i.test(job.as)
+		const indexes = names.map((name) => indexOf(table, name))
+		table = {
+			headers: table.headers,
+			rows: [...table.rows].sort((a, b) => {
+				for (const index of indexes) {
+					const av = a[index] ?? ''
+					const bv = b[index] ?? ''
+					const an = Number(av.replace(/,/g, ''))
+					const bn = Number(bv.replace(/,/g, ''))
+					const cmp = Number.isFinite(an) && Number.isFinite(bn) ? an - bn : av.localeCompare(bv)
+					if (cmp !== 0) return desc ? -cmp : cmp
+				}
+				return 0
+			}),
+		}
 	} else throw new Error('Choose a table operation')
 	return formatTable(table, job.format)
 }

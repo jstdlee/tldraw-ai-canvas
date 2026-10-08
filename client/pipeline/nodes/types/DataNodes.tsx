@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { sqliteFileToPgStatements } from '../../sqliteWasm'
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { chartOption } from '../../../../shared/chartOption'
 import { runTable, TableJob } from '../../../../shared/tableOps'
@@ -59,7 +60,7 @@ export const TableNode = T.object({
 	error: T.string.nullable(),
 })
 
-const OPS = ['select', 'convert', 'formula', 'concat', 'replace', 'join', 'regexp', 'newcol'] as const
+const OPS = ['select', 'convert', 'formula', 'concat', 'replace', 'join', 'regexp', 'newcol', 'groupby', 'pivot', 'dedupe', 'sort'] as const
 
 export class TableNodeDefinition extends NodeDefinition<TableNode> {
 	static type = 'table'
@@ -197,24 +198,29 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 		const host = ref.current
 		if (!host) return
 		let dead = false
+		let observer: ResizeObserver | null = null
 		let chart: { dispose: () => void; setOption: (option: object) => void; resize: () => void } | null = null
 		void import('echarts').then((mod) => {
 			if (dead) return
 			chart = mod.init(host)
 			try {
 				chart.setOption(chartOption(node.text, node.format, node.kind, node.xCol, node.yCol))
-				chart.resize()
 			} catch (error) {
 				set({ error: (error as Error).message })
 			}
+			chart.resize()
+			// The card can be resized or change its text size. The chart follows the area it has.
+			observer = new ResizeObserver(() => chart?.resize())
+			observer.observe(host)
 		})
 		return () => {
 			dead = true
+			observer?.disconnect()
 			chart?.dispose()
 		}
 	}, [node.text, node.format, node.kind, node.xCol, node.yCol])
 	return (
-		<>
+		<div className="ChartNode">
 			<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
 			<NodeRow>
 				<select className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
@@ -227,7 +233,7 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 			</NodeRow>
 			<div ref={ref} className="ChartNode-view" />
 			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
-		</>
+		</div>
 	)
 }
 
@@ -235,6 +241,10 @@ export type SqliteNode = T.TypeOf<typeof SqliteNode>
 export const SqliteNode = T.object({
 	type: T.literal('sqlite_in'),
 	path: T.string,
+	/** The converted Postgres (CREATE + INSERT) from the last imported file. Replayed on run. */
+	imported: T.string,
+	/** Summary of the last import, e.g. "3 tables, 1,204 rows". */
+	importInfo: T.string,
 	sql: T.string,
 	ask: T.string,
 	error: T.string.nullable(),
@@ -248,10 +258,10 @@ export class SqliteNodeDefinition extends NodeDefinition<SqliteNode> {
 	icon = icon
 	category = categoryOf('sqlite_in')
 	getDefault(): SqliteNode {
-		return { type: 'sqlite_in', path: '', sql: 'SELECT 1 AS ready;', ask: '', error: null }
+		return { type: 'sqlite_in', path: '', imported: '', importInfo: '', sql: 'SELECT 1 AS ready;', ask: '', error: null }
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 5 + 88
+		return NODE_ROW_HEIGHT_PX * 5 + 96
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { input: end('input', 0), output: out() }
@@ -259,18 +269,10 @@ export class SqliteNodeDefinition extends NodeDefinition<SqliteNode> {
 	async execute(shape: NodeShape, node: SqliteNode, inputs: InputValues): Promise<ExecutionResult> {
 		const extra = getInputText(inputs, 'input')
 		let sql = node.sql
-		if (node.path.trim()) {
-			const response = await fetch('/api/sqlite/dump', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ path: node.path.trim() }),
-			})
-			const payload = (await response.json()) as { sql?: string; error?: string }
-			if (!response.ok) throw new Error(payload.error || 'Import failed')
-			sql = `${payload.sql ?? ''}\n${sql}`
-		}
 		if (extra) sql = sql.replaceAll('$input', extra.replace(/'/g, "''"))
-		const output = await runSql(sql)
+		// The imported file's schema and rows load first, then the node's own query runs.
+		const full = node.imported ? `${node.imported}\n${sql}` : sql
+		const output = await runSql(full)
 		updateNode<SqliteNode>(this.editor, shape, (n) => ({ ...n, error: null }), false)
 		return { output }
 	}
@@ -282,6 +284,8 @@ export class SqliteNodeDefinition extends NodeDefinition<SqliteNode> {
 
 function SqliteComponent({ shape, node }: NodeComponentProps<SqliteNode>) {
 	const editor = useEditor()
+	const fileRef = useRef<HTMLInputElement>(null)
+	const [busy, setBusy] = useState(false)
 	const set = (patch: Partial<SqliteNode>) => updateNode<SqliteNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
 	const ask = async () => {
 		const { apiGenerateText } = await import('../../api/pipelineApi')
@@ -292,10 +296,42 @@ function SqliteComponent({ shape, node }: NodeComponentProps<SqliteNode>) {
 		})
 		set({ sql: text.replace(/```sql|```/g, '').trim() })
 	}
+	const importFile = async (file: File) => {
+		setBusy(true)
+		try {
+			const bytes = new Uint8Array(await file.arrayBuffer())
+			const { tables, rows, statements } = await sqliteFileToPgStatements(bytes)
+			set({ imported: statements.join('\n'), importInfo: `${tables} table${tables === 1 ? '' : 's'}, ${rows.toLocaleString()} rows`, path: file.name, error: null })
+		} catch (e) {
+			set({ error: (e as Error).message, imported: '', importInfo: '' })
+		} finally {
+			setBusy(false)
+			if (fileRef.current) fileRef.current.value = ''
+		}
+	}
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="Value" dataType="text" hint="replaces $input" />
-			<Field label="File" value={node.path} onChange={(path) => set({ path })} />
+			<NodeRow>
+				<input
+					ref={fileRef}
+					type="file"
+					accept=".sqlite,.sqlite3,.db"
+					style={{ display: 'none' }}
+					onChange={(e) => {
+						const file = e.currentTarget.files?.[0]
+						if (file) void importFile(file)
+					}}
+				/>
+				<button type="button" className="NodeField-button" disabled={busy} onPointerDown={stopEvent} onClick={() => fileRef.current?.click()}>
+					{busy ? 'Importing…' : node.imported ? `Re-import ${node.path || 'file'}` : 'Import .sqlite / .db file'}
+				</button>
+			</NodeRow>
+			{node.importInfo && (
+				<NodeRow>
+					<span className="NodeHint">{node.importInfo} — replayed on every run.</span>
+				</NodeRow>
+			)}
 			<Field label="Ask" value={node.ask} onChange={(ask) => set({ ask })} />
 			<NodeRow>
 				<button type="button" className="NodeField-button" onPointerDown={stopEvent} onClick={() => void ask()}>

@@ -1,4 +1,5 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
+import { normalizeUrl } from '../../../../shared/contentKind'
 import { T, useEditor } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { RANDOM_MODES, randomValue } from '../../../../shared/random'
@@ -79,14 +80,22 @@ export class RandomNodeDefinition extends NodeDefinition<RandomNode> {
 		return { type: 'random', mode: 'number', a: '1', b: '100', list: 'red\ngreen\nblue', lastValue: null }
 	}
 	getBodyHeightPx(_s: NodeShape, node: RandomNode) {
-		return NODE_ROW_HEIGHT_PX * 3 + (node.mode === 'pick' || node.mode === 'shuffle' ? 80 : 0)
+		return NODE_ROW_HEIGHT_PX * 5 + (node.mode === 'pick' || node.mode === 'shuffle' ? 80 : 0)
 	}
 	getPorts(): Record<string, ShapePort> {
-		return { list: { id: 'list', x: 0, y: portY(0), terminal: 'end', dataType: 'any' }, output: out() }
+		return {
+			list: { id: 'list', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
+			a: { id: 'a', x: 0, y: portY(1), terminal: 'end', dataType: 'any' },
+			b: { id: 'b', x: 0, y: portY(2), terminal: 'end', dataType: 'any' },
+			output: out(),
+		}
 	}
 	async execute(shape: NodeShape, node: RandomNode, inputs: InputValues): Promise<ExecutionResult> {
+		// A wired value wins over the field it stands for (min/max, sides, length…).
 		const list = getInput(inputs, 'list') != null ? coerceToText(getInput(inputs, 'list')) : node.list
-		const value = randomValue(node.mode, node.a, node.b, list, strongRandom)
+		const a = getInput(inputs, 'a') != null ? coerceToText(getInput(inputs, 'a')) : node.a
+		const b = getInput(inputs, 'b') != null ? coerceToText(getInput(inputs, 'b')) : node.b
+		const value = randomValue(node.mode, a, b, list, strongRandom)
 		updateNode<RandomNode>(this.editor, shape, (n) => ({ ...n, lastValue: value }))
 		return { output: value }
 	}
@@ -99,6 +108,8 @@ export class RandomNodeDefinition extends NodeDefinition<RandomNode> {
 function RandomNodeComponent({ shape, node }: NodeComponentProps<RandomNode>) {
 	const editor = useEditor()
 	const listWired = useInputConnected(shape.id, 'list')
+	const aWired = useInputConnected(shape.id, 'a')
+	const bWired = useInputConnected(shape.id, 'b')
 	const set = (patch: Partial<RandomNode>) => updateNode<RandomNode>(editor, shape, (n) => ({ ...n, ...patch }))
 	const needsList = node.mode === 'pick' || node.mode === 'shuffle'
 	const fields: Record<string, [string, string] | [string]> = {
@@ -111,6 +122,8 @@ function RandomNodeComponent({ shape, node }: NodeComponentProps<RandomNode>) {
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="list" label="List" dataType="any" hint={needsList ? 'or type below' : 'not used'} />
+			<PortRow shapeId={shape.id} portId="a" label={f?.[0] ?? 'A'} dataType="any" hint={f ? f[0] : 'not used'} />
+			<PortRow shapeId={shape.id} portId="b" label={f?.[1] ?? 'B'} dataType="any" hint={f?.[1] ?? 'not used'} />
 			<NodeRow>
 				<select className="NodeField-select" value={node.mode} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
 					{RANDOM_MODES.map((m) => (
@@ -122,17 +135,21 @@ function RandomNodeComponent({ shape, node }: NodeComponentProps<RandomNode>) {
 			</NodeRow>
 			<NodeRow>
 				{f ? (
-					f.map((label, i) => (
-						<input
-							key={label}
-							className="NodeField-input"
-							placeholder={label}
-							value={i === 0 ? node.a : node.b}
-							onPointerDown={stopEvent}
-							onKeyDown={stopEvent}
-							onChange={(e) => set(i === 0 ? { a: e.target.value } : { b: e.target.value })}
-						/>
-					))
+					f.map((label, i) => {
+						const wired = i === 0 ? aWired : bWired
+						return (
+							<input
+								key={label}
+								className="NodeField-input"
+								placeholder={label}
+								disabled={wired}
+								value={wired ? `(${label} wired)` : i === 0 ? node.a : node.b}
+								onPointerDown={stopEvent}
+								onKeyDown={stopEvent}
+								onChange={(e) => set(i === 0 ? { a: e.target.value } : { b: e.target.value })}
+							/>
+						)
+					})
 				) : (
 					<span className="NodeRow-disconnected">new value on every run</span>
 				)}
@@ -362,7 +379,8 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 		return { input: { id: 'input', x: 0, y: portY(0), terminal: 'end', dataType: 'any' }, output: out() }
 	}
 	async execute(shape: NodeShape, node: SummarizeNode, inputs: InputValues): Promise<ExecutionResult> {
-		const value = coerceToText(getInput(inputs, 'input')).trim()
+		// Bare hosts (www.wikipedia.com) get a scheme so they are read as a web page.
+		const value = normalizeUrl(coerceToText(getInput(inputs, 'input')).trim())
 		if (!value) {
 			updateNode<SummarizeNode>(this.editor, shape, (n) => ({ ...n, error: 'Connect something to summarize' }), false)
 			return { output: STOP_EXECUTION }

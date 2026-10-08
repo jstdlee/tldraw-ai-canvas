@@ -39,7 +39,7 @@ import { ChatPanelFallback } from './components/ChatPanelFallback'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { ImagePipelineSidebar } from './pipeline/components/ImagePipelineSidebar'
-import { CanvasExtras } from './pipeline/components/CanvasExtras'
+import { $examplesOpen, CanvasExtras } from './pipeline/components/CanvasExtras'
 import { installAltScroll } from './pipeline/altScroll'
 import { registerNodeGuards } from './pipeline/nodeGuards'
 import { OnCanvasNodePicker } from './pipeline/components/OnCanvasNodePicker'
@@ -63,7 +63,7 @@ import { FindBar } from './clips/FindBar'
 import { installKeepGroup } from './pipeline/groups/KeepGroupShapeUtil'
 import { ShellChrome } from './shell/ShellChrome'
 import { $featuresOpen, $historyOpen, $libraryRail, $mapOpen } from './shell/shellState'
-import { loadBackup, saveBackup } from './shell/shellState'
+import { saveBackup } from './shell/shellState'
 import { ImageEditorModal } from './clips/ImageEditor'
 import { RatioImageShapeUtil } from './clips/shapeOptions'
 
@@ -89,7 +89,7 @@ const options: Partial<TldrawOptions> = {
 	actionShortcutsLocation: 'menu',
 }
 
-const PANEL_KEY = 'tldraw-ai-canvas:panels'
+const PANEL_KEY = 'oh-my-tldraw:panels'
 
 function loadPanels(): { library: boolean; chat: boolean } {
 	// On a narrow window start with only the agent panel, so the canvas has room.
@@ -223,6 +223,7 @@ function App() {
 			MainMenu: () => (
 				<DefaultMainMenu>
 					<TldrawUiMenuGroup id="ai">
+						<TldrawUiMenuItem id="examples" label="Examples…" onSelect={() => { $examplesOpen.set(true) }} />
 						<CanvasToolsMenuGroup />
 						<TldrawUiMenuItem
 							id="ai-providers"
@@ -246,8 +247,6 @@ function App() {
 						<TldrawUiMenuItem id="feature-list" label="Features vs tldraw" onSelect={() => { $featuresOpen.set(true) }} />
 						<TldrawUiMenuItem id="backup-15" label="Auto backup every 15 min" onSelect={() => saveBackup({ minutes: 15, target: 'folder' })} />
 						<TldrawUiMenuItem id="backup-off" label="Auto backup off" onSelect={() => saveBackup({ minutes: 0, target: 'folder' })} />
-						<TldrawUiMenuItem id="backup-s3" label="Backup target: S3-compatible" onSelect={() => saveBackup({ minutes: loadBackup().minutes || 15, target: 's3' })} />
-						<TldrawUiMenuItem id="backup-gdrive" label="Google Drive backup later (needs an application id)" onSelect={() => {}} />
 					</TldrawUiMenuGroup>
 					<DefaultMainMenuContent />
 				</DefaultMainMenu>
@@ -285,10 +284,19 @@ function App() {
 			>
 				<div className="image-pipeline-sidebar">
 					{editor ? <ImagePipelineSidebar editor={editor} /> : <div />}
+					<button
+						type="button"
+						className="SidebarEdgeHandle"
+						title={rail ? 'Expand node library' : 'Collapse node library'}
+						aria-label={rail ? 'Expand node library' : 'Collapse node library'}
+						onClick={() => $libraryRail.set(!$libraryRail.get())}
+					>
+						{rail ? '›' : '‹'}
+					</button>
 				</div>
 				<div className="app-canvas">
 					<Tldraw
-						persistenceKey="tldraw-ai-canvas"
+						persistenceKey="oh-my-tldraw"
 						getShapeVisibility={getShapeVisibility}
 						assetUrls={assetUrls}
 						options={options}

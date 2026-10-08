@@ -1,4 +1,5 @@
 import { createShapeId, Editor, TLShapeId, toRichText } from 'tldraw'
+import { capTextForCanvas } from './capOutput'
 import { ExecutionResult, STOP_EXECUTION } from './nodes/types/shared'
 import { getNodePortConnections, getNodePorts } from './nodes/nodePorts'
 import { NodeShape } from './nodes/NodeShapeUtil'
@@ -24,17 +25,22 @@ export async function spillUnconnectedOutput(editor: Editor, shape: NodeShape, o
 	if (wired) return
 	const value = outputs[out.id]
 	if (value == null || value === STOP_EXECUTION || value === '') return
-	const text = String(value)
+	const raw = String(value)
 	const spillId = shape.props.spillId as TLShapeId | undefined
 	const existing = spillId ? editor.getShape(spillId) : undefined
 
-	if (isImage(text) || out.dataType === 'image') {
+	if (isImage(raw) || out.dataType === 'image') {
 		if (existing) editor.deleteShapes([existing.id])
-		const id = await placeImageOnCanvas(editor, shape, text, { maxSize: 360, name: 'node-output' })
+		const id = await placeImageOnCanvas(editor, shape, raw, { maxSize: 360, name: 'node-output' })
 		editor.select(shape.id)
 		editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { spillId: id } })
 		return
 	}
+
+	// Text over the cap is spilled to a file; the shape shows a preview.
+	const label: unknown = shape.props.label
+	const name = typeof label === 'string' && label.trim() ? label : shape.props.node.type
+	const { text } = await capTextForCanvas(name, raw)
 
 	if (existing && existing.type === 'text') {
 		editor.updateShape({
@@ -54,9 +60,9 @@ export async function spillUnconnectedOutput(editor: Editor, shape: NodeShape, o
 		y: bounds?.minY ?? shape.y,
 		props: {
 			richText: toRichText(text),
-			autoSize: shape.props.node.type === 'emoji',
-			w: shape.props.node.type === 'emoji' ? 80 : 320,
-			size: shape.props.node.type === 'emoji' ? 'xl' : 'm',
+			autoSize: false,
+			w: 320,
+			size: 'm',
 		},
 	})
 	editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { spillId: id } })

@@ -1,15 +1,15 @@
-/** Sidebar groups. Concat and prompts sit with Text. Net, LLM and Image are separate. */
+/** Sidebar groups, in the order a workflow is built: bring data in, shape it, think, show it. */
 
 export const NODE_GROUPS = [
+	{ id: 'input', label: 'Input' },
 	{ id: 'text', label: 'Text' },
+	{ id: 'llm', label: 'AI' },
+	{ id: 'image', label: 'Image' },
 	{ id: 'data', label: 'Data' },
 	{ id: 'net', label: 'Net' },
-	{ id: 'llm', label: 'LLM' },
-	{ id: 'image', label: 'Image' },
+	{ id: 'logic', label: 'Logic & code' },
 	{ id: 'media', label: 'Media' },
 	{ id: 'tools', label: 'Tools' },
-	{ id: 'logic', label: 'Logic & code' },
-	{ id: 'input', label: 'Input' },
 	{ id: 'output', label: 'Output' },
 ] as const
 
@@ -23,50 +23,56 @@ export const NODE_GROUP_ORDER: string[] = NODE_GROUPS.map((g) => g.id)
 
 /** Which group each node type belongs to. */
 export const NODE_CATEGORY: Record<string, NodeGroupId> = {
-	prompt: 'text',
+	// Input: where a value comes from
+	prompt: 'input',
+	number: 'input',
+	random: 'input',
+	file_in: 'input',
+	url_in: 'input',
+	load_image: 'input',
+	camera: 'input',
+	capture: 'input',
+	// Text
 	prompt_concat: 'text',
 	text_tool: 'text',
-	http: 'net',
-	download: 'net',
-	net_tool: 'net',
-	postgres: 'net',
-	text_ai: 'llm',
+	// AI
 	generate_text: 'llm',
 	chat: 'llm',
 	summarize: 'llm',
+	text_ai: 'llm',
+	raw_model: 'llm',
 	jev: 'llm',
-	load_image: 'image',
-	camera: 'image',
-	capture: 'image',
+	openrouter: 'llm',
+	// Image
 	crop: 'image',
 	image_resize: 'image',
 	image_filter: 'image',
 	image_tool: 'image',
 	adjust: 'image',
-	number: 'input',
-	random: 'input',
+	// Data
+	table: 'data',
+	chart: 'data',
+	postgres: 'data',
+	sqlite_in: 'data',
+	// Net
+	http: 'net',
+	download: 'net',
+	net_tool: 'net',
+	// Logic & code
 	if: 'logic',
 	logic: 'logic',
 	for_each: 'logic',
 	router: 'logic',
+	sleep: 'logic',
 	code: 'logic',
 	subgraph: 'logic',
+	// Media
+	video: 'media',
+	// Tools
+	local_tool: 'tools',
+	// Output
 	output: 'output',
 	save: 'output',
-	table: 'data',
-	chart: 'data',
-	sqlite_in: 'data',
-	openrouter: 'llm',
-	opencode_go: 'llm',
-	model_pick: 'llm',
-	hf: 'llm',
-	video: 'media',
-	emoji: 'media',
-	motion: 'media',
-	local_tool: 'tools',
-	terminal: 'tools',
-	agent_run: 'tools',
-	sleep: 'logic',
 }
 
 export function categoryOf(type: string): string {

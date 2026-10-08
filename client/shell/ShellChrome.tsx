@@ -131,12 +131,14 @@ function insertNode(editor: Editor, type: string) {
 function MapView({ editor }: { editor: Editor }) {
 	const open = useValue('map', () => $mapOpen.get(), [])
 	const hits = useValue('hits', () => $searchHits.get(), [])
-	const tick = useValue('page shapes', () => editor.getCurrentPageShapes().length, [editor])
+	// Subscribe to shapes, page bounds, camera, and viewport so the map (and the
+	// little viewport rectangle) tracks pan/zoom instead of a stale snapshot.
+	const shapes = useValue('map shapes', () => (open ? editor.getCurrentPageShapes() : []), [editor, open])
+	const page = useValue('map page', () => (open ? editor.getCurrentPageBounds() : undefined), [editor, open])
+	const camera = useValue('map camera', () => (open ? editor.getCamera() : { x: 0, y: 0, z: 1 }), [editor, open])
+	const view = useValue('map view', () => (open ? editor.getViewportPageBounds() : undefined), [editor, open])
+	const tick = shapes.length
 	if (!open) return null
-	const shapes = editor.getCurrentPageShapes()
-	const page = editor.getCurrentPageBounds()
-	const camera = editor.getCamera()
-	const view = editor.getViewportPageBounds()
 	const width = 220
 	const height = 150
 	const scale = page && page.width && page.height ? Math.min(width / page.width, height / page.height) : 1
@@ -180,7 +182,7 @@ function MapView({ editor }: { editor: Editor }) {
 							/>
 						)
 					})}
-				{page && (
+				{page && view && (
 					<rect
 						className="MapView-camera"
 						x={(view.minX - page.minX) * scale}
