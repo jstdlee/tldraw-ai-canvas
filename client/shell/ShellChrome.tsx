@@ -4,9 +4,8 @@ import { FEATURE_ROWS } from '../../shared/featureList'
 import { getNodeDefinitions } from '../pipeline/nodes/nodeTypes'
 import { createShapeId } from 'tldraw'
 import { diveGroup, groupPlainText, leaveGroup } from '../pipeline/groups/groupActions'
-import { historyMemory, restoreOp, searchDisk, watchHistory } from './opHistory'
 import { $findOpen } from '../clips/FindBar'
-import { $backup, $featuresOpen, $historyOpen, $libraryRail, $mapOpen, $paletteOpen, $searchHits, loadBackup } from './shellState'
+import { $backup, $featuresOpen, $libraryRail, $mapOpen, $paletteOpen, $searchHits, loadBackup } from './shellState'
 
 function stop(event: { stopPropagation: () => void; target?: EventTarget | null; currentTarget?: EventTarget | null }) {
 	event.stopPropagation()
@@ -14,7 +13,6 @@ function stop(event: { stopPropagation: () => void; target?: EventTarget | null;
 
 export function ShellChrome() {
 	const editor = useEditor()
-	useEffect(() => watchHistory(editor), [editor])
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
 			const tag = (event.target as HTMLElement | null)?.tagName
@@ -28,16 +26,22 @@ export function ShellChrome() {
 				event.preventDefault()
 				$libraryRail.set(!$libraryRail.get())
 			}
+			if (!typing && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'e') {
+				const ids = editor.getSelectedShapeIds()
+				if (!ids.length) return
+				event.preventDefault()
+				event.stopPropagation()
+				editor.deleteShapes(ids)
+			}
 		}
 		window.addEventListener('keydown', onKey, true)
 		return () => window.removeEventListener('keydown', onKey, true)
-	}, [])
+	}, [editor])
 	return (
 		<>
 			<GroupBack editor={editor} />
 			<CommandPalette editor={editor} />
 			<MapView editor={editor} />
-			<HistoryPanel editor={editor} />
 			<FeaturePanel />
 			<BackupClock editor={editor} />
 		</>
@@ -72,7 +76,6 @@ function CommandPalette({ editor }: { editor: Editor }) {
 		const tools = [
 			{ id: 'find', label: 'Find on canvas', run: () => $findOpen.set(true) },
 			{ id: 'map', label: 'Map view', run: () => $mapOpen.set(!$mapOpen.get()) },
-			{ id: 'history', label: 'Operation history', run: () => $historyOpen.set(true) },
 			{ id: 'features', label: 'Features compared with tldraw', run: () => $featuresOpen.set(true) },
 			{ id: 'library', label: 'Collapse node library', run: () => $libraryRail.set(!$libraryRail.get()) },
 		]
@@ -201,40 +204,6 @@ function MapView({ editor }: { editor: Editor }) {
 	)
 }
 
-function HistoryPanel({ editor }: { editor: Editor }) {
-	const open = useValue('history', () => $historyOpen.get(), [])
-	const [query, setQuery] = useState('')
-	const [disk, setDisk] = useState<ReturnType<typeof historyMemory>>([])
-	useEffect(() => {
-		if (!open) return
-		void searchDisk(query).then(setDisk)
-	}, [open, query])
-	if (!open) return null
-	const q = query.trim().toLowerCase()
-	const local = historyMemory().filter((op) => !q || op.label.includes(q) || op.shapeId.includes(q)).slice(-40).reverse()
-	return (
-		<div className="SideSheet" onPointerDown={stop}>
-			<div className="SideSheet-bar">
-				<strong>History</strong>
-				<button type="button" onClick={() => $historyOpen.set(false)} aria-label="Close">×</button>
-			</div>
-			<input placeholder="Search operations" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.stopPropagation()} />
-			<p className="NodeHint">The last 100 stay in memory. Older ones are in the data folder.</p>
-			{local.map((op, index) => (
-				<button key={`${op.t}-${index}`} type="button" onClick={() => restoreOp(editor, op.record)}>
-					{op.kind} {op.label}
-				</button>
-			))}
-			{disk.length > 0 && <strong>On disk</strong>}
-			{disk.slice(-20).reverse().map((op, index) => (
-				<button key={`disk-${op.t}-${index}`} type="button" onClick={() => restoreOp(editor, op.record)}>
-					{op.kind} {op.label}
-				</button>
-			))}
-		</div>
-	)
-}
-
 function FeaturePanel() {
 	const open = useValue('features', () => $featuresOpen.get(), [])
 	if (!open) return null
@@ -287,10 +256,6 @@ function BackupClock({ editor }: { editor: Editor }) {
 
 export function openMap() {
 	$mapOpen.set(!$mapOpen.get())
-}
-
-export function openHistory() {
-	$historyOpen.set(true)
 }
 
 export function openFeatures() {

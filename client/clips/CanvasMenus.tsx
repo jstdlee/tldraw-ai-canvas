@@ -7,6 +7,7 @@ import {
 	TLUiOverrideHelpers,
 	TldrawUiMenuActionItem,
 	TldrawUiMenuGroup,
+	TldrawUiMenuItem,
 	TldrawUiMenuSubmenu,
 	useEditor,
 	useValue,
@@ -38,6 +39,19 @@ import {
 	saveCustomNode,
 } from '../pipeline/customNodes'
 import { imagesKeepRatio, toggleImageRatio, toggleTextWrap } from './shapeOptions'
+import { EXAMPLES } from '../../shared/examples'
+import { loadExample } from '../pipeline/loadExample'
+
+function centerView(editor: Editor) {
+	const selected = editor.getSelectionPageBounds()
+	const bounds = selected ?? editor.getCurrentPageBounds()
+	if (!bounds) return
+	editor.centerOnPoint(bounds.center, { animation: { duration: 200 } })
+}
+
+function resetZoom(editor: Editor) {
+	editor.resetZoom(editor.getViewportScreenCenter(), { animation: { duration: 200 } })
+}
 
 export const MarkdownIcon = (
 	<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -84,6 +98,9 @@ export function canvasActionOverrides(
 		...a('word-count', 'Word count', () => wordCount(editor, notify), '?w'),
 		...a('insert-date', 'Insert date & time', () => insertDateTime(editor), '?d'),
 		...a('find-on-canvas', 'Find on canvas', () => $findOpen.set(true), '$!f'),
+		...a('center-view', 'Center view', () => centerView(editor)),
+		...a('reset-zoom', 'Reset zoom', () => resetZoom(editor)),
+		...a('erase-selection', 'Erase', () => editor.deleteShapes(editor.getSelectedShapeIds()), '$e'),
 		...a('fetch-page', 'Web page → Markdown…', () => fetchPageAsMarkdown(editor, notify)),
 		...a('new-markdown', 'New Markdown clip', () => createClipAtCenter(editor, 'markdown'), '?m'),
 		...a('new-mermaid', 'New Mermaid diagram', () => createClipAtCenter(editor, 'mermaid'), '?g'),
@@ -173,6 +190,11 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 	)
 	return (
 		<DefaultContextMenu {...props}>
+			<TldrawUiMenuGroup id="view-tools">
+				<TldrawUiMenuActionItem actionId="center-view" />
+				<TldrawUiMenuActionItem actionId="reset-zoom" />
+				{hasSelection && <TldrawUiMenuActionItem actionId="erase-selection" />}
+			</TldrawUiMenuGroup>
 			{isImage && (
 				<TldrawUiMenuGroup id="image-tools">
 					<TldrawUiMenuActionItem actionId="edit-image" />
@@ -237,6 +259,28 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 			)}
 			<DefaultContextMenuContent />
 		</DefaultContextMenu>
+	)
+}
+
+/** Examples live inside the top-left menu. */
+export function ExamplesMenu() {
+	const editor = useEditor()
+	return (
+		<TldrawUiMenuSubmenu id="examples-menu" label="Examples">
+			<TldrawUiMenuGroup id="examples-list">
+				{EXAMPLES.map((example) => (
+					<TldrawUiMenuItem
+						key={example.id}
+						id={`example-${example.id}`}
+						label={example.title}
+						onSelect={() => {
+							const view = editor.getViewportPageBounds()
+							loadExample(editor, example, { x: view.minX + 80, y: view.minY + 80 })
+						}}
+					/>
+				))}
+			</TldrawUiMenuGroup>
+		</TldrawUiMenuSubmenu>
 	)
 }
 

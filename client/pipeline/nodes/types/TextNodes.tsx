@@ -10,7 +10,7 @@ import {
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -103,7 +103,7 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 			<PortRow shapeId={shape.id} portId="input2" label="Input 2" dataType="any" hint="optional" />
 			<NodeRow>
 				<span className="NodeInputRow-label">Tool</span>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={node.op}
 					onPointerDown={stopEvent}
@@ -118,7 +118,7 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 							))}
 						</optgroup>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			{(['a', 'b'] as const).map((key) => (
 				<NodeRow key={key}>

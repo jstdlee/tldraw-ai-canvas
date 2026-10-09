@@ -9,7 +9,6 @@ export const NODE_GROUPS = [
 	{ id: 'net', label: 'Net' },
 	{ id: 'logic', label: 'Logic & code' },
 	{ id: 'media', label: 'Media' },
-	{ id: 'tools', label: 'Tools' },
 	{ id: 'output', label: 'Output' },
 ] as const
 
@@ -68,8 +67,6 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	subgraph: 'logic',
 	// Media
 	video: 'media',
-	// Tools
-	local_tool: 'tools',
 	// Output
 	output: 'output',
 	save: 'output',

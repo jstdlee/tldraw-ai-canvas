@@ -9,7 +9,7 @@ import { loopBodyNodes, runLoopBody } from '../../execution/loop'
 import { clearNodeRun } from '../../execution/nodeRunState'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -117,13 +117,13 @@ function IfNodeComponent({ shape, node }: NodeComponentProps<IfNode>) {
 			<PortRow shapeId={shape.id} portId="test" label="Test" dataType="any" hint="optional: test this instead" />
 			<NodeRow>
 				<span className="NodeInputRow-label">If</span>
-				<select className="NodeField-select" value={node.condition} onPointerDown={stopEvent} onChange={(e) => set({ condition: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.condition} onPointerDown={stopEvent} onChange={(e) => set({ condition: e.target.value })}>
 					{CONDITIONS.map((c) => (
 						<option key={c.id} value={c.id}>
 							{c.label}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
 				{cond.operand ? (
@@ -223,7 +223,7 @@ function LogicNodeComponent({ shape, node }: NodeComponentProps<LogicNode>) {
 			{node.op !== 'not' ? <PortRow shapeId={shape.id} portId="b" label="B" dataType="any" /> : <NodeRow>{null}</NodeRow>}
 			<NodeRow>
 				<span className="NodeInputRow-label">Result is</span>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={node.op}
 					onPointerDown={stopEvent}
@@ -234,7 +234,7 @@ function LogicNodeComponent({ shape, node }: NodeComponentProps<LogicNode>) {
 					<option value="not">NOT A</option>
 					<option value="xor">A XOR B</option>
 					<option value="nand">NOT (A AND B)</option>
-				</select>
+				</NodeSelect>
 			</NodeRow>
 		</>
 	)
@@ -347,13 +347,13 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 			<PortRow shapeId={shape.id} portId="list" label="List" dataType="any" />
 			<NodeRow>
 				<span className="NodeInputRow-label">Split</span>
-				<select className="NodeField-select" value={node.split} onPointerDown={stopEvent} onChange={(e) => set({ split: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.split} onPointerDown={stopEvent} onChange={(e) => set({ split: e.target.value })}>
 					<option value="lines">per line</option>
 					<option value="separator">per separator</option>
 					<option value="paragraphs">per paragraph</option>
 					<option value="json">JSON array items</option>
 					<option value="regex">per regex match</option>
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
 				{node.split === 'separator' || node.split === 'regex' ? (

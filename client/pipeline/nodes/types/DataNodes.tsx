@@ -1,15 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { sqliteFileToPgStatements } from '../../sqliteWasm'
 import { categoryOf } from '../../../../shared/nodeGroups'
-import { chartOption } from '../../../../shared/chartOption'
-import { runTable, TableJob } from '../../../../shared/tableOps'
-import { T, useEditor } from 'tldraw'
+import { chartOption, resolveColumns } from '../../../../shared/chartOption'
+import { parseTable, runTable, splitList } from '../../../../shared/tableOps'
+import type { TableJob } from '../../../../shared/tableOps'
+import { T, useEditor, useValue } from 'tldraw'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { runSql } from '../../pg'
 import { sleep } from '../../utils/sleep'
+import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, stopEvent } from './fields'
+import { NodeMultiSelect, PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -128,17 +130,17 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 			<PortRow shapeId={shape.id} portId="data" label="CSV / TSV" dataType="text" />
 			<PortRow shapeId={shape.id} portId="extra" label="New values" dataType="text" hint="one line per row" />
 			<NodeRow>
-				<select className="NodeField-select" value={node.format} onPointerDown={stopEvent} onChange={(e) => set({ format: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.format} onPointerDown={stopEvent} onChange={(e) => set({ format: e.target.value })}>
 					<option value="csv">CSV</option>
 					<option value="tsv">TSV</option>
-				</select>
-				<select className="NodeField-select" value={node.op} onPointerDown={stopEvent} onChange={(e) => set({ op: e.target.value })}>
+				</NodeSelect>
+				<NodeSelect className="NodeField-select" value={node.op} onPointerDown={stopEvent} onChange={(e) => set({ op: e.target.value })}>
 					{OPS.map((op) => (
 						<option key={op} value={op}>
 							{op}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<Field label="Columns" value={node.columns} onChange={(columns) => set({ columns })} />
 			<Field label="Column" value={node.column} onChange={(column) => set({ column })} />
@@ -158,7 +160,10 @@ export const ChartNode = T.object({
 	format: T.string,
 	kind: T.string,
 	xCol: T.string,
+	/** Comma-separated list of y columns; one series per column. */
 	yCol: T.string,
+	/** With 2+ y columns, plot the first on the left axis and the rest on the right. */
+	dualScale: T.boolean,
 	error: T.string.nullable(),
 })
 
@@ -170,17 +175,17 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	icon = icon
 	category = categoryOf('chart')
 	getDefault(): ChartNode {
-		return { type: 'chart', text: SAMPLE, format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score', error: null }
+		return { type: 'chart', text: SAMPLE, format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score', dualScale: false, error: null }
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + 220
+		return NODE_ROW_HEIGHT_PX * 5 + 220
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { data: end('data', 0), output: out() }
 	}
 	async execute(shape: NodeShape, node: ChartNode, inputs: InputValues): Promise<ExecutionResult> {
 		const text = getInputText(inputs, 'data') || node.text
-		chartOption(text, node.format, node.kind, node.xCol, node.yCol)
+		chartOption(text, node.format, node.kind, node.xCol, splitList(node.yCol), node.dualScale)
 		updateNode<ChartNode>(this.editor, shape, (n) => ({ ...n, text, error: null }), false)
 		return { output: text }
 	}
@@ -194,6 +199,34 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	const editor = useEditor()
 	const ref = useRef<HTMLDivElement>(null)
 	const set = (patch: Partial<ChartNode>) => updateNode<ChartNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
+	// Prefer the wired table. The sample text on the node is only a fallback.
+	const source = useValue(
+		'chart source',
+		() => {
+			const value = getNodeInputPortValues(editor, shape.id).data?.value
+			if (typeof value === 'string' && value.trim()) return value
+			return node.text
+		},
+		[editor, shape.id, node.text]
+	)
+	const table = useMemo(() => {
+		try {
+			return parseTable(source, node.format)
+		} catch {
+			return { headers: [] as string[], rows: [] as string[][] }
+		}
+	}, [source, node.format])
+	const columns = resolveColumns(table, node.xCol, splitList(node.yCol))
+	const ySelected = splitList(node.yCol)
+	// First render with this data (or new columns): snap the stored columns to real headers.
+	useEffect(() => {
+		if (table.headers.length === 0) return
+		const patch: Partial<ChartNode> = {}
+		if (columns.xCol !== node.xCol) patch.xCol = columns.xCol
+		const joined = columns.yCols.join(',')
+		if (joined !== node.yCol) patch.yCol = joined
+		if (Object.keys(patch).length > 0) set(patch)
+	}, [table, node.xCol, node.yCol])
 	useEffect(() => {
 		const host = ref.current
 		if (!host) return
@@ -204,7 +237,7 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 			if (dead) return
 			chart = mod.init(host)
 			try {
-				chart.setOption(chartOption(node.text, node.format, node.kind, node.xCol, node.yCol))
+				chart.setOption(chartOption(source, node.format, node.kind, node.xCol, splitList(node.yCol), node.dualScale))
 			} catch (error) {
 				set({ error: (error as Error).message })
 			}
@@ -218,18 +251,50 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 			observer?.disconnect()
 			chart?.dispose()
 		}
-	}, [node.text, node.format, node.kind, node.xCol, node.yCol])
+	}, [source, node.format, node.kind, node.xCol, node.yCol, node.dualScale])
 	return (
 		<div className="ChartNode">
 			<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
 			<NodeRow>
-				<select className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
 					<option value="bar">Bar</option>
 					<option value="line">Line</option>
 					<option value="pie">Pie</option>
-				</select>
-				<input className="NodeField-input" value={node.xCol} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ xCol: e.target.value })} />
-				<input className="NodeField-input" value={node.yCol} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ yCol: e.target.value })} />
+				</NodeSelect>
+				<NodeSelect
+					className="NodeField-select"
+					value={columns.xCol}
+					disabled={table.headers.length === 0}
+					title="X column"
+					onPointerDown={stopEvent}
+					onChange={(e) => set({ xCol: e.target.value })}
+				>
+					{table.headers.map((header) => (
+						<option key={header} value={header}>
+							{header}
+						</option>
+					))}
+				</NodeSelect>
+			</NodeRow>
+			<NodeRow>
+				<NodeMultiSelect
+					title="Y columns. Pick more than one."
+					emptyLabel={table.headers.length ? 'Y columns' : 'No columns'}
+					values={ySelected.filter((col) => col !== columns.xCol && table.headers.includes(col))}
+					disabled={table.headers.length === 0}
+					options={table.headers.map((header) => ({
+						value: header,
+						label: header,
+						disabled: header === columns.xCol,
+					}))}
+					onChange={(next) => set({ yCol: next.filter((col) => col !== columns.xCol).join(',') })}
+				/>
+			</NodeRow>
+			<NodeRow>
+				<label className="NodeField-check" onPointerDown={stopEvent} title="First y column on the left axis, the rest on the right">
+					<input type="checkbox" checked={!!node.dualScale} onChange={(e) => set({ dualScale: e.target.checked })} />
+					Dual y-axes
+				</label>
 			</NodeRow>
 			<div ref={ref} className="ChartNode-view" />
 			{node.error && <span className="NodeStatus is-error">{node.error}</span>}

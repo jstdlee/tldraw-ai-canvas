@@ -38,6 +38,48 @@ import { toggleTask } from '../../shared/clipText'
 
 const stop = (e: React.SyntheticEvent) => e.stopPropagation()
 
+type ClipViewer = React.ComponentType<{
+	kind: 'markdown' | 'mermaid'
+	title: string
+	source: string
+	onApply: (value: string) => void
+	onClose: () => void
+}>
+
+/** Max button. The viewer is loaded on click so this file does not import it at startup. */
+function ClipExpand({
+	kind,
+	title,
+	source,
+	onApply,
+}: {
+	kind: 'markdown' | 'mermaid'
+	title: string
+	source: string
+	onApply: (value: string) => void
+}) {
+	const [Viewer, setViewer] = useState<ClipViewer | null>(null)
+	return (
+		<>
+			<button
+				type="button"
+				className="clip-max"
+				title="Full view"
+				onPointerDown={stop}
+				onClick={(event) => {
+					stop(event)
+					void import('./ClipFullscreen').then((mod) => setViewer(() => mod.ClipFullscreen))
+				}}
+			>
+				⤢
+			</button>
+			{Viewer && (
+				<Viewer kind={kind} title={title} source={source} onApply={onApply} onClose={() => setViewer(null)} />
+			)}
+		</>
+	)
+}
+
 function ClipEditor({
 	editor,
 	value,
@@ -129,6 +171,7 @@ function MarkdownClip({ shape }: { shape: MarkdownShape }) {
 
 	return (
 		<HTMLContainer className={'clip clip-markdown' + (isEditing ? ' is-editing' : '')}>
+			<ClipExpand kind="markdown" title="Markdown" source={shape.props.md} onApply={update} />
 			{isEditing ? (
 				<ClipEditor editor={editor} value={shape.props.md} onChange={update} placeholder="Markdown…" />
 			) : (
@@ -277,6 +320,12 @@ function MermaidClip({ shape }: { shape: MermaidShape }) {
 
 	return (
 		<HTMLContainer className={'clip clip-mermaid' + (isEditing ? ' is-editing' : '')}>
+			<ClipExpand
+				kind="mermaid"
+				title="Mermaid"
+				source={shape.props.code}
+				onApply={(code) => editor.updateShape<MermaidShape>({ id: shape.id, type: MERMAID, props: { code } })}
+			/>
 			{isEditing && (
 				<ClipEditor
 					editor={editor}

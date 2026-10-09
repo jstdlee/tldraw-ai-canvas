@@ -65,6 +65,8 @@ declare module 'tldraw' {
 			deleteLocked?: boolean
 			/** Text or image shape that shows an unconnected output. */
 			spillId?: string
+			/** Output history shapes, newest first. The newest sits beside the node; older ones shift right. */
+			spillIds?: string[]
 			/** Name drawn on the top edge. */
 			label?: string
 			/** Free text note kept with the node. */
@@ -88,6 +90,7 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		pinned: T.boolean.optional(),
 		deleteLocked: T.boolean.optional(),
 		spillId: T.string.optional(),
+		spillIds: T.arrayOf(T.string).optional(),
 		label: T.string.optional(),
 		note: T.string.optional(),
 		fontSize: T.number.optional(),
@@ -275,9 +278,20 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 			onContextMenu={(e) => {
 				const target = e.target as HTMLElement
 				const tag = target.tagName
-				if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+				if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') {
 					e.stopPropagation()
 				}
+			}}
+			onPointerDownCapture={(event) => {
+				// A node underneath must not open its menu when a higher shape covers the click.
+				const point = editor.screenToPage({ x: event.clientX, y: event.clientY })
+				const top = editor
+					.getShapesAtPoint(point, { hitInside: true })
+					.find((hit) => hit.type !== 'arrow' && hit.type !== 'connection')
+				if (!top || top.id === shape.id) return
+				event.preventDefault()
+				event.stopPropagation()
+				editor.select(top.id)
 			}}
 		>
 			<NodeNote shape={shape} />
@@ -334,8 +348,17 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				<NodeFooterTools shape={shape} />
 				<NodeFooterMenu shape={shape} />
 			</div>
+			<NodeRunStatus shape={shape} running={isExecuting || run?.status === 'running'} />
 		</HTMLContainer>
 	)
+}
+
+/** Model call state sits under the card, not in the settings row. */
+function NodeRunStatus({ shape, running }: { shape: NodeShape; running: boolean }) {
+	const usage = (shape.props.node as { lastUsage?: string | null }).lastUsage
+	const text = running ? 'Running…' : typeof usage === 'string' ? usage : ''
+	if (!text) return null
+	return <div className="NodeLlmStatus">{text}</div>
 }
 
 /** Copy a node value: images as image data (fallback: URL), everything else as text. */
@@ -392,14 +415,13 @@ function NodeFooterTools({ shape }: { shape: NodeShape }) {
 		const defaults = definition.getDefault() as unknown as Record<string, unknown>
 		const node = { ...(shape.props.node as unknown as Record<string, unknown>) }
 		for (const key of definition.resultKeys ?? []) node[key] = defaults[key]
-		if (shape.props.spillId) {
-			const spill = editor.getShape(shape.props.spillId as typeof shape.id)
-			if (spill) editor.deleteShapes([spill.id])
-		}
+		const spillIds = (shape.props.spillIds as string[] | undefined) ?? (shape.props.spillId ? [shape.props.spillId as string] : [])
+		const spills = spillIds.map((id) => editor.getShape(id as typeof shape.id)).filter(Boolean)
+		if (spills.length) editor.deleteShapes(spills.map((s) => s!.id))
 		editor.updateShape<NodeShape>({
 			id: shape.id,
 			type: 'node',
-			props: { node: node as NodeShape['props']['node'], spillId: undefined, isOutOfDate: true },
+			props: { node: node as NodeShape['props']['node'], spillId: undefined, spillIds: undefined, isOutOfDate: true },
 		})
 		clearNodeRun(editor, shape.id)
 	}
@@ -636,9 +658,9 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 	)
 }
 
-const DEFAULT_NODE_FONT_PX = 13
-const MIN_NODE_FONT_PX = 9
-const MAX_NODE_FONT_PX = 24
+const DEFAULT_NODE_FONT_PX = 20
+const MIN_NODE_FONT_PX = 12
+const MAX_NODE_FONT_PX = 28
 
 /**
  * A note kept with the node. The corner icon opens it. "Show all notes" in the menu opens every

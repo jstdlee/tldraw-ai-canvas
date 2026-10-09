@@ -53,7 +53,7 @@ export const ChatNode = T.object({
 	...LlmSettingsFields,
 })
 
-const MESSAGE_HEIGHT_PX = 76
+const MESSAGE_HEIGHT_PX = 220
 const EMPTY_TURN: ChatNode = {
 	type: 'chat',
 	userMessage: '',
@@ -271,35 +271,46 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 				/>
 			</NodeRow>
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
-			<div className="ChatNode-compose" style={{ height: MESSAGE_HEIGHT_PX }}>
-				<textarea
-					className="ChatNode-input NodeScroll"
-					placeholder="Message… (Ctrl+Enter to send)"
-					value={node.userMessage}
-					onPointerDown={editor.markEventAsHandled}
-					onChange={(e) =>
-						updateNode<ChatNode>(editor, shape, (n) => ({ ...n, userMessage: e.target.value }), false)
-					}
-					onKeyDown={(e) => {
-						e.stopPropagation()
-						if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend()
-					}}
-				/>
-				<button
-					className="ChatNode-send"
-					title="Send (Ctrl+Enter)"
-					disabled={busy}
-					onPointerDown={editor.markEventAsHandled}
-					onClick={handleSend}
-				>
-					{busy ? (
-						<span>…</span>
+			<div className="ChatNode-thread" style={{ minHeight: MESSAGE_HEIGHT_PX }}>
+				<div className="ChatNode-reply" onPointerDown={editor.markEventAsHandled}>
+					{node.error ? (
+						<span className="ChatNode-error">{node.error}</span>
+					) : node.assistantMessage ? (
+						node.assistantMessage
 					) : (
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-							<path d="M12 19V5M5 12l7-7 7 7" />
-						</svg>
+						<span className="NodeRow-disconnected">The reply fills this area.</span>
 					)}
-				</button>
+				</div>
+				<div className="ChatNode-compose">
+					<textarea
+						className="ChatNode-input NodeScroll"
+						placeholder="Message… (Ctrl+Enter to send)"
+						value={node.userMessage}
+						onPointerDown={editor.markEventAsHandled}
+						onChange={(e) =>
+							updateNode<ChatNode>(editor, shape, (n) => ({ ...n, userMessage: e.target.value }), false)
+						}
+						onKeyDown={(e) => {
+							e.stopPropagation()
+							if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend()
+						}}
+					/>
+					<button
+						className="ChatNode-send"
+						title="Send (Ctrl+Enter)"
+						disabled={busy}
+						onPointerDown={editor.markEventAsHandled}
+						onClick={handleSend}
+					>
+						{busy ? (
+							<span>…</span>
+						) : (
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+								<path d="M12 19V5M5 12l7-7 7 7" />
+							</svg>
+						)}
+					</button>
+				</div>
 			</div>
 		</>
 	)

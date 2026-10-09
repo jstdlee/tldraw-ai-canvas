@@ -1,3 +1,4 @@
+import { NodeSelect } from '../pipeline/nodes/types/NodeSelect'
 import { atom, useValue } from 'tldraw'
 import {
 	getDefaultModelKey,
@@ -163,7 +164,7 @@ export function ModelSelect({
 	const isLive = liveGroups.some((p) => p.models.some((m) => m.key === value))
 	const missing = value && !configured.has(value) && !isLive
 	return (
-		<select
+		<NodeSelect
 			className={className}
 			title={title ?? (value || 'Default model')}
 			value={value}
@@ -198,6 +199,6 @@ export function ModelSelect({
 			{missing && <option value={value}>{value}</option>}
 			{!live && <option disabled>Loading models from providers…</option>}
 			<option value="__providers__">AI providers…</option>
-		</select>
+		</NodeSelect>
 	)
 }

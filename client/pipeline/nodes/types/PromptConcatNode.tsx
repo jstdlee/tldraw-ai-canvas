@@ -1,3 +1,4 @@
+import { NodeSelect } from './NodeSelect'
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor, useValue } from 'tldraw'
 import { PromptConcatIcon } from '../../components/icons/PromptConcatIcon'
@@ -177,7 +178,7 @@ function PromptConcatNodeComponent({ shape, node }: NodeComponentProps<PromptCon
 			</NodeRow>
 			<NodeRow>
 				<span className="NodeInputRow-label">Sep</span>
-				<select
+				<NodeSelect
 					value={node.separator}
 					onChange={(e) =>
 						updateNode<PromptConcatNode>(editor, shape, (n) => ({
@@ -191,7 +192,7 @@ function PromptConcatNodeComponent({ shape, node }: NodeComponentProps<PromptCon
 							{s.label}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
 				<span className="NodeRow-connected-value" style={{ fontSize: 10, opacity: 0.7 }}>

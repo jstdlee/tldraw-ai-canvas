@@ -7,6 +7,7 @@ import { previewReplace, searchHits } from '../shared/searchOps'
 import { runTable, type TableJob } from '../shared/tableOps'
 
 const CSV = 'name,score\nada,9\nbea,4'
+const WIDE = 'name,score,age\nada,9,30\nbea,4,25'
 
 function job(patch: Partial<TableJob>): TableJob {
 	return {
@@ -90,12 +91,53 @@ describe('model lists', () => {
 
 describe('chart option', () => {
 	it('builds a bar series and does not animate', () => {
-		const option = chartOption(CSV, 'csv', 'bar', 'name', 'score') as {
+		const option = chartOption(CSV, 'csv', 'bar', 'name', ['score']) as {
 			animation: boolean
+			yAxis: { type: string } | { type: string }[]
 			series: { type: string; data: number[] }[]
 		}
 		expect(option.animation).toBe(false)
 		expect(option.series[0]?.type).toBe('bar')
+		expect(option.series[0]?.data).toEqual([9, 4])
+		expect(Array.isArray(option.yAxis)).toBe(false)
+	})
+
+	it('builds one series per y column', () => {
+		const option = chartOption(WIDE, 'csv', 'line', 'name', ['score', 'age']) as {
+			series: { type: string; name: string; data: number[] }[]
+		}
+		expect(option.series.map((serie) => serie.name)).toEqual(['score', 'age'])
+		expect(option.series[0]?.data).toEqual([9, 4])
+		expect(option.series[1]?.data).toEqual([30, 25])
+		expect(option.series.every((serie) => serie.type === 'line')).toBe(true)
+	})
+
+	it('uses two y-axes when dual scale is on', () => {
+		const option = chartOption(WIDE, 'csv', 'bar', 'name', ['score', 'age'], true) as {
+			yAxis: { type: string }[]
+			series: { yAxisIndex: number }[]
+		}
+		expect(option.yAxis).toHaveLength(2)
+		expect(option.series.map((serie) => serie.yAxisIndex)).toEqual([0, 1])
+	})
+
+	it('keeps one axis when dual scale has a single series', () => {
+		const option = chartOption(CSV, 'csv', 'bar', 'name', ['score'], true) as { yAxis: unknown }
+		expect(Array.isArray(option.yAxis)).toBe(false)
+	})
+
+	it('drops y columns that are not in the data', () => {
+		const option = chartOption(WIDE, 'csv', 'bar', 'name', ['gone', 'age']) as { series: { name: string }[] }
+		expect(option.series.map((serie) => serie.name)).toEqual(['age'])
+	})
+
+	it('falls back to the first column and first numeric column', () => {
+		const option = chartOption(CSV, 'csv', 'bar', 'gone', ['missing']) as {
+			xAxis: { data: string[] }
+			series: { name: string; data: number[] }[]
+		}
+		expect(option.xAxis.data).toEqual(['ada', 'bea'])
+		expect(option.series[0]?.name).toBe('score')
 		expect(option.series[0]?.data).toEqual([9, 4])
 	})
 })

@@ -12,7 +12,7 @@ import {
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	LlmSettingsFields,
@@ -73,6 +73,8 @@ export const TextAINode = T.object({
 	operation: T.string,
 	option: T.string,
 	instruction: T.string,
+	/** When set, replaces the generated job prompt. Editable under Model settings. */
+	promptOverride: T.string.optional(),
 	model: T.string,
 	lastResultText: T.string.nullable(),
 	error: T.string.nullable(),
@@ -111,7 +113,8 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 		}
 	}
 	getBodyHeightPx(_shape: NodeShape, node: TextAINode) {
-		return NODE_ROW_HEIGHT_PX * 3 + OPTION_HEIGHT_PX + llmSettingsHeight(node)
+		// The advanced job-prompt editor adds a block when settings are open.
+		return NODE_ROW_HEIGHT_PX * 3 + OPTION_HEIGHT_PX + llmSettingsHeight(node) + (node.showSettings ? 140 : 0)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
@@ -133,10 +136,11 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 	}
 	async execute(shape: NodeShape, node: TextAINode, inputs: InputValues): Promise<ExecutionResult> {
 		const input = coerceToText(getInput(inputs, 'input'))
+		const jobPrompt = node.promptOverride?.trim() || buildTextAIPrompt(node)
 		try {
 			const result = await apiGenerateText({
 				input: input || undefined,
-				prompt: input ? buildTextAIPrompt(node) : `${buildTextAIPrompt(node)}\n\n(No input was given.)`,
+				prompt: input ? jobPrompt : `${jobPrompt}\n\n(No input was given.)`,
 				model: node.model || undefined,
 				...llmRequestSettings(node),
 			})
@@ -175,7 +179,7 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 			<PortRow shapeId={shape.id} portId="input" label="Input" dataType="any" hint="text or image" />
 			<NodeRow>
 				<span className="NodeInputRow-label">Job</span>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={node.operation}
 					onPointerDown={stopEvent}
@@ -186,7 +190,7 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 							{o.label}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<div className="NodeField-block" style={{ height: OPTION_HEIGHT_PX }}>
 				{op.id === 'custom' ? (
@@ -231,6 +235,31 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 				/>
 			</NodeRow>
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
+			{node.showSettings && (
+				<div className="NodeField-block">
+					<span className="NodeField-label">
+						Job prompt (advanced)
+						{node.promptOverride != null && (
+							<button
+								type="button"
+								className="LlmSettings-reset"
+								onPointerDown={stopEvent}
+								onClick={() => set({ promptOverride: undefined }, false)}
+							>
+								reset
+							</button>
+						)}
+					</span>
+					<textarea
+						className="NodeField-textarea"
+						style={{ height: 72 }}
+						value={node.promptOverride ?? buildTextAIPrompt(node)}
+						onPointerDown={stopEvent}
+						onKeyDown={stopEvent}
+						onChange={(e) => set({ promptOverride: e.target.value }, false)}
+					/>
+				</div>
+			)}
 		</>
 	)
 }

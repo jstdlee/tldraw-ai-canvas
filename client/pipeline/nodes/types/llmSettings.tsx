@@ -1,3 +1,4 @@
+import { NodeSelect } from './NodeSelect'
 import { Editor, T } from 'tldraw'
 import { NodeShape } from '../NodeShapeUtil'
 import { NodeType } from '../nodeTypes'
@@ -38,9 +39,8 @@ export const DEFAULT_LLM_SETTINGS: Required<LlmSettings> = {
 }
 
 /** Height of the open settings panel (closed: one row for the toggle). */
-export const LLM_SETTINGS_OPEN_HEIGHT_PX = 176
+export const LLM_SETTINGS_OPEN_HEIGHT_PX = 196
 export const LLM_SETTINGS_TOGGLE_HEIGHT_PX = 28
-
 export function llmSettingsHeight(node: LlmSettings) {
 	return LLM_SETTINGS_TOGGLE_HEIGHT_PX + (node.showSettings ? LLM_SETTINGS_OPEN_HEIGHT_PX : 0)
 }
@@ -75,7 +75,6 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 				onClick={() => set({ showSettings: !node.showSettings })}
 			>
 				{node.showSettings ? '▾' : '▸'} Model settings
-				{node.lastUsage && <span className="LlmSettings-usage">{node.lastUsage}</span>}
 				{!node.showSettings && !node.lastUsage && (node.system || node.temperature != null || node.maxTokens != null || node.thinking) && (
 					<span className="LlmSettings-badge">custom</span>
 				)}
@@ -112,7 +111,7 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 					</label>
 					<label className="LlmSettings-row">
 						<span>Thinking</span>
-						<select
+						<NodeSelect
 							className="NodeField-select"
 							value={node.thinking ?? ''}
 							onPointerDown={stop}
@@ -123,7 +122,7 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 							<option value="low">low</option>
 							<option value="medium">medium</option>
 							<option value="high">high (slow, careful)</option>
-						</select>
+						</NodeSelect>
 					</label>
 					<label className="LlmSettings-row">
 						<span>Max tokens</span>
@@ -135,9 +134,9 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 							onPointerDown={stop}
 							onKeyDown={stop}
 							onChange={(e) => set({ maxTokens: e.target.value ? Math.max(1, Number(e.target.value)) : null })}
-						/>
-					</label>
-				</div>
+					/>
+				</label>
+			</div>
 			)}
 		</div>
 	)

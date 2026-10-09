@@ -1,0 +1,131 @@
+.clipfs-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 900;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+	background: transparent;
+	pointer-events: none;
+}
+
+.clipfs {
+	pointer-events: all;
+	display: flex;
+	flex-direction: column;
+	width: calc(100vw - 32px);
+	height: calc(100vh - 32px);
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text);
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-3, 12px);
+	box-shadow: var(--tl-shadow-3);
+	overflow: hidden;
+	font-family: var(--tl-font-sans, 'Inter', sans-serif);
+	font-size: 14px;
+}
+
+.clipfs-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--tl-color-divider);
+}
+
+.clipfs-title {
+	font-size: 13px;
+}
+
+.clipfs-spacer {
+	flex: 1;
+}
+
+.clipfs-toggle,
+.clipfs-zoom {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.clipfs-bar button {
+	font: inherit;
+	font-size: 12px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2, 6px);
+	background: var(--tl-color-muted-0);
+	color: var(--tl-color-text);
+	padding: 4px 8px;
+	cursor: pointer;
+	pointer-events: all;
+}
+
+.clipfs-bar button.is-on {
+	background: var(--tl-color-selected);
+	color: var(--tl-color-selected-contrast, #fff);
+	border-color: transparent;
+}
+
+.clipfs-close {
+	width: 28px;
+}
+
+.clipfs-body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.clipfs-textarea {
+	flex: 1;
+	width: 100%;
+	margin: 0;
+	padding: 16px;
+	border: 0;
+	resize: none;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text);
+	font: inherit;
+	line-height: 1.5;
+}
+
+.clipfs-textarea.is-mono {
+	font-family: ui-monospace, monospace;
+	font-size: 13px;
+}
+
+.clipfs-md-preview {
+	flex: 1;
+	overflow: auto;
+	padding: 16px 20px;
+}
+
+.clipfs-viewport {
+	flex: 1;
+	overflow: auto;
+	cursor: grab;
+	background: var(--tl-color-low);
+}
+
+.clipfs-stage {
+	position: relative;
+}
+
+.clipfs-mermaid {
+	transform-origin: 0 0;
+}
+
+.clipfs-mermaid svg {
+	display: block;
+	max-width: none;
+	max-height: none;
+}
+
+.clipfs-error,
+.clipfs-status {
+	margin: 16px;
+	white-space: pre-wrap;
+	color: var(--tl-color-text-2);
+}

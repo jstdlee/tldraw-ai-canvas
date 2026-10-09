@@ -15,7 +15,7 @@ export interface SearchHit {
 
 export function compileSearch(query: SearchQuery): RegExp | null {
 	if (!query.text) return null
-	const flags = query.caseSensitive ? 'g' : 'gi'
+	const flags = (query.caseSensitive ? 'g' : 'gi') + (query.text.includes('\n') ? 's' : '')
 	if (query.regexp) return new RegExp(query.text, flags)
 	const escaped = query.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 	return new RegExp(escaped, flags)

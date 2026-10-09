@@ -2,7 +2,7 @@
 
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync, appendFileSync, renameSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, extname, isAbsolute, join, resolve, sep } from 'node:path'
 import { Hono } from 'hono'
@@ -14,8 +14,6 @@ import { freeModels, modelsFromPayload } from '../shared/modelPick'
 const MAX_STDIN = 1024 * 1024 // 1 MiB typed into a node
 const MAX_OUT = 1024 * 1024 // 1 MiB back to the canvas
 const MAX_TEXT_FILE = 1024 * 1024
-const HISTORY_FILE = 'ops.jsonl'
-const HISTORY_LIMIT = 5 * 1024 * 1024 // rotate past 5 MB
 const TEXT_EXT = /\.(txt|md|json|jsonl|csv|tsv|log|xml|ya?ml|html?|css|js|ts|py|sql|svg|ini|toml)$/i
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i
 
@@ -115,41 +113,6 @@ function safeName(name: string): string {
 	return clean || 'output'
 }
 
-function historyDir() {
-	const dir = join(dataDir(), 'history')
-	mkdirSync(dir, { recursive: true })
-	return dir
-}
-
-/** Rotate ops.jsonl to ops.1.jsonl once it passes the size limit, dropping the oldest half. */
-function rotateHistory(file: string) {
-	try {
-		if (statSync(file).size < HISTORY_LIMIT) return
-		renameSync(file, file.replace(HISTORY_FILE, 'ops.1.jsonl'))
-	} catch {
-		// First run or a locked file: keep appending.
-	}
-}
-
-function searchHistory(query: string): unknown[] {
-	const q = query.toLowerCase()
-	const found: unknown[] = []
-	for (const name of ['ops.1.jsonl', HISTORY_FILE]) {
-		const file = join(historyDir(), name)
-		if (!existsSync(file)) continue
-		for (const line of readFileSync(file, 'utf8').split('\n')) {
-			if (!line.trim()) continue
-			try {
-				const op = JSON.parse(line) as { label?: string; kind?: string }
-				if (!q || (op.label ?? '').toLowerCase().includes(q) || (op.kind ?? '').includes(q)) found.push(op)
-			} catch {
-				// Skip a truncated line.
-			}
-		}
-	}
-	return found.slice(-80)
-}
-
 export function registerBatchRoutes(app: Hono) {
 	app.post('/api/tool', async (c) => {
 		const body = (await c.req.json()) as { tool?: string; args?: string; stdin?: string }
@@ -214,12 +177,13 @@ export function registerBatchRoutes(app: Hono) {
 			temperature?: number
 			thinking?: string
 			maxTokens?: number
+			apiKey?: string
 		}
 		const base = (body.url ?? '').trim().replace(/\/$/, '')
 		if (!/^https?:\/\//.test(base)) throw new Error('URL must start with http:// or https://')
 		const model = (body.model ?? '').trim()
 		if (!model) throw new Error('Set a model id')
-		const key = resolveSecret(body.keyName, process.env)
+		const key = (body.apiKey ?? '').trim() || resolveSecret(body.keyName, process.env)
 		const endpoint = /\/(chat\/completions|completions|messages)$/.test(base) ? base : `${base}/chat/completions`
 		const thinking = body.thinking && body.thinking !== 'off' ? body.thinking : undefined
 		const payload: Record<string, unknown> = {
@@ -265,17 +229,9 @@ export function registerBatchRoutes(app: Hono) {
 		return c.json({ models })
 	})
 
-	app.post('/api/history', async (c) => {
-		const op = stripSecrets(await c.req.json())
-		const file = join(historyDir(), HISTORY_FILE)
-		appendFileSync(file, JSON.stringify(op) + '\n')
-		rotateHistory(file)
-		return c.json({ ok: true })
-	})
+	app.post('/api/history', (c) => c.json({ ok: true }))
 
-	app.get('/api/history', (c) => {
-		return c.json({ ops: searchHistory(c.req.query('q') ?? '') })
-	})
+	app.get('/api/history', (c) => c.json({ ops: [] }))
 
 	app.post('/api/backup', async (c) => {
 		const body = (await c.req.json()) as { snapshot?: unknown }

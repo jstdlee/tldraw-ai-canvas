@@ -7,7 +7,7 @@ import { RouterIcon } from '../../components/icons/RouterIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, stopEvent, useInputConnected } from './fields'
+import { PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -223,11 +223,11 @@ function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 				/>
 			</div>
 			<NodeRow>
-				<select className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
 					<option value="noul">Yes / no</option>
 					<option value="choice">Choose one option</option>
 					<option value="score">Score on a scale</option>
-				</select>
+				</NodeSelect>
 				<ModelSelect className="node-model-select" capability="jev" value={node.model} onChange={(model) => set({ model }, false)} />
 			</NodeRow>
 			{node.kind !== 'noul' && (

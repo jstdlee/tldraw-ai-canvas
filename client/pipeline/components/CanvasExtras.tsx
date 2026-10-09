@@ -1,46 +1,35 @@
 import { useEffect, useState } from 'react'
-import { atom, useEditor, useValue } from 'tldraw'
-import { EXAMPLES } from '../../../shared/examples'
+import { useEditor, useValue } from 'tldraw'
 import { catalogPrompt } from '../../../shared/nodeCatalog'
-import { $assist, assistDraft, runCompose, runFill, setAssistDraft } from '../assist'
-import { loadExample } from '../loadExample'
+import { $aiNote, $assist, assistDraft, runCompose, runFill, setAssistDraft } from '../assist'
 import { $searchBlink } from '../../shell/shellState'
 
-export const $examplesOpen = atom('examples open', false)
-
-/** Floating AI for the selection, the assist dialog, the examples dialog, and the search blink. */
+/** Floating AI for one node or a selection, plus the search blink. */
 export function CanvasExtras() {
 	const editor = useEditor()
 	const assist = useValue('assist', () => $assist.get(), [])
-	const examplesOpen = useValue('examples', () => $examplesOpen.get(), [])
-	const selected = useValue('selected nodes', () => editor.getSelectedShapes().filter((shape) => shape.type === 'node'), [editor])
+	const note = useValue('ai note', () => $aiNote.get(), [])
 
 	return (
 		<>
 			<SearchBlink />
-			{selected.length > 0 && !assist && (
-				<button
-					className="SelectionAssist"
-					title="Tell the agent what these nodes should do"
-					onPointerDown={(event) => event.stopPropagation()}
-					onClick={() => $assist.set({ mode: 'compose', shapeIds: selected.map((shape) => shape.id) })}
-				>
-					✦ Shape with AI
-				</button>
-			)}
 			{assist?.mode === 'fill' && <FillChatCard shapeId={assist.shapeId} onClose={() => $assist.set(null)} />}
 			{assist?.mode === 'compose' && (
 				<AssistDialog
 					title="What should these nodes do?"
-					hint="The agent wires the selection, fills fields, and adds any node that is missing."
+					hint="The agent reads each node's fields and wires, then fills them or adds the missing connection."
 					onClose={() => $assist.set(null)}
 					onSubmit={async (intent) => {
-						await runCompose(editor, assist.shapeIds, intent)
-						$assist.set(null)
+						const result = await runCompose(editor, assist.shapeIds, intent)
+						if (!result.direction) {
+							$assist.set(null)
+							return
+						}
+						return result.changed ? `Applied. ${result.direction}` : result.direction
 					}}
 				/>
 			)}
-			{examplesOpen && <ExamplesDialog onClose={() => $examplesOpen.set(false)} />}
+			{note != null && <NoteDialog text={note} onClose={() => $aiNote.set(null)} />}
 		</>
 	)
 }
@@ -80,6 +69,7 @@ function FillChatCard({ shapeId, onClose }: { shapeId: import('tldraw').TLShapeI
 	const editor = useEditor()
 	const [text, setText] = useState(() => assistDraft(shapeId))
 	const [error, setError] = useState<string | null>(null)
+	const [note, setNote] = useState<string | null>(null)
 	const [busy, setBusy] = useState(false)
 	// Anchor to the node's bottom edge in viewport space; follow pan/zoom.
 	const position = useValue(
@@ -119,6 +109,7 @@ function FillChatCard({ shapeId, onClose }: { shapeId: import('tldraw').TLShapeI
 					setAssistDraft(shapeId, event.target.value)
 				}}
 			/>
+			{note && <p className="AssistDialog-note">{note}</p>}
 			{error && <p className="AssistDialog-error">{error}</p>}
 			<div className="AssistDialog-actions">
 				<button type="button" onClick={close}>
@@ -131,8 +122,13 @@ function FillChatCard({ shapeId, onClose }: { shapeId: import('tldraw').TLShapeI
 						setBusy(true)
 						setError(null)
 						try {
-							await runFill(editor, shapeId, text.trim())
+							const result = await runFill(editor, shapeId, text.trim())
 							setAssistDraft(shapeId, '')
+							if (result.direction) {
+								setNote(result.changed ? `Applied. ${result.direction}` : result.direction)
+								setBusy(false)
+								return
+							}
 							onClose()
 						} catch (cause) {
 							setError((cause as Error).message)
@@ -156,10 +152,11 @@ function AssistDialog({
 	title: string
 	hint: string
 	onClose: () => void
-	onSubmit: (intent: string) => Promise<void>
+	onSubmit: (intent: string) => Promise<string | void>
 }) {
 	const [text, setText] = useState('')
 	const [error, setError] = useState<string | null>(null)
+	const [note, setNote] = useState<string | null>(null)
 	const [busy, setBusy] = useState(false)
 	const [abilities, setAbilities] = useState(false)
 	return (
@@ -182,6 +179,7 @@ function AssistDialog({
 					placeholder="Example: turn this into a short title, then save it"
 					onChange={(event) => setText(event.target.value)}
 				/>
+				{note && <p className="AssistDialog-note">{note}</p>}
 				{error && <p className="AssistDialog-error">{error}</p>}
 				<div className="AssistDialog-actions">
 					<button type="button" onClick={onClose}>
@@ -194,7 +192,13 @@ function AssistDialog({
 							setBusy(true)
 							setError(null)
 							try {
-								await onSubmit(text.trim())
+								const message = await onSubmit(text.trim())
+								if (message) {
+									setNote(message)
+									setBusy(false)
+									return
+								}
+								onClose()
 							} catch (cause) {
 								setError((cause as Error).message)
 								setBusy(false)
@@ -209,35 +213,21 @@ function AssistDialog({
 	)
 }
 
-function ExamplesDialog({ onClose }: { onClose: () => void }) {
-	const editor = useEditor()
+function NoteDialog({ text, onClose }: { text: string; onClose: () => void }) {
 	return (
 		<div className="AssistDialog-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
-			<div className="AssistDialog ExamplesDialog" role="dialog" aria-label="Examples">
+			<div className="AssistDialog" role="dialog" aria-label="AI answer">
 				<div className="AssistDialog-bar">
-					<strong>Example workflows</strong>
+					<strong>✦ AI</strong>
 					<button type="button" onClick={onClose} aria-label="Close">
 						×
 					</button>
 				</div>
-				<div className="ExamplesDialog-list">
-					{EXAMPLES.map((example) => (
-						<button
-							key={example.id}
-							type="button"
-							className="ExamplesDialog-item"
-							onClick={() => {
-								const view = editor.getViewportPageBounds()
-								loadExample(editor, example, { x: view.minX + 80, y: view.minY + 80 })
-								onClose()
-							}}
-						>
-							<span>{example.title}</span>
-							<small>
-								{example.nodes.length} nodes. {example.blurb}
-							</small>
-						</button>
-					))}
+				<pre className="AbilityList">{text}</pre>
+				<div className="AssistDialog-actions">
+					<button type="button" onClick={onClose}>
+						Close
+					</button>
 				</div>
 			</div>
 		</div>

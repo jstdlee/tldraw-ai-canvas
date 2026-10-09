@@ -10,13 +10,14 @@ import {
 	PgType,
 	suggestColumns,
 } from '../../../../shared/pgImport'
+import { apiHttp } from '../../api/pipelineApi'
 import { runSql } from '../../pg'
 import { NumberIcon } from '../../components/icons/NumberIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { CodeArea } from '../../editors/CodeArea'
-import { PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -45,6 +46,8 @@ export const PostgresNode = T.object({
 	mode: T.string.optional(),
 	/** CSV used when nothing is wired into the input. */
 	csv: T.string.optional(),
+	/** Fetch this URL (CSV or TSV) when the input port is empty. */
+	sourceUrl: T.string.optional(),
 	/** The saved import steps (JSON). Reused on every run. */
 	recipe: T.string.optional(),
 })
@@ -79,7 +82,7 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 	category = categoryOf('postgres')
 	resultKeys = ['lastText', 'error'] as const
 	getDefault(): PostgresNode {
-		return { type: 'postgres', sql: DEFAULT_SQL, lastText: null, error: null, mode: 'sql', csv: '', recipe: '' }
+		return { type: 'postgres', sql: DEFAULT_SQL, lastText: null, error: null, mode: 'sql', csv: '', sourceUrl: '', recipe: '' }
 	}
 	override getWidthPx() {
 		return WIDTH
@@ -87,7 +90,7 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 	getBodyHeightPx(_shape: NodeShape, node: PostgresNode) {
 		if (node.mode === 'import') {
 			const columns = readRecipe(node)?.columns.length ?? 0
-			return NODE_ROW_HEIGHT_PX * (3 + columns) + CSV_HEIGHT + 56
+			return NODE_ROW_HEIGHT_PX * (4 + columns) + CSV_HEIGHT + 56
 		}
 		return NODE_ROW_HEIGHT_PX * 2 + SQL_HEIGHT
 	}
@@ -103,8 +106,10 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 		try {
 			let text: string
 			if (node.mode === 'import') {
-				const source = input == null ? (node.csv ?? '') : coerceToText(input)
-				if (!source.trim()) throw new Error('Wire CSV text into the input, or paste it in the node')
+				let source = input == null ? '' : coerceToText(input)
+				if (!source.trim() && node.sourceUrl?.trim()) source = await textFromUrl(node.sourceUrl)
+				if (!source.trim()) source = node.csv ?? ''
+				if (!source.trim()) throw new Error('Wire CSV text, paste it, or set a URL')
 				// The saved steps are reused. Without them, guess once and keep the guess.
 				const recipe = readRecipe(node) ?? makeRecipe(source, 'imported')
 				const { sql, rows, truncated } = importSql(source, recipe)
@@ -139,6 +144,16 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 	Component = PostgresNodeComponent
 }
 
+async function textFromUrl(url: string): Promise<string> {
+	const trimmed = url.trim()
+	if (!trimmed) throw new Error('Type a URL')
+	const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+	const result = await apiHttp({ method: 'GET', url: href, extractText: true })
+	if (!result.ok) throw new Error(`URL returned ${result.status}`)
+	if (!result.text.trim()) throw new Error('The URL returned no text')
+	return result.text
+}
+
 function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>) {
 	const editor = useEditor()
 	const set = (patch: Partial<PostgresNode>) => updateNode<PostgresNode>(editor, shape, (n) => ({ ...n, ...patch }))
@@ -166,10 +181,10 @@ function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>
 		<>
 			<PortRow shapeId={shape.id} portId="input" label={importing ? 'CSV' : '$1'} dataType="text" hint={importing ? 'or paste below' : 'optional value'} />
 			<NodeRow>
-				<select className="NodeField-select" value={importing ? 'import' : 'sql'} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={importing ? 'import' : 'sql'} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
 					<option value="sql">Run SQL</option>
 					<option value="import">Import CSV</option>
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			{!importing && (
 				<div onPointerDown={stopEvent}>
@@ -178,6 +193,30 @@ function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>
 			)}
 			{importing && (
 				<>
+					<NodeRow>
+						<input
+							className="NodeField-input"
+							placeholder="https://example.com/data.csv"
+							title="Load a CSV or TSV from a URL"
+							value={node.sourceUrl ?? ''}
+							onPointerDown={stopEvent}
+							onKeyDown={stopEvent}
+							onChange={(e) => set({ sourceUrl: e.target.value })}
+						/>
+						<button
+							type="button"
+							className="NodeField-button"
+							title="Download the URL into the box below"
+							onPointerDown={stopEvent}
+							onClick={() => {
+								void textFromUrl(node.sourceUrl ?? '')
+									.then((csv) => set({ csv, error: null }))
+									.catch((error) => set({ error: (error as Error).message }))
+							}}
+						>
+							Load
+						</button>
+					</NodeRow>
 					<textarea
 						className="NodeField-textarea"
 						style={{ height: CSV_HEIGHT }}
@@ -219,11 +258,11 @@ function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>
 					{recipe?.columns.map((column, index) => (
 						<NodeRow key={index}>
 							<input className="NodeField-input" value={column.name} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => setColumn(index, { name: e.target.value })} />
-							<select className="NodeField-select" value={column.type} onPointerDown={stopEvent} onChange={(e) => setColumn(index, { type: e.target.value as PgType })}>
+							<NodeSelect className="NodeField-select" value={column.type} onPointerDown={stopEvent} onChange={(e) => setColumn(index, { type: e.target.value as PgType })}>
 								{PG_TYPES.map((type) => (
 									<option key={type} value={type}>{type}</option>
 								))}
-							</select>
+							</NodeSelect>
 						</NodeRow>
 					))}
 					<NodeRow>

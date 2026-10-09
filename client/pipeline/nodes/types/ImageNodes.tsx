@@ -29,7 +29,7 @@ import {
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { ImageZoom } from '../../editors/LargeEditor'
-import { PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -308,13 +308,13 @@ function CropNodeComponent({ shape, node }: NodeComponentProps<CropNode>) {
 			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
 			<NodeRow>
 				<span className="NodeInputRow-label">Shape</span>
-				<select className="NodeField-select" value={node.aspect} onPointerDown={stopEvent} onChange={(e) => set({ aspect: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.aspect} onPointerDown={stopEvent} onChange={(e) => set({ aspect: e.target.value })}>
 					{Object.keys(ASPECTS).map((a) => (
 						<option key={a} value={a}>
 							{a === 'Custom' ? 'Custom box (%)' : `${a} centred`}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			{node.aspect === 'Custom' && (
 				<>
@@ -384,7 +384,7 @@ function ImageResizeNodeComponent({ shape, node }: NodeComponentProps<ImageResiz
 			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
 			<NodeRow>
 				<span className="NodeInputRow-label">Mode</span>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={node.mode}
 					onPointerDown={stopEvent}
@@ -398,7 +398,7 @@ function ImageResizeNodeComponent({ shape, node }: NodeComponentProps<ImageResiz
 					<option value="scale">Scale (%)</option>
 					<option value="width">Width (px), keep ratio</option>
 					<option value="height">Height (px), keep ratio</option>
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
 				<NumberField
@@ -483,7 +483,7 @@ function ImageFilterNodeComponent({ shape, node }: NodeComponentProps<ImageFilte
 			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
 			<NodeRow>
 				<span className="NodeInputRow-label">Preset</span>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={matchPreset(node)}
 					onPointerDown={stopEvent}
@@ -498,7 +498,7 @@ function ImageFilterNodeComponent({ shape, node }: NodeComponentProps<ImageFilte
 							{p}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<div className="NodeField-block" style={{ height: SLIDERS.length * 26 }}>
 				{SLIDERS.map((s) => (
@@ -601,7 +601,7 @@ function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNod
 		<>
 			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
 			<NodeRow>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={node.tool}
 					onPointerDown={stopEvent}
@@ -612,14 +612,14 @@ function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNod
 							{t.label}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ tool: 'info', a: '', b: '' })}>
 					Restore default
 				</TldrawUiButton>
 			</NodeRow>
 			<NodeRow>
 				{node.tool === 'look' ? (
-					<select
+					<NodeSelect
 						className="NodeField-select"
 						value={FILTER_PRESETS[node.a] ? node.a : 'JP 90s'}
 						onPointerDown={stopEvent}
@@ -632,7 +632,7 @@ function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNod
 									{name}
 								</option>
 							))}
-					</select>
+					</NodeSelect>
 				) : (
 					<>
 						{'a' in tool && (

@@ -30,6 +30,15 @@ export interface ComposePlan {
 	connect: ComposeWire[]
 }
 
+/** One reply can advise, fill fields, add nodes, and add wires. */
+export interface AssistPlan {
+	direction: string
+	props: Record<string, unknown>
+	updates: ComposeUpdate[]
+	add: ComposeAdd[]
+	connect: ComposeWire[]
+}
+
 export function extractJsonObject(text: string): unknown {
 	const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
 	const raw = (fenced ? fenced[1] : text).trim()
@@ -43,45 +52,84 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
-export function parseFillPlan(text: string): FillPlan {
-	const data = extractJsonObject(text)
-	const record = isRecord(data) ? data : {}
-	const props = isRecord(record.props) ? record.props : record
-	if (!isRecord(props)) throw new Error('The reply needs a props object')
-	const clean = { ...props }
-	delete clean.type
-	return { props: clean }
+function cleanProps(value: unknown): Record<string, unknown> {
+	if (!isRecord(value)) return {}
+	const props = { ...value }
+	delete props.type
+	return props
 }
 
-export function parseComposePlan(text: string): ComposePlan {
-	const data = extractJsonObject(text)
-	if (!isRecord(data)) throw new Error('The reply needs a JSON object')
-	const updates = (Array.isArray(data.updates) ? data.updates : []).flatMap((item) => {
+function readUpdates(value: unknown): ComposeUpdate[] {
+	return (Array.isArray(value) ? value : []).flatMap((item) => {
 		if (!isRecord(item) || typeof item.id !== 'string' || !isRecord(item.props)) return []
-		const props = { ...item.props }
-		delete props.type
-		return [{ id: item.id, props }]
+		return [{ id: item.id, props: cleanProps(item.props) }]
 	})
-	const add = (Array.isArray(data.add) ? data.add : []).flatMap((item) => {
+}
+
+function readAdd(value: unknown): ComposeAdd[] {
+	return (Array.isArray(value) ? value : []).flatMap((item) => {
 		if (!isRecord(item) || typeof item.tempId !== 'string' || typeof item.type !== 'string') return []
 		return [
 			{
 				tempId: item.tempId,
 				type: item.type,
-				props: isRecord(item.props) ? item.props : {},
+				props: cleanProps(item.props),
 				x: typeof item.x === 'number' ? item.x : 0,
 				y: typeof item.y === 'number' ? item.y : 0,
 			},
 		]
 	})
-	const connect = (Array.isArray(data.connect) ? data.connect : []).flatMap((item) => {
+}
+
+function readConnect(value: unknown): ComposeWire[] {
+	return (Array.isArray(value) ? value : []).flatMap((item) => {
 		if (!isRecord(item)) return []
 		if (typeof item.from !== 'string' || typeof item.to !== 'string') return []
 		if (typeof item.fromPort !== 'string' || typeof item.toPort !== 'string') return []
 		return [{ from: item.from, fromPort: item.fromPort, to: item.to, toPort: item.toPort }]
 	})
+}
+
+export function parseFillPlan(text: string): FillPlan {
+	const data = extractJsonObject(text)
+	const record = isRecord(data) ? data : {}
+	const props = isRecord(record.props) ? record.props : record
+	if (!isRecord(props)) throw new Error('The reply needs a props object')
+	return { props: cleanProps(props) }
+}
+
+export function parseComposePlan(text: string): ComposePlan {
+	const data = extractJsonObject(text)
+	if (!isRecord(data)) throw new Error('The reply needs a JSON object')
+	const updates = readUpdates(data.updates)
+	const add = readAdd(data.add)
+	const connect = readConnect(data.connect)
 	if (!updates.length && !add.length && !connect.length) throw new Error('The reply has no changes')
 	return { updates, add, connect }
+}
+
+const ASSIST_KEYS = new Set(['direction', 'props', 'updates', 'add', 'connect', 'type'])
+
+/** Accept a full plan, or a bare field object from an older reply. */
+export function parseAssistPlan(text: string): AssistPlan {
+	const data = extractJsonObject(text)
+	const record = isRecord(data) ? data : {}
+	const direction = typeof record.direction === 'string' ? record.direction.trim() : ''
+	let props = cleanProps(record.props)
+	if (!Object.keys(props).length && !record.updates && !record.add && !record.connect) {
+		props = {}
+		for (const [key, value] of Object.entries(record)) {
+			if (ASSIST_KEYS.has(key)) continue
+			props[key] = value
+		}
+	}
+	return {
+		direction,
+		props,
+		updates: readUpdates(record.updates),
+		add: readAdd(record.add),
+		connect: readConnect(record.connect),
+	}
 }
 
 /** Keep only fields the node already has, plus type is never changed. */

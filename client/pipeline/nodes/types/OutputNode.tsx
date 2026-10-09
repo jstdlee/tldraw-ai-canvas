@@ -6,7 +6,7 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE
 import { ShapePort } from '../../ports/Port'
 import { ValuePreview } from '../../ValuePreview'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -94,7 +94,7 @@ function OutputNodeComponent({ shape, node }: NodeComponentProps<OutputNode>) {
 			<PortRow shapeId={shape.id} portId="input" label="Value" dataType="any" />
 			<NodeRow>
 				<span className="NodeInputRow-label">Show as</span>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={node.kind}
 					onPointerDown={stopEvent}
@@ -105,7 +105,7 @@ function OutputNodeComponent({ shape, node }: NodeComponentProps<OutputNode>) {
 							{k.label}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<div className="NodeGrow NodeOutputView" style={{ height: VIEW_HEIGHT_PX - 8 }}>
 				{node.lastValue ? (

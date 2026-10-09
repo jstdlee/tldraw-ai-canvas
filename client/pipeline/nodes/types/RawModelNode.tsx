@@ -6,7 +6,7 @@ import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -72,25 +72,27 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 		return WIDTH
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 6 + 96
+		return NODE_ROW_HEIGHT_PX * 7 + 96
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
 			prompt: { id: 'prompt', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'text' },
+			model: { id: 'model', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 1.5, terminal: 'end', dataType: 'text' },
 			output: { id: 'output', x: WIDTH, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}
 	async execute(shape: NodeShape, node: RawModelNode, inputs: InputValues): Promise<ExecutionResult> {
 		try {
 			const prompt = getInputText(inputs, 'prompt')
+			const model = getInputText(inputs, 'model').trim() || node.model.trim()
 			if (!prompt.trim()) throw new Error('Connect a prompt')
-			if (!node.model.trim()) throw new Error('Set a model id')
+			if (!model) throw new Error('Set a model id, or wire one in')
 			const response = await fetch('/api/raw-model', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					url: node.url,
-					model: node.model,
+					model,
 					apiKey: node.apiKey || undefined,
 					system: node.system || undefined,
 					temperature: node.temperature === '' ? undefined : Number(node.temperature),
@@ -145,8 +147,9 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="prompt" label="Prompt" dataType="text" />
+			<PortRow shapeId={shape.id} portId="model" label="Model id" dataType="text" hint="or type below" />
 			<Field label="URL">{text('url', 'https://api.openai.com/v1')}</Field>
-			<Field label="Model">{text('model', 'model id')}</Field>
+			<Field label="Model">{text('model', 'model id, or wire one')}</Field>
 			<Field label="Key">{text('apiKey', 'optional', 'password')}</Field>
 			<textarea
 				className="NodeField-textarea"
@@ -160,15 +163,14 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 			<Field label="Temp">{text('temperature', 'default', 'number')}</Field>
 			<Field label="Max tok">{text('maxTokens', 'default', 'number')}</Field>
 			<Field label="Think">
-				<select className="NodeField-select" value={node.thinking} onPointerDown={stopEvent} onChange={(e) => set({ thinking: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.thinking} onPointerDown={stopEvent} onChange={(e) => set({ thinking: e.target.value })}>
 					<option value="">default</option>
 					<option value="none">none</option>
 					<option value="low">low</option>
 					<option value="medium">medium</option>
 					<option value="high">high</option>
-				</select>
+				</NodeSelect>
 			</Field>
-			{node.lastUsage && <span className="NodeHint">{node.lastUsage}</span>}
 			{node.error && (
 				<NodeRow>
 					<span className="NodeStatus is-error">{node.error}</span>

@@ -10,6 +10,7 @@ import {
 	TLShapeId,
 	toRichText,
 } from 'tldraw'
+import { $aiNote, openComposeAssist, openFillAssist } from '../pipeline/assist'
 import { apiGenerateText, apiHttp } from '../pipeline/api/pipelineApi'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../pipeline/placeOnCanvas'
 import { isMermaid, looksLikeMarkdown } from '../../shared/clipText'
@@ -128,14 +129,30 @@ export async function aiExplainSelection(editor: Editor, notify: Notify) {
 }
 
 export async function aiAskSelection(editor: Editor, notify: Notify) {
+	const nodes = editor.getSelectedShapes().filter((shape) => shape.type === 'node')
+	if (nodes.length === 1) {
+		openFillAssist(nodes[0].id)
+		return
+	}
+	if (nodes.length > 1) {
+		openComposeAssist(nodes.map((shape) => shape.id))
+		return
+	}
 	const question = window.prompt('Ask AI about the selection:')
 	if (!question) return
 	const text = selectionText(editor)
 	const snapshot = await selectionSnapshot(editor)
 	const input = snapshot ?? text
 	if (!input) return notify('Select something first', 'warning')
-	const prompt = text ? `Text in the selection:\n${text.slice(0, 8000)}\n\nQuestion: ${question}` : question
-	return runAI(editor, notify, 'Ask AI', input, prompt)
+	notify('Ask AI…')
+	try {
+		const prompt = text ? `Text in the selection:\n${text.slice(0, 8000)}\n\nQuestion: ${question}` : question
+		const { text: answer } = await apiGenerateText({ input, prompt })
+		$aiNote.set(answer.trim() || 'No answer')
+		notify('Ask AI: done', 'success')
+	} catch (e) {
+		notify(`Ask AI failed: ${(e as Error).message}`, 'error')
+	}
 }
 
 export async function aiTextJob(editor: Editor, notify: Notify, job: 'summarize' | 'translate' | 'improve' | 'brainstorm') {

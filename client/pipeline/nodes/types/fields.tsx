@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { TLShapeId, useEditor, useValue } from 'tldraw'
+export { NodeMultiSelect, NodeSelect } from './NodeSelect'
 import { FieldMax, LargeEditor } from '../../editors/LargeEditor'
 import { PortDataType } from '../../constants'
 import { Port } from '../../ports/Port'

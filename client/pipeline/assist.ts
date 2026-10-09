@@ -1,22 +1,31 @@
 import { atom, createBindingId, createShapeId, Editor, TLShapeId } from 'tldraw'
-import { allowedProps, parseComposePlan, parseFillPlan } from '../../shared/nodeAssist'
-import { catalogPrompt } from '../../shared/nodeCatalog'
+import { allowedProps, parseAssistPlan, type AssistPlan } from '../../shared/nodeAssist'
+import { catalogPrompt, NODE_PORTS } from '../../shared/nodeCatalog'
 import { featurePrompt } from '../../shared/featureList'
 import { shapeText } from '../clips/shapeText'
 import { apiGenerateText } from './api/pipelineApi'
 import { getNodeDefinition, NodeType } from './nodes/nodeTypes'
 import { NodeShape } from './nodes/NodeShapeUtil'
+import { getNodePortConnections } from './nodes/nodePorts'
 
 export const $assist = atom<{ mode: 'fill'; shapeId: TLShapeId } | { mode: 'compose'; shapeIds: TLShapeId[] } | null>(
 	'node assist',
 	null
 )
 
+/** Answer text for a selection that is not a node. Shown in a dialog, not on the canvas. */
+export const $aiNote = atom<string | null>('ai note', null)
+
 /**
  * Draft text per node, so closing the AI-star card and reopening it brings back
  * what you were typing. Keyed by shape id.
  */
 export const $assistDrafts = atom<Record<string, string>>('assist drafts', {})
+
+export interface AssistResult {
+	direction: string
+	changed: boolean
+}
 
 export function assistDraft(shapeId: TLShapeId): string {
 	return $assistDrafts.get()[shapeId] ?? ''
@@ -39,6 +48,21 @@ export function openComposeAssist(shapeIds: TLShapeId[]) {
 	$assist.set({ mode: 'compose', shapeIds })
 }
 
+const ASSIST_SYSTEM =
+	'You improve workflow nodes. Read each node\'s properties, attributes, wires, and the user prompt. ' +
+	'Reply with JSON only:\n' +
+	'{"direction":"one sentence","props":{},"updates":[{"id":"shape id","props":{}}],' +
+	'"add":[{"tempId":"n1","type":"prompt","props":{},"x":360,"y":0}],' +
+	'"connect":[{"from":"id or tempId","fromPort":"output","to":"id or tempId","toPort":"input"}]}\n' +
+	'direction is the change or the next step. props fills the one selected node. ' +
+	'updates fills the listed nodes. add and connect when the request needs another node or a wire. ' +
+	'Use only fields and ports from the catalog. Do not change type. Omit keys you do not change. ' +
+	'A direction alone is valid when you only advise. ' +
+	'The catalog is a static list of this app. It is not a live MCP server.\n\n' +
+	catalogPrompt() +
+	'\n\nApp features:\n' +
+	featurePrompt()
+
 function nodeSummary(shape: NodeShape) {
 	const node = shape.props.node as unknown as Record<string, unknown>
 	const brief: Record<string, unknown> = { type: node.type }
@@ -50,63 +74,62 @@ function nodeSummary(shape: NodeShape) {
 	return { id: shape.id, ...brief }
 }
 
-export async function runFill(editor: Editor, shapeId: TLShapeId, intent: string) {
-	const shape = editor.getShape(shapeId)
-	if (!shape || shape.type !== 'node') throw new Error('Select a node')
-	const node = shape.props.node as unknown as Record<string, unknown>
-	const { text } = await apiGenerateText({
-		temperature: 0.2,
-		system:
-			'You set the fields of one workflow node. Reply with JSON only: {"props": { ...fields }}. ' +
-			'Do not change type. Use only fields that already exist. Leave result fields empty.\n\n' +
-			catalogPrompt(),
-		prompt: `Node:\n${JSON.stringify(nodeSummary(shape))}\n\nSelection text:\n${shapeText(editor, shape)}\n\nThe user wants: ${intent}`,
+function describeNode(editor: Editor, shape: NodeShape) {
+	const wires = getNodePortConnections(editor, shape).map((link) => {
+		const other = editor.getShape(link.connectedShapeId)
+		const otherType =
+			other?.type === 'node' ? (other.props as { node?: { type?: string } }).node?.type : other?.type
+		return {
+			direction: link.terminal === 'end' ? 'in' : 'out',
+			port: link.ownPortId,
+			otherId: link.connectedShapeId,
+			otherType: otherType ?? 'shape',
+			otherPort: link.connectedPortId,
+		}
 	})
-	const plan = parseFillPlan(text)
-	const props = allowedProps(node, plan.props)
-	if (!Object.keys(props).length) throw new Error('The model did not change any field')
+	return { ...nodeSummary(shape), wires }
+}
+
+/** Defaults plus catalog fields, so an optional key such as promptOverride can be set. */
+function fieldBase(editor: Editor, node: Record<string, unknown>): Record<string, unknown> {
+	const type = typeof node.type === 'string' ? node.type : ''
+	let defaults: Record<string, unknown> = {}
+	try {
+		if (type) defaults = getNodeDefinition(editor, type as NodeType['type']).getDefault() as unknown as Record<string, unknown>
+	} catch {
+		defaults = {}
+	}
+	const base: Record<string, unknown> = { ...defaults, ...node }
+	for (const key of NODE_PORTS[type]?.fields ?? []) {
+		if (!(key in base)) base[key] = ''
+	}
+	return base
+}
+
+function writeProps(editor: Editor, shape: NodeShape, patch: Record<string, unknown>): boolean {
+	const node = shape.props.node as unknown as Record<string, unknown>
+	const props = allowedProps(fieldBase(editor, node), patch)
+	if (!Object.entries(props).some(([key, value]) => node[key] !== value)) return false
 	editor.updateShape<NodeShape>({
 		id: shape.id,
 		type: 'node',
 		props: { node: { ...shape.props.node, ...props } as NodeType, isOutOfDate: true },
 	})
+	return true
 }
 
-export async function runCompose(editor: Editor, shapeIds: TLShapeId[], intent: string) {
-	const shapes = shapeIds
-		.map((id) => editor.getShape(id))
-		.filter((shape): shape is NodeShape => !!shape && shape.type === 'node')
-	if (!shapes.length) throw new Error('Select one or more nodes')
-	const { text } = await apiGenerateText({
-		temperature: 0.2,
-		system:
-			'You wire workflow nodes so they do what the user asks. Reply with JSON only:\n' +
-			'{"updates":[{"id":"existing shape id","props":{}}],"add":[{"tempId":"n1","type":"prompt","props":{},"x":0,"y":0}],"connect":[{"from":"id or tempId","fromPort":"output","to":"id or tempId","toPort":"input"}]}\n' +
-			'Use existing ids for selected nodes. Add a node when one is missing. Use only the ports and fields listed. ' +
-			'The catalog is a static list of this app. It is not a live MCP server.\n\n' +
-			catalogPrompt() +
-			'\n\nApp features:\n' +
-			featurePrompt(),
-		prompt: `Selected nodes:\n${JSON.stringify(shapes.map(nodeSummary), null, 2)}\n\nSelection text:\n${shapes
-			.map((shape) => shapeText(editor, shape))
-			.filter(Boolean)
-			.join('\n---\n')}\n\nThe user wants: ${intent}`,
-	})
-	const plan = parseComposePlan(text)
+function applyPlan(editor: Editor, shapes: NodeShape[], plan: AssistPlan): boolean {
 	const ids = new Map<string, TLShapeId>()
 	for (const shape of shapes) ids.set(shape.id, shape.id)
+	let changed = false
 	editor.markHistoryStoppingPoint('ai arrange nodes')
 	editor.run(() => {
-		for (const update of plan.updates) {
+		const updates = [...plan.updates]
+		if (shapes.length === 1 && Object.keys(plan.props).length) updates.push({ id: shapes[0].id, props: plan.props })
+		for (const update of updates) {
 			const shape = editor.getShape(update.id as TLShapeId)
 			if (!shape || shape.type !== 'node') continue
-			const node = shape.props.node as unknown as Record<string, unknown>
-			const props = allowedProps(node, update.props)
-			editor.updateShape<NodeShape>({
-				id: shape.id,
-				type: 'node',
-				props: { node: { ...shape.props.node, ...props } as NodeType, isOutOfDate: true },
-			})
+			if (writeProps(editor, shape, update.props)) changed = true
 		}
 		const origin = editor.getViewportPageBounds().center
 		for (const add of plan.add) {
@@ -126,6 +149,7 @@ export async function runCompose(editor: Editor, shapeIds: TLShapeId[], intent: 
 				y: origin.y + add.y,
 				props: { node: { ...base, ...props, type: add.type } as NodeType },
 			})
+			changed = true
 		}
 		for (const wire of plan.connect) {
 			const fromId = ids.get(wire.from) ?? (editor.getShape(wire.from as TLShapeId) ? (wire.from as TLShapeId) : undefined)
@@ -151,6 +175,37 @@ export async function runCompose(editor: Editor, shapeIds: TLShapeId[], intent: 
 				toId: toId,
 				props: { terminal: 'end', portId: wire.toPort, order: 1 },
 			})
+			changed = true
 		}
 	})
+	return changed
+}
+
+async function askModel(editor: Editor, shapes: NodeShape[], intent: string): Promise<AssistResult> {
+	const { text } = await apiGenerateText({
+		temperature: 0.2,
+		system: ASSIST_SYSTEM,
+		prompt: `Selected nodes:\n${JSON.stringify(shapes.map((shape) => describeNode(editor, shape)), null, 2)}\n\nSelection text:\n${shapes
+			.map((shape) => shapeText(editor, shape))
+			.filter(Boolean)
+			.join('\n---\n')}\n\nThe user wants: ${intent}`,
+	})
+	const plan = parseAssistPlan(text)
+	const changed = applyPlan(editor, shapes, plan)
+	if (!changed && !plan.direction) throw new Error('The model did not change the node')
+	return { direction: plan.direction, changed }
+}
+
+export async function runFill(editor: Editor, shapeId: TLShapeId, intent: string): Promise<AssistResult> {
+	const shape = editor.getShape(shapeId)
+	if (!shape || shape.type !== 'node') throw new Error('Select a node')
+	return askModel(editor, [shape], intent)
+}
+
+export async function runCompose(editor: Editor, shapeIds: TLShapeId[], intent: string): Promise<AssistResult> {
+	const shapes = shapeIds
+		.map((id) => editor.getShape(id))
+		.filter((shape): shape is NodeShape => !!shape && shape.type === 'node')
+	if (!shapes.length) throw new Error('Select one or more nodes')
+	return askModel(editor, shapes, intent)
 }

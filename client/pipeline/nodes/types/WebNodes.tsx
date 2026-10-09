@@ -15,7 +15,7 @@ import {
 } from '../../constants'
 import { Port as PortDot, ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { isImageValue, PortRow, stopEvent, useInputConnected } from './fields'
+import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -203,7 +203,7 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 		<>
 			<NodeRow>
 				<span className="NodeInputRow-label">Method</span>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={node.method}
 					onPointerDown={stopEvent}
@@ -212,7 +212,7 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 					{['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].map((m) => (
 						<option key={m}>{m}</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			{urlConnected ? (
 				<PortRow shapeId={shape.id} portId="url" label="URL" dataType="text" />
@@ -239,7 +239,7 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 			/>
 			<NodeRow>
 				<span className="NodeInputRow-label">Auth</span>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={node.auth ?? ''}
 					onPointerDown={stopEvent}
@@ -248,7 +248,7 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 					<option value="">None</option>
 					<option value="bearer">Bearer</option>
 					<option value="basic">Basic</option>
-				</select>
+				</NodeSelect>
 				<input
 					className="NodeField-input"
 					placeholder={node.auth === 'basic' ? 'user:password' : 'token'}

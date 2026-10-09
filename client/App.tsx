@@ -39,7 +39,7 @@ import { ChatPanelFallback } from './components/ChatPanelFallback'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { ImagePipelineSidebar } from './pipeline/components/ImagePipelineSidebar'
-import { $examplesOpen, CanvasExtras } from './pipeline/components/CanvasExtras'
+import { CanvasExtras } from './pipeline/components/CanvasExtras'
 import { installAltScroll } from './pipeline/altScroll'
 import { registerNodeGuards } from './pipeline/nodeGuards'
 import { OnCanvasNodePicker } from './pipeline/components/OnCanvasNodePicker'
@@ -56,13 +56,13 @@ import { PointingPort } from './pipeline/ports/PointingPort'
 import { isPacked, watchPackedNodes } from './pipeline/subgraph'
 import { TargetAreaTool } from './tools/TargetAreaTool'
 import { TargetShapeTool } from './tools/TargetShapeTool'
-import { canvasActionOverrides, CanvasContextMenu, CanvasToolsMenuGroup, MarkdownIcon, MermaidIcon } from './clips/CanvasMenus'
+import { canvasActionOverrides, CanvasContextMenu, CanvasToolsMenuGroup, ExamplesMenu, MarkdownIcon, MermaidIcon } from './clips/CanvasMenus'
 import { registerClipHandlers } from './clips/canvasFeatures'
 import { clipShapeUtils, clipTools } from './clips/ClipShapes'
 import { FindBar } from './clips/FindBar'
 import { installKeepGroup } from './pipeline/groups/KeepGroupShapeUtil'
 import { ShellChrome } from './shell/ShellChrome'
-import { $featuresOpen, $historyOpen, $libraryRail, $mapOpen } from './shell/shellState'
+import { $featuresOpen, $libraryRail, $mapOpen } from './shell/shellState'
 import { saveBackup } from './shell/shellState'
 import { ImageEditorModal } from './clips/ImageEditor'
 import { RatioImageShapeUtil } from './clips/shapeOptions'
@@ -223,7 +223,7 @@ function App() {
 			MainMenu: () => (
 				<DefaultMainMenu>
 					<TldrawUiMenuGroup id="ai">
-						<TldrawUiMenuItem id="examples" label="Examples…" onSelect={() => { $examplesOpen.set(true) }} />
+						<ExamplesMenu />
 						<CanvasToolsMenuGroup />
 						<TldrawUiMenuItem
 							id="ai-providers"
@@ -243,7 +243,6 @@ function App() {
 							onSelect={() => togglePanel('chat')}
 						/>
 						<TldrawUiMenuItem id="map-view" label="Map view" onSelect={() => { $mapOpen.set(!$mapOpen.get()) }} />
-						<TldrawUiMenuItem id="op-history" label="Operation history" onSelect={() => { $historyOpen.set(true) }} />
 						<TldrawUiMenuItem id="feature-list" label="Features vs tldraw" onSelect={() => { $featuresOpen.set(true) }} />
 						<TldrawUiMenuItem id="backup-15" label="Auto backup every 15 min" onSelect={() => saveBackup({ minutes: 15, target: 'folder' })} />
 						<TldrawUiMenuItem id="backup-off" label="Auto backup off" onSelect={() => saveBackup({ minutes: 0, target: 'folder' })} />

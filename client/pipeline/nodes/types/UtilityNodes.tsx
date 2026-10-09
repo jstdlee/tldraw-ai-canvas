@@ -11,7 +11,7 @@ import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { isImageValue, PortRow, stopEvent, useInputConnected } from './fields'
+import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	LlmSettingsFields,
@@ -125,13 +125,13 @@ function RandomNodeComponent({ shape, node }: NodeComponentProps<RandomNode>) {
 			<PortRow shapeId={shape.id} portId="a" label={f?.[0] ?? 'A'} dataType="any" hint={f ? f[0] : 'not used'} />
 			<PortRow shapeId={shape.id} portId="b" label={f?.[1] ?? 'B'} dataType="any" hint={f?.[1] ?? 'not used'} />
 			<NodeRow>
-				<select className="NodeField-select" value={node.mode} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.mode} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
 					{RANDOM_MODES.map((m) => (
 						<option key={m.id} value={m.id}>
 							{m.label}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
 				{f ? (
@@ -253,13 +253,13 @@ function NetToolNodeComponent({ shape, node }: NodeComponentProps<NetToolNode>) 
 				<PortRow shapeId={shape.id} portId="target" label="Target" dataType="text" hint="or type below" />
 			)}
 			<NodeRow>
-				<select className="NodeField-select" value={node.tool} onPointerDown={stopEvent} onChange={(e) => set({ tool: e.target.value, option: '' })}>
+				<NodeSelect className="NodeField-select" value={node.tool} onPointerDown={stopEvent} onChange={(e) => set({ tool: e.target.value, option: '' })}>
 					{NET_TOOL_OPTIONS.map((t) => (
 						<option key={t.id} value={t.id}>
 							{t.label}
 						</option>
 					))}
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
 				{'target' in tool && !targetWired ? (
@@ -435,17 +435,17 @@ function SummarizeNodeComponent({ shape, node }: NodeComponentProps<SummarizeNod
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="Input" dataType="any" hint="text, URL, image, video" />
 			<NodeRow>
-				<select className="NodeField-select" value={node.length} onPointerDown={stopEvent} onChange={(e) => set({ length: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.length} onPointerDown={stopEvent} onChange={(e) => set({ length: e.target.value })}>
 					<option value="short">Short</option>
 					<option value="medium">Medium</option>
 					<option value="long">Long</option>
-				</select>
-				<select className="NodeField-select" value={node.format} onPointerDown={stopEvent} onChange={(e) => set({ format: e.target.value })}>
+				</NodeSelect>
+				<NodeSelect className="NodeField-select" value={node.format} onPointerDown={stopEvent} onChange={(e) => set({ format: e.target.value })}>
 					<option value="bullets">Bullets</option>
 					<option value="paragraph">Paragraph</option>
 					<option value="tldr">TL;DR + points</option>
 					<option value="outline">Outline</option>
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
 				<input className="NodeField-input" placeholder="Focus (optional)" value={node.focus} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ focus: e.target.value })} />

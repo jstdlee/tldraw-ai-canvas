@@ -200,8 +200,7 @@
 	padding: 0;
 }
 
-.Palette-backdrop,
-.LargeEditor-backdrop {
+.Palette-backdrop {
 	pointer-events: all;
 }
 
@@ -227,9 +226,7 @@
 }
 
 .Palette input,
-.SideSheet input,
-.find-bar-advanced input,
-.find-bar-advanced select {
+.SideSheet input {
 	width: 100%;
 	font: inherit;
 	font-size: 13px;

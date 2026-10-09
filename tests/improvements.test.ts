@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { formatCode } from '../shared/codeFormat'
 import { EXAMPLES, exampleCovers } from '../shared/examples'
+import { parseAssistPlan } from '../shared/nodeAssist'
+import { searchHits } from '../shared/searchOps'
 import { buildHttpRequest } from '../shared/httpBuild'
 import { applyPreset, FILTER_PRESETS, matchPreset, NO_FILTER } from '../shared/imageFilters'
 import { formatLlmUsage, normalizeLlmUsage, takeUsageTrailer } from '../shared/llmUsage'
@@ -49,11 +51,10 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	chart: { inn: ['data'], out: ['output'] },
 	sqlite_in: { inn: ['input'], out: ['output'] },
 	openrouter: { inn: [], out: ['output'] },
-	raw_model: { inn: ['prompt'], out: ['output'] },
+	raw_model: { inn: ['prompt', 'model'], out: ['output'] },
 	video: { inn: ['url'], out: ['output'] },
 	file_in: { inn: [], out: ['output'] },
 	url_in: { inn: [], out: ['output'] },
-	local_tool: { inn: ['stdin'], out: ['output'] },
 	sleep: { inn: ['input'], out: ['output'] },
 }
 
@@ -136,6 +137,33 @@ describe('code format and python markers', () => {
 		const parsed = readPythonResult('noise\n___LOG___words: 2\n___RESULT___{"output":"Hi"}')
 		expect(parsed.logs).toBe('words: 2')
 		expect(parsed.outputs.output).toBe('Hi')
+	})
+})
+
+describe('assist plan', () => {
+	it('keeps a direction when the reply only advises', () => {
+		const plan = parseAssistPlan('```json\n{"direction":"Add a summary node","props":{"focus":"names"}}\n```')
+		expect(plan.direction).toBe('Add a summary node')
+		expect(plan.props.focus).toBe('names')
+	})
+
+	it('reads new nodes and wires', () => {
+		const plan = parseAssistPlan('{"add":[{"tempId":"n1","type":"output"}],"connect":[{"from":"a","fromPort":"output","to":"n1","toPort":"input"}]}')
+		expect(plan.add[0].type).toBe('output')
+		expect(plan.connect[0].to).toBe('n1')
+	})
+})
+
+describe('find', () => {
+	it('matches a phrase on more than one line', () => {
+		const hits = searchHits('alpha\nbeta', {
+			text: 'alpha\nbeta',
+			regexp: false,
+			caseSensitive: false,
+			component: '',
+			asset: '',
+		})
+		expect(hits).toHaveLength(1)
 	})
 })
 

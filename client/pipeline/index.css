@@ -35,10 +35,13 @@ body {
 	background: var(--tl-color-panel);
 	box-shadow: var(--node-shadow-border);
 	width: 100%;
-	height: fit-content;
+	height: 100%;
 	display: flex;
 	flex-direction: column;
 	transition: box-shadow 120ms ease;
+	/* Node text scales with the per-node font size. 20px is close to tldraw's default text. */
+	font-size: var(--node-fs, 20px);
+	line-height: 1.4;
 
 	/* A slightly stronger shadow on hover, like tldraw's own cards. */
 	[data-state='select.idle'] &:hover {
@@ -68,12 +71,12 @@ body {
 	.NodeShape-label {
 		flex: 1 1 auto;
 		font-weight: 500;
-		font-size: 13px;
+		font-size: 0.87em;
 	}
 
 	.NodeShape-output {
 		font-variant-numeric: tabular-nums;
-		font-size: 11px;
+		font-size: 0.74em;
 		color: var(--tl-color-text-3);
 		max-width: 80px;
 		overflow: hidden;
@@ -82,8 +85,18 @@ body {
 	}
 
 	/* Enable pointer events on the entire node body so all interactive
-	   elements work. The heading stays inert (drag handle for tldraw). */
-	[data-state='select.idle'] & > :not(.NodeShape-heading) {
+	   elements work, and so the whole card (including gaps between fields)
+	   blocks clicks from reaching a node stacked underneath. The heading
+	   stays inert (drag handle for tldraw). */
+	[data-state='select.idle'] & {
+		pointer-events: all;
+	}
+	/* The heading itself stays inert so tldraw's wrapper drags the card, but
+	   the rename label and output port inside it keep their own events. */
+	[data-state='select.idle'] & .NodeShape-heading {
+		pointer-events: none;
+	}
+	[data-state='select.idle'] & .NodeShape-label {
 		pointer-events: all;
 	}
 
@@ -107,7 +120,7 @@ body {
 		margin: 0 -6px;
 		border-radius: var(--tl-radius-2);
 		font: inherit;
-		font-size: 11px;
+		font-size: 0.74em;
 		color: var(--tl-color-text-3);
 		cursor: pointer;
 
@@ -185,7 +198,7 @@ body {
 		border-radius: var(--tl-radius-3);
 		background: none;
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.8em;
 		outline: none;
 
 		&:focus {
@@ -215,7 +228,7 @@ body {
 		border-radius: var(--tl-radius-3);
 		background: none;
 		font: inherit;
-		font-size: 12px;
+		font-size: 0.8em;
 		outline: none;
 		resize: none;
 
@@ -227,7 +240,7 @@ body {
 
 .NodeInputRow {
 	.NodeInputRow-label {
-		font-size: 11px;
+		font-size: 0.74em;
 		color: var(--tl-color-text-3);
 		flex: 0 0 auto;
 		min-width: 48px;
@@ -256,7 +269,7 @@ body {
 }
 
 .NodeRow-connected-value {
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 	flex: 1 1 auto;
 	text-align: right;
@@ -266,7 +279,7 @@ body {
 }
 
 .NodeRow-disconnected {
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 	opacity: 0.5;
 	flex: 1 1 auto;
@@ -282,7 +295,7 @@ body {
 }
 
 .NodeRow-value {
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 	font-variant-numeric: tabular-nums;
 	flex: 0 0 auto;
@@ -291,7 +304,7 @@ body {
 }
 
 .NodePortLabel {
-	font-size: 11px;
+	font-size: 0.74em;
 	font-weight: 500;
 	flex: 0 0 auto;
 }
@@ -369,7 +382,7 @@ body {
 	border-radius: var(--tl-radius-3);
 	padding: var(--tl-space-2) var(--tl-space-3);
 	font: inherit;
-	font-size: 11px;
+	font-size: 0.74em;
 	background: var(--tl-color-panel);
 	cursor: pointer;
 
@@ -384,7 +397,7 @@ body {
 	border-radius: var(--tl-radius-3);
 	padding: var(--tl-space-2) var(--tl-space-3);
 	font: inherit;
-	font-size: 14px;
+	font-size: 0.93em;
 	line-height: 1;
 	background: var(--tl-color-panel);
 	cursor: pointer;
@@ -404,7 +417,7 @@ body {
 	justify-content: center;
 
 	span {
-		font-size: 11px;
+		font-size: 0.74em;
 		color: var(--tl-color-text-3);
 		opacity: 0.5;
 	}
@@ -455,7 +468,7 @@ body {
 	width: 100%;
 	min-height: 100%;
 	padding: var(--tl-space-3) var(--tl-space-4);
-	font-size: 11px;
+	font-size: 0.74em;
 	line-height: 1.4;
 	color: var(--tl-color-text-1);
 	overflow: visible;
@@ -472,7 +485,7 @@ body {
 	justify-content: center;
 
 	span {
-		font-size: 11px;
+		font-size: 0.74em;
 		color: var(--tl-color-text-3);
 		opacity: 0.5;
 	}
@@ -676,7 +689,7 @@ body {
 
 .TemplatePicker-header {
 	padding: var(--tl-space-3) var(--tl-space-4);
-	font-size: 12px;
+	font-size: 0.8em;
 	font-weight: 600;
 	border-bottom: 1px solid var(--tl-color-divider);
 }
@@ -693,7 +706,7 @@ body {
 		border-radius: var(--tl-radius-3);
 		padding: var(--tl-space-2) var(--tl-space-3);
 		font: inherit;
-		font-size: 11px;
+		font-size: 0.74em;
 		outline: none;
 
 		&:focus {
@@ -709,7 +722,7 @@ body {
 
 .TemplatePicker-empty {
 	padding: var(--tl-space-4);
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 	text-align: center;
 }
@@ -760,7 +773,7 @@ body {
 	background: var(--tl-color-panel);
 	color: var(--tl-color-text-3);
 	cursor: pointer;
-	font-size: 12px;
+	font-size: 0.8em;
 	line-height: 1;
 	display: flex;
 	align-items: center;
@@ -790,7 +803,7 @@ body {
 	align-items: center;
 	justify-content: space-between;
 	font-weight: 500;
-	font-size: 12px;
+	font-size: 0.8em;
 	flex: 0 0 auto;
 	border-bottom: 1px solid var(--tl-color-divider);
 	color: var(--tl-color-text-3);
@@ -813,7 +826,7 @@ body {
 .ImagePipelineSidebar-category {
 	padding: 8px 12px 0;
 	margin-bottom: 8px;
-	font-size: 11px;
+	font-size: 0.74em;
 	font-weight: 500;
 	color: var(--tl-color-text-3);
 }
@@ -829,7 +842,7 @@ body {
 	border: none;
 	background: transparent;
 	font-family: inherit;
-	font-size: 12px;
+	font-size: 0.8em;
 	cursor: pointer;
 	color: var(--tl-color-text-1);
 	text-align: left;
@@ -882,20 +895,52 @@ body {
 
 /* Chat node (branching chat) */
 
+.ChatNode-thread {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-height: 0;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 0 var(--tl-space-4) var(--tl-space-2);
+}
+
+.ChatNode-reply {
+	flex: 1 1 auto;
+	min-height: 64px;
+	width: 100%;
+	box-sizing: border-box;
+	overflow: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+	padding: 8px;
+	border-radius: var(--tl-radius-2);
+	border: 1px solid var(--tl-color-divider);
+	background: var(--tl-color-muted-0);
+	color: var(--tl-color-text-1);
+	pointer-events: all;
+}
+
 .ChatNode-compose {
 	display: flex;
+	flex: 1 1 auto;
 	gap: var(--tl-space-2);
 	align-items: stretch;
-	padding: var(--tl-space-2) var(--tl-space-4);
+	min-height: 72px;
+	width: 100%;
 	box-sizing: border-box;
 }
 
 .ChatNode-input {
 	flex: 1;
+	width: 100%;
+	height: 100%;
+	box-sizing: border-box;
 	resize: none;
 	font: inherit;
-	font-size: 12px;
+	font-size: 0.8em;
 	padding: 6px 8px;
+	padding-right: 40px;
 	border-radius: var(--tl-radius-2);
 	border: 1px solid var(--tl-color-divider);
 	background: var(--tl-color-panel);
@@ -909,7 +954,7 @@ body {
 
 .ImagePipelineSidebar-hint {
 	font-weight: 400;
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 }
 
@@ -917,7 +962,7 @@ body {
 
 .LlmSettings {
 	padding: 0 var(--tl-space-4);
-	font-size: 11px;
+	font-size: 0.74em;
 }
 
 .LlmSettings-toggle {
@@ -951,6 +996,15 @@ body {
 	font-variant-numeric: tabular-nums;
 }
 
+/* Run status (tokens, time) shown below the settings, near the node bottom. */
+.LlmSettings-status {
+	padding: 2px var(--tl-space-4) 4px;
+	font-size: 0.74em;
+	color: var(--tl-color-text-3);
+	font-variant-numeric: tabular-nums;
+	border-top: 1px solid var(--tl-color-divider);
+}
+
 .LlmSettings-body {
 	display: flex;
 	flex-direction: column;
@@ -965,7 +1019,7 @@ body {
 	min-height: 0;
 	resize: none;
 	font: inherit;
-	font-size: 11px;
+	font-size: 1em;
 	padding: 5px 7px;
 	border-radius: var(--tl-radius-2);
 	border: 1px solid var(--tl-color-divider);
@@ -980,7 +1034,8 @@ body {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	height: 24px;
+	min-height: 30px;
+	height: auto;
 }
 
 .LlmSettings-row > span:first-child {
@@ -998,7 +1053,7 @@ body {
 	flex: 1;
 	min-width: 0;
 	font: inherit;
-	font-size: 11px;
+	font-size: 1em;
 	padding: 3px 6px;
 	border-radius: var(--tl-radius-2);
 	border: 1px solid var(--tl-color-divider);
@@ -1025,6 +1080,155 @@ body {
 	flex: 1;
 	min-width: 0;
 	pointer-events: all;
+	appearance: none;
+	-webkit-appearance: none;
+	font: inherit;
+	font-size: 0.8em;
+	color: var(--tl-color-text-1);
+	background: var(--tl-color-panel);
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	padding: 4px 22px 4px 8px;
+	background-image: linear-gradient(45deg, transparent 50%, var(--tl-color-text-3) 50%),
+		linear-gradient(135deg, var(--tl-color-text-3) 50%, transparent 50%);
+	background-position:
+		calc(100% - 12px) 55%,
+		calc(100% - 8px) 55%;
+	background-size:
+		4px 4px,
+		4px 4px;
+	background-repeat: no-repeat;
+	cursor: pointer;
+}
+
+.NodeField-select:hover {
+	border-color: var(--tl-color-text-3);
+}
+
+.NodeField-select:focus {
+	outline: none;
+	border-color: var(--tl-color-selected);
+	box-shadow: 0 0 0 1px var(--tl-color-selected);
+}
+
+/* Custom menu. Matches tldraw panels: same radius, divider, and text color. */
+.TlSelect {
+	all: unset;
+	box-sizing: border-box;
+	flex: 1;
+	min-width: 0;
+	max-width: 100%;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 8px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	font: inherit;
+	font-size: 1em;
+	line-height: 1.2;
+	cursor: pointer;
+	pointer-events: all;
+}
+
+.TlSelect:hover:not(:disabled) {
+	background: var(--tl-color-muted-0);
+}
+
+.TlSelect:focus-visible {
+	outline: none;
+	border-color: var(--tl-color-selected);
+	box-shadow: 0 0 0 1px var(--tl-color-selected);
+}
+
+.TlSelect:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.TlSelect-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: left;
+}
+
+.TlSelect-caret {
+	flex: 0 0 auto;
+	width: 0;
+	height: 0;
+	border-left: 4px solid transparent;
+	border-right: 4px solid transparent;
+	border-top: 5px solid var(--tl-color-text-3);
+}
+
+.TlSelect-menu {
+	position: fixed;
+	z-index: 2000;
+	max-height: 280px;
+	overflow: auto;
+	padding: 4px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	box-shadow: var(--tl-shadow-2);
+	pointer-events: all;
+}
+
+.TlSelect-group {
+	padding: 6px 8px 2px;
+	font-size: 11px;
+	color: var(--tl-color-text-3);
+}
+
+.TlSelect-item {
+	all: unset;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	min-height: 28px;
+	padding: 4px 8px;
+	border-radius: var(--tl-radius-2);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+	color: var(--tl-color-text-1);
+}
+
+.TlSelect-item:hover:not(:disabled),
+.TlSelect-item.is-on {
+	background: var(--tl-color-muted-1);
+}
+
+.TlSelect-item:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.TlSelect-mark {
+	width: 14px;
+	flex: 0 0 auto;
+	color: var(--tl-color-selected);
+}
+
+.TlSelect-empty {
+	padding: 8px;
+	color: var(--tl-color-text-3);
+	font-size: 12px;
+}
+
+.NodeField-select option {
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
 }
 
 .NodeField-block {
@@ -1036,7 +1240,7 @@ body {
 }
 
 .NodeField-label {
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 }
 
@@ -1044,13 +1248,13 @@ body {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-2);
 	pointer-events: all;
 }
 
 .NodeStatus {
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1116,8 +1320,24 @@ body {
 
 .NodeBody > .GenerateTextNode-result,
 .NodeBody > .NodeImagePreview,
-.NodeBody > .NodeGrow {
+.NodeBody > .NodeGrow,
+.NodeBody > .ChatNode-thread {
 	flex-grow: 1;
+}
+
+.NodeLlmStatus {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: calc(100% + 6px);
+	padding: 2px 8px;
+	font-size: 12px;
+	line-height: 1.3;
+	color: var(--tl-color-text-3);
+	pointer-events: none;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .NodeShape.NodeShape_collapsed .NodeShape-heading {
@@ -1152,7 +1372,7 @@ body {
 	min-width: 0;
 	min-height: 0;
 	overflow: auto;
-	font-size: 12px;
+	font-size: 0.8em;
 	color: var(--tl-color-text-1);
 }
 
@@ -1184,7 +1404,7 @@ body {
 
 .ValuePreview-text.is-mono {
 	font-family: ui-monospace, monospace;
-	font-size: 11px;
+	font-size: 0.74em;
 }
 
 .ValuePreview-markdown {
@@ -1240,7 +1460,7 @@ body {
 	gap: 4px;
 	flex: 1;
 	min-width: 0;
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 }
 
@@ -1254,7 +1474,7 @@ body {
 	gap: 6px;
 	align-items: center;
 	height: 22px;
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 	pointer-events: all;
 }
@@ -1340,7 +1560,7 @@ body {
 	background: var(--tl-color-muted-0);
 	overflow: hidden;
 	font-family: ui-monospace, monospace;
-	font-size: 11px;
+	font-size: 0.74em;
 	line-height: 1.45;
 	pointer-events: all;
 }
@@ -1429,21 +1649,28 @@ body {
 
 .LargeEditor-backdrop {
 	position: fixed;
-	inset: 0;
+	top: 64px;
+	left: 50%;
 	z-index: 800;
-	background: rgba(0, 0, 0, 0.45);
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	width: max-content;
+	max-width: calc(100vw - 24px);
+	transform: translateX(-50%);
+	background: transparent;
+	pointer-events: none;
+}
+
+.LargeEditor,
+.LargeEditor-image {
 	pointer-events: all;
 }
 
 .LargeEditor {
-	width: min(960px, calc(100vw - 48px));
-	height: min(80vh, 720px);
+	width: min(560px, calc(100vw - 48px));
+	height: min(420px, 70vh);
 	display: flex;
 	flex-direction: column;
 	background: var(--tl-color-panel);
+	border: 1px solid var(--tl-color-divider);
 	border-radius: 12px;
 	box-shadow: var(--tl-shadow-3);
 	overflow: hidden;
@@ -1501,7 +1728,7 @@ body {
 	border: none;
 	resize: none;
 	font-family: ui-monospace, monospace;
-	font-size: 13px;
+	font-size: 0.87em;
 	line-height: 1.5;
 }
 
@@ -1523,7 +1750,7 @@ body {
 	border-radius: 999px;
 	background: #2563eb;
 	color: white;
-	font-size: 13px;
+	font-size: 0.87em;
 	cursor: pointer;
 	box-shadow: var(--tl-shadow-2);
 	pointer-events: all;
@@ -1570,6 +1797,12 @@ body {
 .AssistDialog-error {
 	margin: 0;
 	color: #e03131;
+	font-size: 0.8em;
+}
+
+.AssistDialog-note {
+	margin: 0;
+	color: var(--tl-color-text-2);
 	font-size: 12px;
 }
 
@@ -1654,7 +1887,7 @@ body {
 
 .ExamplesDialog-item span {
 	color: var(--tl-color-text-3);
-	font-size: 12px;
+	font-size: 0.8em;
 }
 
 /* Code node */
@@ -1712,7 +1945,7 @@ body {
 	right: var(--tl-space-4);
 	top: 50%;
 	transform: translateY(-50%);
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 }
 
@@ -1739,7 +1972,7 @@ body {
 	margin-left: auto;
 	padding: 2px 8px;
 	border-radius: 999px;
-	font-size: 11px;
+	font-size: 0.74em;
 	border: 1px solid var(--tl-color-divider);
 	color: var(--tl-color-text-3);
 	pointer-events: all;
@@ -1764,7 +1997,7 @@ body {
 }
 
 .NodeBranch {
-	font-size: 11px;
+	font-size: 0.74em;
 	padding: 2px 8px;
 	border-radius: 999px;
 	color: var(--tl-color-text-3);
@@ -1810,7 +2043,7 @@ body {
 
 .NodeField-textarea.is-mono {
 	font-family: ui-monospace, monospace;
-	font-size: 11px;
+	font-size: 0.74em;
 }
 
 /* Packed group node */
@@ -1843,7 +2076,7 @@ body {
 	flex-direction: column;
 	gap: 4px;
 	overflow: auto;
-	font-size: 11px;
+	font-size: 0.74em;
 }
 
 .JevBar {
@@ -1894,12 +2127,12 @@ body {
 }
 
 .CodeNode-outLabel-static {
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 }
 
 .ImagePipelineSidebar-empty {
-	font-size: 11px;
+	font-size: 0.74em;
 	color: var(--tl-color-text-3);
 	padding: 2px 12px 8px;
 }

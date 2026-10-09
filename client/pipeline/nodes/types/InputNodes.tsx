@@ -5,7 +5,7 @@ import { asWebUrl } from '../../../../shared/webUrl'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { stopEvent } from './fields'
+import { stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -124,14 +124,14 @@ function FileInComponent({ shape, node }: NodeComponentProps<FileInNode>) {
 	return (
 		<>
 			<NodeRow>
-				<select className="NodeField-select" value={node.mode} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
+				<NodeSelect className="NodeField-select" value={node.mode} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
 					<option value="upload">Upload</option>
 					<option value="path">Path on server</option>
-				</select>
-				<select className="NodeField-select" value={node.action} onPointerDown={stopEvent} onChange={(e) => set({ action: e.target.value })}>
+				</NodeSelect>
+				<NodeSelect className="NodeField-select" value={node.action} onPointerDown={stopEvent} onChange={(e) => set({ action: e.target.value })}>
 					<option value="text">Text</option>
 					<option value="sha256">SHA-256</option>
-				</select>
+				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
 				{node.mode === 'path' ? (

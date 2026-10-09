@@ -8,7 +8,7 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -34,73 +34,12 @@ function info(shape: NodeShape, value: string | null, inputs: InfoValues, dataTy
 	return { output: { value, isOutOfDate: areAnyInputsOutOfDate(inputs) || shape.props.isOutOfDate, dataType } }
 }
 
-async function postJson(url: string, body: unknown): Promise<Record<string, unknown>> {
-	const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-	const payload = (await response.json()) as Record<string, unknown>
-	if (!response.ok) throw new Error(String(payload.error || response.statusText))
-	return payload
-}
-
 function Line({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
 	return (
 		<NodeRow>
 			<span className="NodeInputRow-label">{label}</span>
 			<input className="NodeField-input" value={value} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => onChange(e.target.value)} />
 		</NodeRow>
-	)
-}
-
-export type LocalToolNode = T.TypeOf<typeof LocalToolNode>
-export const LocalToolNode = T.object({
-	type: T.literal('local_tool'),
-	tool: T.string,
-	args: T.string,
-	error: T.string.nullable(),
-})
-
-export class LocalToolNodeDefinition extends NodeDefinition<LocalToolNode> {
-	static type = 'local_tool'
-	static validator = LocalToolNode
-	title = 'Local tool'
-	heading = 'gawk / grep'
-	icon = mark
-	category = categoryOf('local_tool')
-	getDefault(): LocalToolNode {
-		return { type: 'local_tool', tool: 'grep', args: '-i canvas', error: null }
-	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + 36
-	}
-	getPorts(): Record<string, ShapePort> {
-		return { stdin: end('stdin', 0), output: out() }
-	}
-	async execute(shape: NodeShape, node: LocalToolNode, inputs: InputValues): Promise<ExecutionResult> {
-		const payload = await postJson('/api/tool', { tool: node.tool, args: node.args, stdin: getInputText(inputs, 'stdin') })
-		updateNode<LocalToolNode>(this.editor, shape, (n) => ({ ...n, error: null }), false)
-		return { output: String(payload.output ?? '') }
-	}
-	getOutputInfo(shape: NodeShape, _node: LocalToolNode, inputs: InfoValues): InfoValues {
-		return info(shape, null, inputs)
-	}
-	Component = LocalToolComponent
-}
-
-function LocalToolComponent({ shape, node }: NodeComponentProps<LocalToolNode>) {
-	const editor = useEditor()
-	const set = (patch: Partial<LocalToolNode>) => updateNode<LocalToolNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
-	return (
-		<>
-			<PortRow shapeId={shape.id} portId="stdin" label="Text in" dataType="text" />
-			<NodeRow>
-				<select className="NodeField-select" value={node.tool} onPointerDown={stopEvent} onChange={(e) => set({ tool: e.target.value })}>
-					{['grep', 'gawk', 'awk', 'sed', 'cut', 'sort', 'uniq', 'wc'].map((tool) => (
-						<option key={tool} value={tool}>{tool}</option>
-					))}
-				</select>
-			</NodeRow>
-			<Line label="Args" value={node.args} onChange={(args) => set({ args })} />
-			<p className="NodeHint">Runs on the server, not in the page. Only the listed tools.</p>
-		</>
 	)
 }
 
@@ -279,12 +218,12 @@ function OpenRouterComponent({ shape, node }: NodeComponentProps<OpenRouterNode>
 	const { models, error } = useHub('/api/hub/openrouter')
 	return (
 		<NodeRow>
-			<select className="NodeField-select" value={node.model} onPointerDown={stopEvent} onChange={(e) => updateNode<OpenRouterNode>(editor, shape, (n) => ({ ...n, model: e.target.value }), false)}>
+			<NodeSelect className="NodeField-select" value={node.model} onPointerDown={stopEvent} onChange={(e) => updateNode<OpenRouterNode>(editor, shape, (n) => ({ ...n, model: e.target.value }), false)}>
 				<option value="">{error || (models.length ? 'Free models' : 'Loading free models…')}</option>
 				{models.map((model) => (
 					<option key={model.id} value={model.id}>{model.name}</option>
 				))}
-			</select>
+			</NodeSelect>
 		</NodeRow>
 	)
 }

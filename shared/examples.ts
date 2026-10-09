@@ -238,12 +238,12 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
-	step('local-grep', 'grep a column', 'Local tool runs grep on the text. The tool list is gawk, awk, grep, sed, cut, sort, uniq, and wc.', [
+	step('local-grep', 'Keep matching lines', 'Text tools keeps lines that contain ada. The match runs in the page.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
-		{ id: 'b', type: 'local_tool', x: 460, y: 0, props: { tool: 'grep', args: 'ada' } },
+		{ id: 'b', type: 'text_tool', x: 460, y: 0, props: { op: 'keep_lines', a: 'ada' } },
 		{ id: 'c', type: 'output', x: 980, y: 0 },
 	], [
-		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'stdin' },
+		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
 	step('url-summary', 'Summarize a page', 'Type www.wikipedia.org with no https. URL in adds it, fetches the page, and Summarize reads the text.', [
@@ -282,10 +282,10 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
-	step('local-wc', 'Count words', 'Local tool runs wc on the text. It runs on the server with no shell.', [
+	step('local-wc', 'Count words', 'Text tools counts words, characters, and lines in the page.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'one two three four' } },
-		{ id: 'b', type: 'local_tool', x: 460, y: 0, props: { tool: 'wc', args: '-w' } },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'stdin' }]),
+		{ id: 'b', type: 'text_tool', x: 460, y: 0, props: { op: 'count' } },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
 	{
 		id: 'group-label',
 		title: 'Group and rename',
@@ -298,14 +298,14 @@ export const EXAMPLES: CanvasExample[] = [
 		groupIds: ['a', 'b'],
 		groupLabel: 'Notes',
 	},
-	step('shell-keys', 'Search, map, and commands', 'Ctrl-P inserts a node. Shift-B collapses the library. Find supports regexp, highlight, and a dry run. Map view moves the canvas. Search hits blink. History can restore a deleted node. Backup is in the View menu.', [
+	step('shell-keys', 'Search, map, and commands', 'Ctrl-P inserts a node. Shift-B collapses the library. Find supports regexp, several lines, highlight, and a dry run. Map view moves the canvas. Search hits blink. Undo is the normal canvas undo. Backup is in the View menu.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Find this sentence on the canvas.' } },
 		{ id: 'b', type: 'output', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
 	{
 		id: 'data-desk',
 		title: 'Data desk',
-		blurb: 'CSV goes through select, a new column, a chart, concat, grep, a short wait, a view, a file, Postgres, and SQLite.',
+		blurb: 'CSV goes through select, a new column, a chart, concat, a line filter, a short wait, a view, a file, Postgres, and SQLite.',
 		nodes: [
 			{ id: 'csv', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 			{ id: 'pick', type: 'table', x: 460, y: 0, props: { format: 'csv', op: 'select', columns: 'name,score' } },
@@ -313,7 +313,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ id: 'bars', type: 'chart', x: 1500, y: 0, props: { format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score' } },
 			{ id: 'title', type: 'prompt', x: 0, y: 420, props: { text: 'Score table' } },
 			{ id: 'join', type: 'prompt_concat', x: 460, y: 420, props: { separator: '\n' } },
-			{ id: 'grep', type: 'local_tool', x: 980, y: 420, props: { tool: 'grep', args: 'ada' } },
+			{ id: 'grep', type: 'text_tool', x: 980, y: 420, props: { op: 'keep_lines', a: 'ada' } },
 			{ id: 'wait', type: 'sleep', x: 1500, y: 420, props: { ms: 100 } },
 			{ id: 'view', type: 'output', x: 0, y: 840 },
 			{ id: 'file', type: 'save', x: 460, y: 840, props: { fileName: 'scores.csv' } },
@@ -326,7 +326,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ from: 'col', fromPort: 'output', to: 'bars', toPort: 'data' },
 			{ from: 'title', fromPort: 'output', to: 'join', toPort: 'prefix' },
 			{ from: 'col', fromPort: 'output', to: 'join', toPort: 'main' },
-			{ from: 'col', fromPort: 'output', to: 'grep', toPort: 'stdin' },
+			{ from: 'col', fromPort: 'output', to: 'grep', toPort: 'input' },
 			{ from: 'grep', fromPort: 'output', to: 'wait', toPort: 'input' },
 			{ from: 'wait', fromPort: 'output', to: 'view', toPort: 'input' },
 			{ from: 'join', fromPort: 'output', to: 'file', toPort: 'input' },
@@ -337,13 +337,13 @@ export const EXAMPLES: CanvasExample[] = [
 	{
 		id: 'media-desk',
 		title: 'Media and models desk',
-		blurb: 'A page address feeds video and HTTP. The body waits, then wc counts lines. A file hash and a URL node sit beside a raw model call and a summary.',
+		blurb: 'A page address feeds video and HTTP. The body waits, then a text tool counts it. A file hash and a URL node sit beside a raw model call and a summary.',
 		nodes: [
 			{ id: 'url', type: 'prompt', x: 0, y: 0, props: { text: 'https://example.com' } },
 			{ id: 'clip', type: 'video', x: 460, y: 0, props: { autoplay: false } },
 			{ id: 'fetch', type: 'http', x: 980, y: 0, props: { method: 'GET', extractText: true } },
 			{ id: 'wait', type: 'sleep', x: 1500, y: 0, props: { ms: 100 } },
-			{ id: 'lines', type: 'local_tool', x: 0, y: 420, props: { tool: 'wc', args: '-l' } },
+			{ id: 'lines', type: 'text_tool', x: 0, y: 420, props: { op: 'count' } },
 			{ id: 'site', type: 'url_in', x: 460, y: 420, props: { url: 'www.example.com', fetchBody: false } },
 			{ id: 'file', type: 'file_in', x: 980, y: 420, props: { mode: 'path', path: '/etc/hostname', action: 'sha256' } },
 			{ id: 'task', type: 'prompt', x: 1500, y: 420, props: { text: 'Say hello in one line.' } },
@@ -354,7 +354,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ from: 'url', fromPort: 'output', to: 'clip', toPort: 'url' },
 			{ from: 'url', fromPort: 'output', to: 'fetch', toPort: 'url' },
 			{ from: 'fetch', fromPort: 'output', to: 'wait', toPort: 'input' },
-			{ from: 'wait', fromPort: 'output', to: 'lines', toPort: 'stdin' },
+			{ from: 'wait', fromPort: 'output', to: 'lines', toPort: 'input' },
 			{ from: 'fetch', fromPort: 'output', to: 'sum', toPort: 'input' },
 			{ from: 'task', fromPort: 'output', to: 'raw', toPort: 'prompt' },
 		],

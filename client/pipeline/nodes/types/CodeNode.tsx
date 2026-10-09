@@ -19,7 +19,7 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } fro
 import { Port } from '../../ports/Port'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, stopEvent } from './fields'
+import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -287,7 +287,7 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 				</div>
 			))}
 			<NodeRow>
-				<select
+				<NodeSelect
 					className="NodeField-select"
 					value={node.lang}
 					onPointerDown={stopEvent}
@@ -302,7 +302,7 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 					<option value="ts">TypeScript</option>
 					<option value="js">JavaScript</option>
 					<option value="py">Python</option>
-				</select>
+				</NodeSelect>
 				<label className="NodeField-inline" title="Number of inputs (1–20)">
 					<span>in</span>
 					<input

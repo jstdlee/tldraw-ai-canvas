@@ -37,12 +37,7 @@ import { RouterNodeDefinition } from './types/RouterNode'
 import { ChartNodeDefinition, SqliteNodeDefinition, TableNodeDefinition } from './types/DataNodes'
 import { FileInNodeDefinition, UrlInNodeDefinition } from './types/InputNodes'
 import { RawModelNodeDefinition } from './types/RawModelNode'
-import {
-	LocalToolNodeDefinition,
-	OpenRouterNodeDefinition,
-	SleepNodeDefinition,
-	VideoNodeDefinition,
-} from './types/ToolNodes'
+import { OpenRouterNodeDefinition, SleepNodeDefinition, VideoNodeDefinition } from './types/ToolNodes'
 import {
 	ExecutionResult,
 	InfoValues,
@@ -96,7 +91,6 @@ export const NodeDefinitions = {
 	video: VideoNodeDefinition,
 	file_in: FileInNodeDefinition,
 	url_in: UrlInNodeDefinition,
-	local_tool: LocalToolNodeDefinition,
 	sleep: SleepNodeDefinition,
 } satisfies Record<string, NodeDefinitionConstructor<any>>
 
@@ -122,6 +116,7 @@ const RemovedNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {
 	model_pick: removedNodeDefinition('model_pick', 'Pick a model'),
 	terminal: removedNodeDefinition('terminal', 'Terminal'),
 	agent_run: removedNodeDefinition('agent_run', 'Local agent'),
+	local_tool: removedNodeDefinition('local_tool', 'Local tool'),
 }
 
 const AllNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {
