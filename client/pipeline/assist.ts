@@ -1,19 +1,15 @@
-import { atom, createBindingId, createShapeId, Editor, TLShapeId } from 'tldraw'
-import { allowedProps, parseAssistPlan, type AssistPlan } from '../../shared/nodeAssist'
-import { catalogPrompt, NODE_PORTS } from '../../shared/nodeCatalog'
-import { featurePrompt } from '../../shared/featureList'
-import { shapeText } from '../clips/shapeText'
+import { atom, Editor, TLShapeId } from 'tldraw'
+import { validateProps } from '../../shared/aiPlan'
+import { extractJsonObject } from '../../shared/nodeAssist'
+import { NodeSpec, NODE_SPECS, nodeSpecText } from '../../shared/nodeSpecs'
+import { describeCanvasNode, nodeAssistContext } from './aiContext'
 import { apiGenerateText } from './api/pipelineApi'
-import { getNodeDefinition, NodeType } from './nodes/nodeTypes'
 import { NodeShape } from './nodes/NodeShapeUtil'
-import { getNodePortConnections } from './nodes/nodePorts'
 
-export const $assist = atom<{ mode: 'fill'; shapeId: TLShapeId } | { mode: 'compose'; shapeIds: TLShapeId[] } | null>(
-	'node assist',
-	null
-)
+/** Per-node AI card: which node it is open for. */
+export const $assist = atom<{ shapeId: TLShapeId } | null>('node assist', null)
 
-/** Answer text for a selection that is not a node. Shown in a dialog, not on the canvas. */
+/** Answer text for a selection that is not a node (kept for other Ask/Explain dialogs). */
 export const $aiNote = atom<string | null>('ai note', null)
 
 /**
@@ -21,11 +17,6 @@ export const $aiNote = atom<string | null>('ai note', null)
  * what you were typing. Keyed by shape id.
  */
 export const $assistDrafts = atom<Record<string, string>>('assist drafts', {})
-
-export interface AssistResult {
-	direction: string
-	changed: boolean
-}
 
 export function assistDraft(shapeId: TLShapeId): string {
 	return $assistDrafts.get()[shapeId] ?? ''
@@ -43,171 +34,147 @@ export function setAssistDraft(shapeId: TLShapeId, text: string) {
 export function openFillAssist(shapeId: TLShapeId, options?: { error?: string }) {
 	const error = options?.error?.trim()
 	if (error) setAssistDraft(shapeId, `Fix this error: ${error}`)
-	$assist.set({ mode: 'fill', shapeId })
+	$assist.set({ shapeId })
 }
 
-export function openComposeAssist(shapeIds: TLShapeId[]) {
-	$assist.set({ mode: 'compose', shapeIds })
+export function closeFillAssist() {
+	$assist.set(null)
 }
 
-const ASSIST_SYSTEM =
-	'You improve workflow nodes. Read each node\'s properties, attributes, wires, and the user prompt. ' +
-	'Reply with JSON only:\n' +
-	'{"direction":"one sentence","props":{},"updates":[{"id":"shape id","props":{}}],' +
-	'"add":[{"tempId":"n1","type":"prompt","props":{},"x":360,"y":0}],' +
-	'"connect":[{"from":"id or tempId","fromPort":"output","to":"id or tempId","toPort":"input"}]}\n' +
-	'direction is the change or the next step. props fills the one selected node. ' +
-	'updates fills the listed nodes. add and connect when the request needs another node or a wire. ' +
-	'Use only fields and ports from the catalog. Do not change type. Omit keys you do not change. ' +
-	'A direction alone is valid when you only advise. ' +
-	'The catalog is a static list of this app. It is not a live MCP server.\n\n' +
-	catalogPrompt() +
-	'\n\nApp features:\n' +
-	featurePrompt()
-
-function nodeSummary(shape: NodeShape) {
-	const node = shape.props.node as unknown as Record<string, unknown>
-	const brief: Record<string, unknown> = { type: node.type }
-	for (const [key, value] of Object.entries(node)) {
-		if (key === 'type' || value == null || value === '') continue
-		if (typeof value === 'string' && value.length > 400) brief[key] = value.slice(0, 400) + '…'
-		else if (typeof value !== 'object') brief[key] = value
-	}
-	return { id: shape.id, ...brief }
+export interface NodeAssistChange {
+	key: string
+	label: string
+	before: unknown
+	after: unknown
 }
 
-function describeNode(editor: Editor, shape: NodeShape) {
-	const wires = getNodePortConnections(editor, shape).map((link) => {
-		const other = editor.getShape(link.connectedShapeId)
-		const otherType =
-			other?.type === 'node' ? (other.props as { node?: { type?: string } }).node?.type : other?.type
-		return {
-			direction: link.terminal === 'end' ? 'in' : 'out',
-			port: link.ownPortId,
-			otherId: link.connectedShapeId,
-			otherType: otherType ?? 'shape',
-			otherPort: link.connectedPortId,
-		}
+export interface NodeAssistNeed {
+	type: string
+	why: string
+}
+
+export interface NodeAssistResult {
+	say: string
+	changes: NodeAssistChange[]
+	needs: NodeAssistNeed[]
+	errors: string[]
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+	return value != null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+}
+
+function parseNodeAssistReply(text: string): { say: string; props: Record<string, unknown>; needs: NodeAssistNeed[] } {
+	const record = asRecord(extractJsonObject(text))
+	const say = typeof record.say === 'string' ? record.say : ''
+	const props = asRecord(record.props)
+	const needs = (Array.isArray(record.needs) ? record.needs : []).flatMap((item) => {
+		const r = asRecord(item)
+		return typeof r.type === 'string' ? [{ type: r.type, why: typeof r.why === 'string' ? r.why : '' }] : []
 	})
-	return { ...nodeSummary(shape), wires }
+	return { say, props, needs }
 }
 
-/** Defaults plus catalog fields, so an optional key such as promptOverride can be set. */
-function fieldBase(editor: Editor, node: Record<string, unknown>): Record<string, unknown> {
-	const type = typeof node.type === 'string' ? node.type : ''
-	let defaults: Record<string, unknown> = {}
-	try {
-		if (type) defaults = getNodeDefinition(editor, type as NodeType['type']).getDefault() as unknown as Record<string, unknown>
-	} catch {
-		defaults = {}
-	}
-	const base: Record<string, unknown> = { ...defaults, ...node }
-	for (const key of NODE_PORTS[type]?.fields ?? []) {
-		if (!(key in base)) base[key] = ''
-	}
-	return base
+function buildSystemPrompt(spec: NodeSpec): string {
+	const rules = spec.assistant.rules?.length ? `\nRules:\n${spec.assistant.rules.map((r) => `- ${r}`).join('\n')}` : ''
+	return [
+		spec.assistant.role,
+		rules,
+		'',
+		nodeSpecText(spec.type),
+		'',
+		'Reply with JSON only, in this shape:',
+		'{"say":"one or two sentences","props":{"<field>":<value>},"needs":[{"type":"<node type>","why":"…"}]}',
+		'props holds only the fields you are changing, using the field kinds, enum values and ports above.',
+		'needs lists upstream/downstream node types this node cannot do alone on its own; it may be empty.',
+		'Never invent a field or an enum value that is not listed above.',
+	]
+		.filter(Boolean)
+		.join('\n')
 }
 
-function writeProps(editor: Editor, shape: NodeShape, patch: Record<string, unknown>): boolean {
-	const node = shape.props.node as unknown as Record<string, unknown>
-	const props = allowedProps(fieldBase(editor, node), patch)
-	if (!Object.entries(props).some(([key, value]) => node[key] !== value)) return false
-	editor.updateShape<NodeShape>({
-		id: shape.id,
-		type: 'node',
-		props: { node: { ...shape.props.node, ...props } as NodeType, isOutOfDate: true },
-	})
-	return true
+function describeNodeForPrompt(editor: Editor, shape: NodeShape) {
+	const ctx = describeCanvasNode(editor, shape)
+	return JSON.stringify(
+		{
+			props: ctx.props,
+			wiredInputs: ctx.wiredInputs,
+			inputSamples: ctx.inputSamples,
+			outputSample: ctx.outputSample,
+			error: ctx.error,
+		},
+		null,
+		2
+	)
 }
 
-function applyPlan(editor: Editor, shapes: NodeShape[], plan: AssistPlan): boolean {
-	const ids = new Map<string, TLShapeId>()
-	for (const shape of shapes) ids.set(shape.id, shape.id)
-	let changed = false
-	editor.markHistoryStoppingPoint('ai arrange nodes')
-	editor.run(() => {
-		const updates = [...plan.updates]
-		if (shapes.length === 1 && Object.keys(plan.props).length) updates.push({ id: shapes[0].id, props: plan.props })
-		for (const update of updates) {
-			const shape = editor.getShape(update.id as TLShapeId)
-			if (!shape || shape.type !== 'node') continue
-			if (writeProps(editor, shape, update.props)) changed = true
-		}
-		const origin = editor.getViewportPageBounds().center
-		for (const add of plan.add) {
-			let base: NodeType
-			try {
-				base = getNodeDefinition(editor, add.type as NodeType['type']).getDefault()
-			} catch {
-				continue
-			}
-			const id = createShapeId()
-			ids.set(add.tempId, id)
-			const props = allowedProps(base as unknown as Record<string, unknown>, add.props)
-			editor.createShape({
-				id,
-				type: 'node',
-				x: origin.x + add.x,
-				y: origin.y + add.y,
-				props: { node: { ...base, ...props, type: add.type } as NodeType },
-			})
-			changed = true
-		}
-		for (const wire of plan.connect) {
-			const fromId = ids.get(wire.from) ?? (editor.getShape(wire.from as TLShapeId) ? (wire.from as TLShapeId) : undefined)
-			const toId = ids.get(wire.to) ?? (editor.getShape(wire.to as TLShapeId) ? (wire.to as TLShapeId) : undefined)
-			if (!fromId || !toId) continue
-			const connectionId = createShapeId()
-			editor.createShape({
-				id: connectionId,
-				type: 'connection',
-				props: { start: { x: 0, y: 0 }, end: { x: 80, y: 0 } },
-			})
-			editor.createBinding({
-				id: createBindingId(),
-				type: 'connection',
-				fromId: connectionId,
-				toId: fromId,
-				props: { terminal: 'start', portId: wire.fromPort, order: 0 },
-			})
-			editor.createBinding({
-				id: createBindingId(),
-				type: 'connection',
-				fromId: connectionId,
-				toId: toId,
-				props: { terminal: 'end', portId: wire.toPort, order: 1 },
-			})
-			changed = true
-		}
-	})
-	return changed
-}
-
-async function askModel(editor: Editor, shapes: NodeShape[], intent: string): Promise<AssistResult> {
-	const { text } = await apiGenerateText({
-		temperature: 0.2,
-		system: ASSIST_SYSTEM,
-		prompt: `Selected nodes:\n${JSON.stringify(shapes.map((shape) => describeNode(editor, shape)), null, 2)}\n\nSelection text:\n${shapes
-			.map((shape) => shapeText(editor, shape))
-			.filter(Boolean)
-			.join('\n---\n')}\n\nThe user wants: ${intent}`,
-	})
-	const plan = parseAssistPlan(text)
-	const changed = applyPlan(editor, shapes, plan)
-	if (!changed && !plan.direction) throw new Error('The model did not change the node')
-	return { direction: plan.direction, changed }
-}
-
-export async function runFill(editor: Editor, shapeId: TLShapeId, intent: string): Promise<AssistResult> {
+/** The node's own AI specialist: reads the node's spec + current state, proposes field changes. Does not apply them. */
+export async function runNodeAssist(
+	editor: Editor,
+	shapeId: TLShapeId,
+	request: string,
+	opts: { model?: string } = {}
+): Promise<NodeAssistResult> {
 	const shape = editor.getShape(shapeId)
 	if (!shape || shape.type !== 'node') throw new Error('Select a node')
-	return askModel(editor, [shape], intent)
+	const nodeShape = shape as NodeShape
+	const node = nodeShape.props.node as unknown as Record<string, unknown>
+	const type = String(node.type)
+	const spec = NODE_SPECS[type]
+	if (!spec) throw new Error(`No AI specialist for node type "${type}"`)
+
+	const system = buildSystemPrompt(spec)
+	const extra = nodeAssistContext(editor, nodeShape)
+	const userBase = [
+		request,
+		'',
+		'This node now:',
+		describeNodeForPrompt(editor, nodeShape),
+		extra ? `\n${extra}` : '',
+	]
+		.filter(Boolean)
+		.join('\n')
+
+	const call = (prompt: string) =>
+		apiGenerateText({ system, prompt, model: opts.model, capability: 'chat', temperature: 0.2 })
+
+	const first = await call(userBase)
+	let reply = parseNodeAssistReply(first.text)
+	let errors: string[] = []
+	let cleanProps = validateProps(type, reply.props, NODE_SPECS, errors, 'props')
+
+	if (errors.length) {
+		const retryPrompt = `${userBase}\n\nYour last reply had these problems:\n${errors
+			.map((e) => `- ${e}`)
+			.join('\n')}\nReturn corrected JSON in the same shape, fixing only those problems.`
+		const second = await call(retryPrompt)
+		reply = parseNodeAssistReply(second.text)
+		const retryErrors: string[] = []
+		cleanProps = validateProps(type, reply.props, NODE_SPECS, retryErrors, 'props')
+		errors = retryErrors
+	}
+
+	const fieldsByKey = new Map(spec.fields.map((f) => [f.key, f]))
+	const changes: NodeAssistChange[] = Object.entries(cleanProps)
+		.filter(([key, value]) => node[key] !== value)
+		.map(([key, value]) => ({ key, label: fieldsByKey.get(key)?.label ?? key, before: node[key] ?? null, after: value }))
+
+	const needs = reply.needs.filter((need) => NODE_SPECS[need.type] && !NODE_SPECS[need.type].hidden)
+
+	return { say: reply.say, changes, needs, errors }
 }
 
-export async function runCompose(editor: Editor, shapeIds: TLShapeId[], intent: string): Promise<AssistResult> {
-	const shapes = shapeIds
-		.map((id) => editor.getShape(id))
-		.filter((shape): shape is NodeShape => !!shape && shape.type === 'node')
-	if (!shapes.length) throw new Error('Select one or more nodes')
-	return askModel(editor, shapes, intent)
+/** Apply changes proposed by runNodeAssist, as one history step. */
+export function applyNodeAssistChanges(editor: Editor, shapeId: TLShapeId, changes: NodeAssistChange[]) {
+	if (!changes.length) return
+	const shape = editor.getShape(shapeId)
+	if (!shape || shape.type !== 'node') return
+	const nodeShape = shape as NodeShape
+	editor.markHistoryStoppingPoint('ai node')
+	const patch = Object.fromEntries(changes.map((c) => [c.key, c.after]))
+	editor.updateShape<NodeShape>({
+		id: shapeId,
+		type: 'node',
+		props: { node: { ...nodeShape.props.node, ...patch } as NodeShape['props']['node'], isOutOfDate: true },
+	})
 }

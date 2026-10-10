@@ -1852,7 +1852,7 @@ body {
 .AssistDialog {
 	width: min(480px, calc(100vw - 32px));
 	background: var(--tl-color-panel);
-	border-radius: 12px;
+	border-radius: var(--tl-radius-4);
 	box-shadow: var(--tl-shadow-3);
 	padding: 14px;
 	display: flex;
@@ -1865,33 +1865,146 @@ body {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
+	color: var(--tl-color-text-1);
 }
 
-.AssistDialog textarea {
-	width: 100%;
-	min-height: 90px;
-	resize: vertical;
-	box-sizing: border-box;
-	font: inherit;
-	padding: 8px;
-}
-
-.AssistDialog-error {
-	margin: 0;
-	color: var(--tl-color-danger);
-	font-size: 0.8em;
-}
-
-.AssistDialog-note {
-	margin: 0;
-	color: var(--tl-color-text-2);
-	font-size: 12px;
+.AssistDialog-bar strong {
+	display: flex;
+	align-items: center;
+	gap: 6px;
 }
 
 .AssistDialog-actions {
 	display: flex;
 	justify-content: flex-end;
 	gap: 8px;
+}
+
+/* Floating "Build with AI" panel: fixed at the right, under the top bar. */
+.BuildPanel {
+	position: fixed;
+	top: 56px;
+	right: 12px;
+	bottom: 12px;
+	z-index: 650;
+	width: 400px;
+	max-width: calc(100vw - 24px);
+	background: var(--tl-color-panel);
+	border-radius: var(--tl-radius-4);
+	box-shadow: var(--tl-shadow-3);
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	overflow-y: auto;
+	pointer-events: all;
+}
+
+.BuildPanel-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	color: var(--tl-color-text-1);
+}
+
+.BuildPanel-bar strong {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.BuildPanel-using {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.BuildPanel-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.BuildPanel-groups {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.BuildPanel-group {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.BuildPanel-types {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding-left: 8px;
+	width: 100%;
+}
+
+.BuildPanel-error {
+	margin: 0;
+	color: var(--tl-color-danger);
+	font-size: 0.85em;
+}
+
+.BuildPanel-plan {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border-top: 1px solid var(--tl-color-divider);
+	padding-top: 8px;
+}
+
+.BuildPanel-divider {
+	font-weight: 600;
+	color: var(--tl-color-text-1);
+	font-size: 0.85em;
+}
+
+.BuildPanel-summary {
+	margin: 0;
+	color: var(--tl-color-text-1);
+	font-size: 0.9em;
+}
+
+.BuildPanel-planRow {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 0.82em;
+	color: var(--tl-color-text-2);
+}
+
+.BuildPanel-note {
+	color: var(--tl-color-text-2);
+}
+
+.BuildPanel-warning {
+	color: var(--tl-color-warning);
+}
+
+.BuildPanel-revise {
+	display: flex;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+.BuildPanel-revise > :first-child {
+	flex: 1;
+}
+
+.BuildPanel-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: auto;
+	padding-top: 8px;
 }
 
 /* AI-star chat card: anchored under the node, not a centered modal. */
@@ -1902,7 +2015,7 @@ body {
 	z-index: 700;
 	width: min(360px, calc(100vw - 32px));
 	background: var(--tl-color-panel);
-	border-radius: 12px;
+	border-radius: var(--tl-radius-4);
 	box-shadow: var(--tl-shadow-3);
 	padding: 12px;
 	display: flex;
@@ -1911,13 +2024,85 @@ body {
 	pointer-events: all;
 }
 
-.FillChatCard textarea {
-	width: 100%;
-	min-height: 72px;
-	resize: vertical;
-	box-sizing: border-box;
-	font: inherit;
-	padding: 8px;
+.FillChatCard-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	color: var(--tl-color-text-1);
+}
+
+.FillChatCard-bar strong {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.95em;
+}
+
+.FillChatCard-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.FillChatCard-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.FillChatCard-error {
+	margin: 0;
+	color: var(--tl-color-danger);
+	font-size: 0.8em;
+}
+
+.FillChatCard-answer {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border-top: 1px solid var(--tl-color-divider);
+	padding-top: 8px;
+}
+
+.FillChatCard-say {
+	margin: 0;
+	color: var(--tl-color-text-1);
+	font-size: 0.9em;
+}
+
+.FillChatCard-diff {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.FillChatCard-diffRow {
+	display: flex;
+	gap: 8px;
+	font-size: 0.82em;
+	color: var(--tl-color-text-2);
+}
+
+.FillChatCard-diffLabel {
+	min-width: 90px;
+	color: var(--tl-color-text-1);
+	font-weight: 500;
+}
+
+.FillChatCard-need {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 0.85em;
+	color: var(--tl-color-text-2);
+}
+
+.FillChatCard-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
 }
 
 /* Dashed outline that blinks around the shape a search just jumped to. */

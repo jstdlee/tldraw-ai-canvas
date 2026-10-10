@@ -10,7 +10,8 @@ import {
 	TLShapeId,
 	toRichText,
 } from 'tldraw'
-import { $aiNote, openComposeAssist, openFillAssist } from '../pipeline/assist'
+import { $aiNote, openFillAssist } from '../pipeline/assist'
+import { openBuildPanel } from '../pipeline/aiBuild'
 import { apiGenerateText, apiHttp, apiImportImage, apiProbeImage } from '../pipeline/api/pipelineApi'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../pipeline/placeOnCanvas'
 import { isMermaid, looksLikeMarkdown } from '../../shared/clipText'
@@ -130,31 +131,17 @@ export async function aiExplainSelection(editor: Editor, notify: Notify) {
 	return runAI(editor, notify, 'Explain', snapshot, 'Explain what this part of a whiteboard shows (drawings, diagrams, notes). Then suggest 3 next steps. Use Markdown.')
 }
 
-export async function aiAskSelection(editor: Editor, notify: Notify) {
+/**
+ * One node selected opens its own AI specialist. Anything else (0, 2+ nodes, or
+ * non-node shapes as notes) opens "Build with AI" on the current selection.
+ */
+export function aiAskSelection(editor: Editor, _notify: Notify) {
 	const nodes = editor.getSelectedShapes().filter((shape) => shape.type === 'node')
 	if (nodes.length === 1) {
 		openFillAssist(nodes[0].id)
 		return
 	}
-	if (nodes.length > 1) {
-		openComposeAssist(nodes.map((shape) => shape.id))
-		return
-	}
-	const question = window.prompt('Ask AI about the selection:')
-	if (!question) return
-	const text = selectionText(editor)
-	const snapshot = await selectionSnapshot(editor)
-	const input = snapshot ?? text
-	if (!input) return notify('Select something first', 'warning')
-	notify('Ask AI…')
-	try {
-		const prompt = text ? `Text in the selection:\n${text.slice(0, 8000)}\n\nQuestion: ${question}` : question
-		const { text: answer } = await apiGenerateText({ input, prompt })
-		$aiNote.set(answer.trim() || 'No answer')
-		notify('Ask AI: done', 'success')
-	} catch (e) {
-		notify(`Ask AI failed: ${(e as Error).message}`, 'error')
-	}
+	openBuildPanel()
 }
 
 export async function aiTextJob(editor: Editor, notify: Notify, job: 'summarize' | 'translate' | 'improve' | 'brainstorm') {

@@ -4,6 +4,7 @@
  */
 
 import { LlmUsage, takeUsageTrailer } from '../../../shared/llmUsage'
+import { ModelCapability } from '../../../shared/aiConfig'
 
 
 export interface LlmRequestSettings {
@@ -21,6 +22,8 @@ export interface GenerateTextParams extends LlmRequestSettings {
 	images?: string[]
 	prompt: string
 	model?: string
+	/** Overrides the default capability ('vision' when an image is present, else 'chat'). */
+	capability?: ModelCapability
 }
 
 export interface GenerateTextResult {

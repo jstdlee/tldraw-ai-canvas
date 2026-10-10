@@ -302,13 +302,15 @@ app.post('/api/generate-text', async (c) => {
 		temperature?: number | null
 		maxTokens?: number | null
 		thinking?: string
+		/** Overrides the default capability ('vision' when images are present, else 'chat'). */
+		capability?: ModelCapability
 	}
 	if (!body.prompt) throw new ConfigError('prompt is required')
 	const { images, text } = body.input ? await inputToContent(String(body.input)) : { images: [], text: '' }
 	for (const extra of (body.images ?? []).slice(0, 12)) images.push(await resolveImage(extra))
 	const content: UserContent = images.map((img) => ({ type: 'image' as const, image: img.bytes, mediaType: img.mime }))
 	content.push({ type: 'text', text: text ? `Input:\n${text}\n\n${body.prompt}` : body.prompt })
-	const { model, provider } = resolveModelRef(body.model, images.length ? 'vision' : 'chat')
+	const { model, provider } = resolveModelRef(body.model, body.capability ?? (images.length ? 'vision' : 'chat'))
 	const started = Date.now()
 	const generated = await generateText({
 		model: getLanguageModel(provider, model),

@@ -27,6 +27,7 @@ import {
 	sendImageToPipeline,
 	wordCount,
 } from './canvasFeatures'
+import { openBuildPanel } from '../pipeline/aiBuild'
 import { $findOpen } from './FindBar'
 import { $imageEditorTarget } from './ImageEditor'
 import { diveGroup, groupSelection, leaveGroup, renameSelection } from '../pipeline/groups/groupActions'
@@ -112,6 +113,7 @@ export function canvasActionOverrides(
 		...a('ai-extract-text', 'Extract text (OCR)', () => aiExtractText(editor, notify)),
 		...a('ai-explain', 'Explain selection', () => aiExplainSelection(editor, notify)),
 		...a('ai-ask', 'Ask about selection…', () => aiAskSelection(editor, notify), '$!k'),
+		...a('build-with-ai', 'Build with AI…', () => openBuildPanel()),
 		...a('ai-summarize', 'Summarize text', () => aiTextJob(editor, notify, 'summarize')),
 		...a('ai-translate', 'Translate text…', () => aiTextJob(editor, notify, 'translate')),
 		...a('ai-improve', 'Improve writing', () => aiTextJob(editor, notify, 'improve')),
@@ -283,6 +285,7 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 					<TldrawUiMenuSubmenu id="ai-submenu" label="AI">
 						<TldrawUiMenuGroup id="ai-sel">
 							<TldrawUiMenuActionItem actionId="ai-ask" />
+							<TldrawUiMenuActionItem actionId="build-with-ai" />
 							<TldrawUiMenuActionItem actionId="ai-explain" />
 						</TldrawUiMenuGroup>
 						<TldrawUiMenuGroup id="ai-text">
@@ -343,6 +346,7 @@ export function CanvasToolsMenuGroup() {
 			</TldrawUiMenuGroup>
 			<TldrawUiMenuGroup id="ct-ai">
 				<TldrawUiMenuActionItem actionId="ai-ask" />
+				<TldrawUiMenuActionItem actionId="build-with-ai" />
 				<TldrawUiMenuActionItem actionId="ai-explain" />
 				<TldrawUiMenuActionItem actionId="ai-summarize" />
 				<TldrawUiMenuActionItem actionId="ai-translate" />
