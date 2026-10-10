@@ -1,10 +1,8 @@
-/** Local tools, backup, history, file reads, output spill, and the raw-model proxy. */
+/** Local tools, backup, history, output spill, and the raw-model proxy. */
 
 import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { basename, extname, isAbsolute, join, resolve, sep } from 'node:path'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
 import { buildToolCommand } from '../shared/localTool'
 import { normalizeLlmUsage } from '../shared/llmUsage'
@@ -13,9 +11,6 @@ import { freeModels, modelsFromPayload } from '../shared/modelPick'
 
 const MAX_STDIN = 1024 * 1024 // 1 MiB typed into a node
 const MAX_OUT = 1024 * 1024 // 1 MiB back to the canvas
-const MAX_TEXT_FILE = 1024 * 1024
-const TEXT_EXT = /\.(txt|md|json|jsonl|csv|tsv|log|xml|ya?ml|html?|css|js|ts|py|sql|svg|ini|toml)$/i
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i
 
 function dataDir() {
 	return resolve(process.env.DATA_DIR ?? join(process.cwd(), 'data'))
@@ -71,37 +66,6 @@ function runProcess(cmd: string, args: string[], stdin: string, timeoutMs: numbe
 	return promise
 }
 
-/** Roots a file read may touch: home, /tmp, and the data folder. Credential and config dirs stay out. */
-const BLOCKED_DIRS = ['.ssh', '.gnupg', '.aws', '.config', '.kube', '.docker']
-const BLOCKED_FILES = ['.env', '.netrc', '.npmrc', '.git-credentials', '.pgpass']
-
-function readablePath(input: string): string {
-	if (!input.trim()) throw new Error('Give a file path')
-	const path = resolve(input)
-	if (!isAbsolute(path)) throw new Error('Use an absolute path')
-	let real: string
-	try {
-		real = realpathSync(path)
-	} catch {
-		throw new Error('File not found')
-	}
-	const roots = [homedir(), '/tmp', dataDir()].map((root) => resolve(root))
-	if (!roots.some((root) => real === root || real.startsWith(root + sep))) {
-		throw new Error('Read files under your home folder, /tmp, or the app data folder')
-	}
-	const parts = real.split(sep)
-	if (parts.some((part) => BLOCKED_DIRS.includes(part))) throw new Error('That folder holds credentials, not data')
-	if (BLOCKED_FILES.includes(basename(real))) throw new Error('That file holds credentials, not data')
-	if (!statSync(real).isFile()) throw new Error('Not a file')
-	return real
-}
-
-async function sha256File(path: string): Promise<string> {
-	const hash = createHash('sha256')
-	for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer)
-	return hash.digest('hex')
-}
-
 function outputsDir() {
 	const dir = join(dataDir(), 'outputs')
 	mkdirSync(dir, { recursive: true })
@@ -122,21 +86,6 @@ export function registerBatchRoutes(app: Hono) {
 		const result = await runProcess(cmd, args, stdin, 20_000)
 		if (result.code !== 0 && !result.out) throw new Error(result.err.trim() || `${cmd} exited ${result.code}`)
 		return c.json({ output: result.out || result.err })
-	})
-
-	app.post('/api/file/read', async (c) => {
-		const body = (await c.req.json()) as { path?: string; mode?: string }
-		const path = readablePath(body.path ?? '')
-		const size = statSync(path).size
-		if (body.mode === 'sha256') {
-			return c.json({ sha256: await sha256File(path), size })
-		}
-		if (!TEXT_EXT.test(path) && size > 0) {
-			const sample = readFileSync(path).subarray(0, 512)
-			if (sample.includes(0)) throw new Error('Binary file. Read it as sha256 instead.')
-		}
-		const text = readFileSync(path, 'utf8')
-		return c.json({ text: text.slice(0, MAX_TEXT_FILE), truncated: text.length > MAX_TEXT_FILE })
 	})
 
 	app.post('/api/output', async (c) => {
@@ -242,5 +191,3 @@ export function registerBatchRoutes(app: Hono) {
 		return c.json({ name, target: 'folder' })
 	})
 }
-
-export { IMAGE_EXT }

@@ -48,6 +48,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	image_filter: 'image',
 	image_tool: 'image',
 	adjust: 'image',
+	image_gen: 'image',
 	// Data
 	table: 'data',
 	chart: 'data',

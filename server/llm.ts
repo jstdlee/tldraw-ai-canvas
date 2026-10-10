@@ -69,6 +69,8 @@ export interface ProviderModelInfo {
 	label?: string
 	/** Set when the provider says whether the model takes images. */
 	vision?: boolean
+	/** Set when the provider says the model outputs images (image generation). */
+	image?: boolean
 }
 
 /** Ask a provider which models it serves (for the "Fetch models" button). */
@@ -89,10 +91,12 @@ export async function listProviderModels(provider: ProviderConfig): Promise<Prov
 			const data = await json(url, auth)
 			return (data.data ?? data.models ?? []).map((m: any) => {
 				const input: unknown = m.modalities?.input ?? m.architecture?.input_modalities
+				const output: unknown = m.modalities?.output ?? m.architecture?.output_modalities
 				return {
 					id: m.id ?? m.name,
 					label: m.display_name ?? m.name,
 					...(Array.isArray(input) ? { vision: input.includes('image') } : {}),
+					...(Array.isArray(output) ? { image: output.includes('image') } : {}),
 				}
 			})
 		}

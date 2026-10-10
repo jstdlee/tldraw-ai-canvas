@@ -25,7 +25,7 @@ export async function placeImageOnCanvas(
 	editor: Editor,
 	nextTo: TLShape | null,
 	src: string,
-	opts: { maxSize?: number; name?: string } = {}
+	opts: { maxSize?: number; name?: string; at?: { x: number; y: number } } = {}
 ) {
 	const { w, h } = await loadSize(src)
 	const scale = Math.min(1, (opts.maxSize ?? 480) / Math.max(w, h))
@@ -33,7 +33,7 @@ export async function placeImageOnCanvas(
 	const sh = Math.round(h * scale)
 	const assetId = AssetRecordType.createId()
 	const mimeType = src.startsWith('data:') ? src.slice(5, src.indexOf(';')) : 'image/png'
-	const { x, y } = spotNextTo(editor, nextTo, sw, sh)
+	const { x, y } = opts.at ? { x: opts.at.x - sw / 2, y: opts.at.y - sh / 2 } : spotNextTo(editor, nextTo, sw, sh)
 	const id = createShapeId()
 	editor.run(() => {
 		editor.createAssets([

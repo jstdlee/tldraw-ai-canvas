@@ -3,10 +3,12 @@ import { useCallback, useState } from 'react'
 import { T, useEditor } from 'tldraw'
 import { apiImportImage } from '../../api/pipelineApi'
 import { FieldMax, ImageZoom } from '../../editors/LargeEditor'
+import { toImageUrl } from '../../imageOps'
 import { LoadImageIcon } from '../../components/icons/LoadImageIcon'
 import {
 	NODE_HEADER_HEIGHT_PX,
 	NODE_IMAGE_PREVIEW_HEIGHT_PX,
+	NODE_ROW_HEADER_GAP_PX,
 	NODE_ROW_HEIGHT_PX,
 	NODE_WIDTH_PX,
 } from '../../constants'
@@ -14,9 +16,12 @@ import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { IconClose, UiButton, UiIconButton, UiTextInput } from '../../../ui'
 import { NodeShape } from '../NodeShapeUtil'
+import { PortRow, useInputConnected } from './fields'
 import {
 	ExecutionResult,
+	getInputText,
 	InfoValues,
+	InputValues,
 	NodeComponentProps,
 	NodeDefinition,
 	NodeImage,
@@ -48,10 +53,17 @@ export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
 		}
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 2 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+		return NODE_ROW_HEIGHT_PX * 3 + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
+			url: {
+				id: 'url',
+				x: 0,
+				y: NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + NODE_ROW_HEIGHT_PX * 0.5,
+				terminal: 'end',
+				dataType: 'text',
+			},
 			output: {
 				id: 'output',
 				x: NODE_WIDTH_PX,
@@ -61,12 +73,13 @@ export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
 			},
 		}
 	}
-	async execute(shape: NodeShape, node: LoadImageNode): Promise<ExecutionResult> {
-		const source = (node.source ?? '').trim()
+	async execute(shape: NodeShape, node: LoadImageNode, inputs: InputValues): Promise<ExecutionResult> {
+		const fromPort = getInputText(inputs, 'url').trim()
+		const source = fromPort || (node.source ?? '').trim()
 		let imageUrl = node.imageUrl
 		if (source) {
-			imageUrl = await apiImportImage(source)
-			updateNode<LoadImageNode>(this.editor, shape, (n) => ({ ...n, imageUrl }))
+			imageUrl = fromPort ? await toImageUrl(fromPort) : await apiImportImage(source)
+			updateNode<LoadImageNode>(this.editor, shape, (n) => ({ ...n, imageUrl, source: fromPort ? n.source : source }))
 		}
 		await sleep(200)
 		return { output: imageUrl }
@@ -127,6 +140,7 @@ function selectImageFile(): Promise<File | null> {
 
 function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNode>) {
 	const editor = useEditor()
+	const urlWired = useInputConnected(shape.id, 'url')
 	const [isDragOver, setIsDragOver] = useState(false)
 	const [zoom, setZoom] = useState(false)
 	const [loadError, setLoadError] = useState<string | null>(null)
@@ -182,14 +196,17 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 
 	return (
 		<>
-			<NodeRow>
-				<UiTextInput
-					placeholder="Image URL or file path"
-					value={node.source ?? ''}
-					onChange={(source) => updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, source }))}
-				/>
-				<UiButton size="sm" variant="low" className="LoadImageNode-browse" label="Load" onClick={() => void loadSource()} />
-			</NodeRow>
+			<PortRow shapeId={shape.id} portId="url" label="URL" dataType="text" hint="optional: overrides the field below" />
+			{!urlWired && (
+				<NodeRow>
+					<UiTextInput
+						placeholder="Image URL"
+						value={node.source ?? ''}
+						onChange={(source) => updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, source }))}
+					/>
+					<UiButton size="sm" variant="low" className="LoadImageNode-browse" label="Load" onClick={() => void loadSource()} />
+				</NodeRow>
+			)}
 			<NodeRow>
 				<UiButton
 					size="sm"

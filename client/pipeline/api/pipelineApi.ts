@@ -132,14 +132,37 @@ export interface HttpResult {
 	ms?: number
 }
 
-/** Copy a local image path, or fetch an image URL, into the image store. */
+/** Bring an image URL, data URL, or stored image path into the image store. */
 export async function apiImportImage(source: string): Promise<string> {
-	const isUrl = /^https?:\/\//i.test(source.trim())
-	const data = await postJson<{ imageUrl: string }>(
-		isUrl ? '/api/images/from-url' : '/api/images/from-path',
-		isUrl ? { url: source.trim() } : { path: source.trim() }
-	)
-	return data.imageUrl
+	const value = source.trim()
+	if (value.startsWith('data:image/') || value.startsWith('/api/images/')) return value
+	if (/^https?:\/\//i.test(value)) {
+		const data = await postJson<{ imageUrl: string }>('/api/images/from-url', { url: value })
+		return data.imageUrl
+	}
+	throw new Error('Paste an image, upload one, or use an image URL.')
+}
+
+/** Is this URL an image? Checked before pasting a link onto the canvas. */
+export function apiProbeImage(url: string) {
+	return postJson<{ isImage: boolean; mime?: string; width?: number; height?: number }>('/api/images/probe', { url })
+}
+
+export interface GenerateImageParams {
+	/** Model key from the AI config; empty means the default image model. */
+	model?: string
+	prompt: string
+	n: number
+	size?: string
+	/** Reference images: data URLs, /api/images/… URLs, or http(s) URLs. */
+	images?: string[]
+	negative?: string
+	seed?: number
+}
+
+/** Generate N images from a prompt. Returns /api/images/… URLs; keys stay on the server. */
+export function apiGenerateImage(params: GenerateImageParams) {
+	return postJson<{ images: string[] }>('/api/generate-image', params)
 }
 
 /** HTTP node: the local server makes the request (no CORS limits). */

@@ -14,12 +14,13 @@ export interface LibraryEntry {
  * `pdf` is File in (any upload). `json` is the nodes that parse or show JSON.
  */
 export const LIBRARY_KEYWORDS: Record<string, string> = {
-	file_in: 'upload file pdf txt csv',
+	file_in: 'upload file url pdf txt csv image read',
 	text_tool: 'json csv markdown regex template',
 	text_ai: 'json summarize translate',
 	output: 'json markdown mermaid image',
 	code: 'javascript typescript python json',
 	chart: 'bar line pie',
+	image_gen: 'dall-e imagen flux stable diffusion openrouter txt2img',
 }
 
 function searchText(def: LibraryEntry): string {

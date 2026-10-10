@@ -37,6 +37,7 @@ import { RouterNodeDefinition } from './types/RouterNode'
 import { ChartNodeDefinition, TableNodeDefinition } from './types/DataNodes'
 import { DatabaseNodeDefinition } from './types/DatabaseNode'
 import { FileInNodeDefinition, UrlInNodeDefinition } from './types/InputNodes'
+import { ImageGenNodeDefinition } from './types/ImageGenNode'
 import { RawModelNodeDefinition } from './types/RawModelNode'
 import { OpenRouterNodeDefinition, SleepNodeDefinition, VideoNodeDefinition } from './types/ToolNodes'
 import {
@@ -68,6 +69,7 @@ export const NodeDefinitions = {
 	image_filter: ImageFilterNodeDefinition,
 	image_tool: ImageToolNodeDefinition,
 	adjust: AdjustNodeDefinition,
+	image_gen: ImageGenNodeDefinition,
 	// Logic & code
 	jev: JevNodeDefinition,
 	if: IfNodeDefinition,

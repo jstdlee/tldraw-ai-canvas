@@ -22,6 +22,7 @@ const CAPABILITY_HELP: Record<ModelCapability, string> = {
 	chat: 'Chat and text nodes',
 	vision: 'Reads images (chat with sketches, describe image)',
 	jev: 'JEV decisions: probabilities for yes/no, choice, score (System One API, or any chat model)',
+	image: 'Generate image node (text-to-image)',
 }
 
 function uniqueId(base: string, taken: string[]) {

@@ -43,9 +43,10 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	openrouter: { in: [], out: ['output'], fields: ['model'] },
 	raw_model: { in: ['prompt', 'model'], out: ['output'], fields: ['url', 'model', 'system', 'temperature', 'thinking', 'maxTokens'] },
 	video: { in: ['url'], out: ['output'], fields: ['url', 'autoplay'] },
-	file_in: { in: [], out: ['output'], fields: ['mode', 'path', 'action'] },
+	file_in: { in: ['url'], out: ['output'], fields: ['source', 'url', 'asText', 'action'] },
 	url_in: { in: [], out: ['output'], fields: ['url', 'fetchBody'] },
 	sleep: { in: ['input'], out: ['output'], fields: ['ms'] },
+	image_gen: { in: ['prompt', 'image', 'model'], out: ['output', 'images'], fields: ['model', 'prompt', 'n', 'size', 'negative', 'seed'] },
 }
 
 export function catalogPrompt(): string {

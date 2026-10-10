@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { extname, join, resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { ConfigError, DATA_DIR } from './config'
 
 export const IMAGE_DIR = join(DATA_DIR, 'images')
@@ -64,30 +64,6 @@ export async function resolveImage(url: string): Promise<{ bytes: Uint8Array; mi
 	}
 }
 
-const PATH_MIME: Record<string, string> = {
-	'.png': 'image/png',
-	'.jpg': 'image/jpeg',
-	'.jpeg': 'image/jpeg',
-	'.webp': 'image/webp',
-	'.gif': 'image/gif',
-}
-
-/** Read a png, jpeg, webp or gif from a path on this machine. */
-export function importLocalImage(filePath: string): string {
-	const full = resolve(filePath.trim())
-	let info: ReturnType<typeof statSync>
-	try {
-		info = statSync(full)
-	} catch {
-		throw new ConfigError('File not found')
-	}
-	if (!info.isFile()) throw new ConfigError('Path is not a file')
-	if (info.size > 25 * 1024 * 1024) throw new ConfigError('Image is larger than 25 MB')
-	const mime = PATH_MIME[extname(full).toLowerCase()]
-	if (!mime) throw new ConfigError('Use a png, jpeg, webp, or gif file')
-	return saveImage(readFileSync(full), mime)
-}
-
 /** Fetch an image URL and store it locally. */
 export async function importRemoteImage(url: string): Promise<string> {
 	const image = await resolveImage(url)
@@ -97,4 +73,60 @@ export async function importRemoteImage(url: string): Promise<string> {
 
 export function toDataUrl(image: { bytes: Uint8Array; mime: string }) {
 	return `data:${image.mime};base64,${Buffer.from(image.bytes).toString('base64')}`
+}
+
+export interface ImageProbeResult {
+	isImage: boolean
+	mime?: string
+	width?: number
+	height?: number
+}
+
+/** PNG/GIF/JPEG/WebP signatures, for when a server lies about (or omits) content-type. */
+function sniffImageMime(bytes: Uint8Array): string | null {
+	if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+		return 'image/png'
+	}
+	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg'
+	if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif'
+	if (
+		bytes.length >= 12 &&
+		bytes[0] === 0x52 &&
+		bytes[1] === 0x49 &&
+		bytes[2] === 0x46 &&
+		bytes[3] === 0x46 &&
+		bytes[8] === 0x57 &&
+		bytes[9] === 0x45 &&
+		bytes[10] === 0x42 &&
+		bytes[11] === 0x50
+	) {
+		return 'image/webp'
+	}
+	return null
+}
+
+/** Is this URL an image? Tries a HEAD first, then a small ranged GET (some servers reject HEAD). */
+export async function probeImageUrl(url: string): Promise<ImageProbeResult> {
+	const signal = AbortSignal.timeout(5000)
+	try {
+		const head = await fetch(url, { method: 'HEAD', signal })
+		const mime = head.headers.get('content-type')?.split(';')[0]
+		if (mime?.startsWith('image/')) return { isImage: true, mime }
+		if (head.ok && mime && !mime.startsWith('image/') && mime !== 'application/octet-stream') {
+			return { isImage: false, mime }
+		}
+	} catch {
+		// Some servers refuse HEAD, or the request timed out: fall through to a ranged GET.
+	}
+	try {
+		const res = await fetch(url, { headers: { Range: 'bytes=0-4095' }, signal })
+		const mime = res.headers.get('content-type')?.split(';')[0]
+		if (mime?.startsWith('image/')) return { isImage: true, mime }
+		const bytes = new Uint8Array(await res.arrayBuffer())
+		const sniffed = sniffImageMime(bytes)
+		if (sniffed) return { isImage: true, mime: sniffed }
+		return { isImage: false, mime }
+	} catch {
+		return { isImage: false }
+	}
 }

@@ -18,7 +18,8 @@ import {
 	saveConfig,
 	toPublicConfig,
 } from './config'
-import { importLocalImage, importRemoteImage, readImage, resolveImage, saveImage, toDataUrl } from './images'
+import { importRemoteImage, probeImageUrl, readImage, resolveImage, saveImage, toDataUrl } from './images'
+import { generateImage, ImageGenParams } from './imageGen'
 import { isValidFileId, MAX_FILE_BYTES, readFile, saveFile } from './files'
 import { downloadUrl, httpRequest, HttpRequestInput, saveContent, unfurl } from './http'
 import { deleteCustomNode, listCustomNodes, readCustomNode, saveCustomNode } from './customNodes'
@@ -127,6 +128,10 @@ app.get('/api/models', async (c) => {
 						if (m.vision !== undefined && caps.includes('chat')) {
 							caps = caps.filter((x) => x !== 'vision')
 							if (m.vision) caps.push('vision')
+						}
+						if (m.image !== undefined) {
+							caps = caps.filter((x) => x !== 'image')
+							if (m.image) caps.push('image')
 						}
 						// Any chat model may drive the agent or answer JEV questions; the user decides.
 						if (caps.includes('chat') && !caps.includes('agent')) caps.push('agent')
@@ -328,16 +333,39 @@ app.post('/api/nettool', async (c) => {
 
 // --- Local image store -----------------------------------------------------
 
-app.post('/api/images/from-path', async (c) => {
-	const body = (await c.req.json()) as { path?: string }
-	if (!body.path?.trim()) throw new ConfigError('path is required')
-	return c.json({ imageUrl: importLocalImage(body.path) })
-})
-
 app.post('/api/images/from-url', async (c) => {
 	const body = (await c.req.json()) as { url?: string }
 	if (!body.url?.trim()) throw new ConfigError('url is required')
 	return c.json({ imageUrl: await importRemoteImage(body.url) })
+})
+
+/** Is this URL an image? Used before pasting a link, and by "Read from". */
+app.post('/api/images/probe', async (c) => {
+	const body = (await c.req.json()) as { url?: string }
+	if (!body.url?.trim()) throw new ConfigError('url is required')
+	return c.json(await probeImageUrl(body.url.trim()))
+})
+
+app.post('/api/generate-image', async (c) => {
+	const body = (await c.req.json()) as {
+		model?: string
+		prompt?: string
+		n?: number
+		size?: string
+		images?: string[]
+		negative?: string
+		seed?: number
+	}
+	const { model, provider } = resolveModel(body.model, 'image')
+	const images = await generateImage(provider, model, {
+		prompt: body.prompt ?? '',
+		n: body.n ?? 1,
+		size: body.size,
+		images: body.images,
+		negative: body.negative,
+		seed: body.seed,
+	} satisfies ImageGenParams)
+	return c.json(images)
 })
 
 app.post('/api/images/:imageId', async (c) => {

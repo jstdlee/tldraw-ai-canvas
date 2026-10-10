@@ -266,10 +266,14 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
-	step('file-hash', 'Hash a file', 'File in reads a file you upload, or a path on the server. Choose SHA-256 to get its hash.', [
-		{ id: 'a', type: 'file_in', x: 0, y: 0, props: { mode: 'path', path: '/etc/hostname', action: 'sha256' } },
+	step('read-from-hash', 'Hash a page', 'Read from reads a URL or an uploaded file. Tick "Output SHA-256 instead" to get a hash instead of the text.', [
+		{ id: 'a', type: 'file_in', x: 0, y: 0, props: { source: 'url', url: 'https://www.example.com', asText: 'text', action: 'sha256' } },
 		{ id: 'b', type: 'output', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
+	step('image-gen', 'Generate an image', 'A prompt feeds Generate image. It calls the model you set up in AI providers and shows the result on the card.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'A watercolor fox in a forest' } },
+		{ id: 'b', type: 'image_gen', x: 460, y: 0 },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'prompt' }]),
 	step('url-in', 'A web address', 'URL in accepts www.example.com without https. Turn on Fetch to send the page text.', [
 		{ id: 'a', type: 'url_in', x: 0, y: 0, props: { url: 'www.example.com', fetchBody: true } },
 		{ id: 'b', type: 'summarize', x: 460, y: 0 },
@@ -348,7 +352,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ id: 'wait', type: 'sleep', x: 1500, y: 0, props: { ms: 100 } },
 			{ id: 'lines', type: 'text_tool', x: 0, y: 420, props: { op: 'count' } },
 			{ id: 'site', type: 'url_in', x: 460, y: 420, props: { url: 'www.example.com', fetchBody: false } },
-			{ id: 'file', type: 'file_in', x: 980, y: 420, props: { mode: 'path', path: '/etc/hostname', action: 'sha256' } },
+			{ id: 'file', type: 'file_in', x: 980, y: 420, props: { source: 'url', url: 'https://www.example.com', asText: 'text' } },
 			{ id: 'task', type: 'prompt', x: 1500, y: 420, props: { text: 'Say hello in one line.' } },
 			{ id: 'sum', type: 'summarize', x: 0, y: 840 },
 			{ id: 'raw', type: 'raw_model', x: 460, y: 840, props: { url: 'http://127.0.0.1:11434/v1', model: 'llama3.2' } },

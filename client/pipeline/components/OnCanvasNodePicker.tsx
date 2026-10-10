@@ -217,7 +217,7 @@ function NodeSearchPicker({
 				const defaultNode = def.getDefault()
 				const ports = def.getPorts({ props: { node: defaultNode } } as never, defaultNode)
 				return Object.values(ports).some(
-					(port) => port.terminal === 'end' && arePortDataTypesCompatible(port.dataType, sourceDataType)
+					(port) => port.terminal === 'end' && arePortDataTypesCompatible(sourceDataType, port.dataType)
 				)
 			}),
 		[allDefs, sourceDataType]

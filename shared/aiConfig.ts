@@ -18,8 +18,10 @@ export type ModelCapability =
 	| 'vision'
 	/** JEV decisions: probabilities for yes/no, choice and score questions. */
 	| 'jev'
+	/** Image generation (the Generate image node). */
+	| 'image'
 
-export const MODEL_CAPABILITIES: ModelCapability[] = ['agent', 'chat', 'vision', 'jev']
+export const MODEL_CAPABILITIES: ModelCapability[] = ['agent', 'chat', 'vision', 'jev', 'image']
 
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high'
 
@@ -59,6 +61,7 @@ export interface AIDefaults {
 	chat?: string
 	vision?: string
 	jev?: string
+	image?: string
 }
 
 export interface AIConfig {
@@ -88,14 +91,14 @@ export const PROVIDER_KINDS: Record<ProviderKind, ProviderKindInfo> = {
 		label: 'OpenAI-compatible (Ollama, LM Studio, vLLM, llama.cpp…)',
 		defaultBaseURL: 'http://127.0.0.1:11434/v1',
 		needsApiKey: false,
-		capabilities: ['agent', 'chat', 'vision', 'jev'],
+		capabilities: ['agent', 'chat', 'vision', 'jev', 'image'],
 		local: true,
 	},
 	openai: {
 		label: 'OpenAI',
 		defaultBaseURL: 'https://api.openai.com/v1',
 		needsApiKey: true,
-		capabilities: ['agent', 'chat', 'vision', 'jev'],
+		capabilities: ['agent', 'chat', 'vision', 'jev', 'image'],
 		local: false,
 	},
 	anthropic: {
@@ -116,7 +119,7 @@ export const PROVIDER_KINDS: Record<ProviderKind, ProviderKindInfo> = {
 		label: 'Google Gemini',
 		defaultBaseURL: 'https://generativelanguage.googleapis.com/v1beta',
 		needsApiKey: true,
-		capabilities: ['agent', 'chat', 'vision', 'jev'],
+		capabilities: ['agent', 'chat', 'vision', 'jev', 'image'],
 		local: false,
 	},
 	cloudflare: {
@@ -174,6 +177,15 @@ export const PROVIDER_PRESETS: { label: string; provider: Omit<ProviderConfig, '
 	{ label: 'Anthropic', provider: { name: 'Anthropic', kind: 'anthropic', enabled: true } },
 	{ label: 'Google Gemini', provider: { name: 'Google', kind: 'google', enabled: true } },
 	{
+		label: 'OpenRouter',
+		provider: {
+			name: 'OpenRouter',
+			kind: 'openai-compatible',
+			baseURL: 'https://openrouter.ai/api/v1',
+			enabled: true,
+		},
+	},
+	{
 		label: 'Cloudflare Workers AI',
 		provider: { name: 'Cloudflare Workers AI', kind: 'cloudflare', enabled: true },
 	},
@@ -200,8 +212,12 @@ export function guessCapabilities(kind: ProviderKind, model: string): ModelCapab
 	const id = model.toLowerCase()
 	if (kind === 'systemone') return ['jev']
 	if (kind === 'cloudflare' && id.startsWith('@cf/cloudflare/clef')) return ['jev']
-	// Image generators, embeddings and speech models can't chat.
-	if (/(dall-e|gpt-image|flux|sdxl|stable-diffusion|imagen|embed|whisper|tts|rerank)/.test(id)) return []
+	// Image generators can't chat, but can generate images.
+	if (/(gpt-image|dall-e|imagen|image-preview|flash-image|flux|sdxl|stable-diffusion|seedream|ideogram)/.test(id)) {
+		return ['image']
+	}
+	// Embeddings and speech models can't do either.
+	if (/(embed|whisper|tts|rerank)/.test(id)) return []
 	const caps: ModelCapability[] = ['chat']
 	if (/(vl|vision|gpt-4o|gpt-4\.1|gpt-5|claude|gemini|llava|gemma3|gemma4|pixtral|qwen2\.5-omni)/.test(id)) {
 		caps.push('vision')

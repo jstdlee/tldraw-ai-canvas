@@ -112,6 +112,11 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'Quick image adjustment node (legacy; prefer Filter).',
 		keywords: ['image', 'adjust', 'filter'],
 	},
+	image_gen: {
+		title: 'Generate image',
+		description: 'Generates one or more images from a prompt with an image model (Google, OpenAI, OpenRouter, or a custom URL).',
+		keywords: ['image', 'ai', 'generate', 'txt2img', 'dall-e', 'imagen', 'flux', 'stable diffusion'],
+	},
 	number: {
 		title: 'Number',
 		description: 'A single number value, adjustable with a slider or the spinner.',
@@ -193,13 +198,13 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		keywords: ['video', 'youtube', 'player', 'media'],
 	},
 	file_in: {
-		title: 'File in',
-		description: 'Reads a file (uploaded or by path) as text, or hashes it with SHA-256.',
-		keywords: ['file', 'upload', 'read', 'hash'],
+		title: 'Read from',
+		description: 'Reads an uploaded file or a URL: text, an image, a spreadsheet (as CSV), or SHA-256 of the bytes.',
+		keywords: ['file', 'url', 'upload', 'read', 'hash', 'csv', 'xlsx', 'image'],
 	},
 	url_in: {
 		title: 'URL in',
-		description: 'Reads a URL, optionally fetching the page text.',
+		description: 'Reads a URL, optionally fetching the page text. Replaced by "Read from"; kept so old canvases still load.',
 		keywords: ['url', 'web', 'fetch', 'read'],
 	},
 	sleep: {

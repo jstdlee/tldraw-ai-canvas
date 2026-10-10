@@ -26,6 +26,7 @@ import {
 	matchPreset,
 	NO_FILTER,
 	resizeImage,
+	toImageUrl,
 } from '../../imageOps'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
@@ -99,12 +100,13 @@ async function runImageOp<N extends { lastResultUrl: string | null; error: strin
 	inputs: InputValues,
 	op: (src: string) => Promise<string>
 ): Promise<ExecutionResult> {
-	const src = coerceToText(getInput(inputs, 'image'))
-	if (!src) {
+	const raw = coerceToText(getInput(inputs, 'image'))
+	if (!raw) {
 		updateNode<any>(def.editor, shape, (n: N) => ({ ...n, error: 'Connect an image' }), false)
 		return { output: STOP_EXECUTION }
 	}
 	try {
+		const src = await toImageUrl(raw)
 		const url = await op(src)
 		updateNode<any>(def.editor, shape, (n: N) => ({ ...n, lastResultUrl: url, error: null }))
 		return { output: url }
@@ -577,12 +579,13 @@ export class ImageToolNodeDefinition extends NodeDefinition<ImageToolNode> {
 		return { image: imageIn(), output: { ...imageOut(), dataType: 'any' } }
 	}
 	async execute(shape: NodeShape, node: ImageToolNode, inputs: InputValues): Promise<ExecutionResult> {
-		const src = coerceToText(getInput(inputs, 'image'))
-		if (!src) {
+		const raw = coerceToText(getInput(inputs, 'image'))
+		if (!raw) {
 			updateNode<ImageToolNode>(this.editor, shape, (n) => ({ ...n, error: 'Connect an image' }), false)
 			return { output: STOP_EXECUTION }
 		}
 		try {
+			const src = await toImageUrl(raw)
 			const r = await imageTool(src, node.tool, node.a, node.b)
 			updateNode<ImageToolNode>(this.editor, shape, (n) => ({ ...n, lastResultUrl: r.image ?? null, lastText: r.text ?? null, error: null }))
 			return { output: r.image ?? r.text ?? STOP_EXECUTION }

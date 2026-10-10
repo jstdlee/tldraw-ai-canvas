@@ -36,6 +36,43 @@ export async function storeBlob(blob: Blob): Promise<string> {
 	return `/api/images/${id}`
 }
 
+const importedUrls = new Map<string, Promise<string>>()
+
+/**
+ * Resolve any value an 'image' input might carry to an image URL the canvas
+ * can show: a stored image URL or data URL passes through; an http(s) URL is
+ * imported into the local image store once and cached by URL (so a text
+ * source wired into several image nodes only downloads it once); anything
+ * else is not an image.
+ */
+export async function toImageUrl(value: string | null | undefined): Promise<string> {
+	const text = (value ?? '').trim()
+	if (!text) throw new Error('No image yet. Paste an image, upload one, or use an image URL.')
+	if (text.startsWith('data:image/') || text.startsWith('/api/images/')) return text
+	if (/^https?:\/\//i.test(text)) {
+		let pending = importedUrls.get(text)
+		if (!pending) {
+			pending = fetch('/api/images/from-url', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ url: text }),
+			}).then(async (res) => {
+				const data = await res.json().catch(() => ({ error: res.statusText }))
+				if (!res.ok) throw new Error(String((data as { error?: string }).error || res.statusText))
+				return (data as { imageUrl: string }).imageUrl
+			})
+			importedUrls.set(text, pending)
+		}
+		try {
+			return await pending
+		} catch (error) {
+			importedUrls.delete(text)
+			throw error
+		}
+	}
+	throw new Error('Paste an image, upload one, or use an image URL.')
+}
+
 export interface CropRect {
 	/** All in percent of the image (0–100). */
 	x: number

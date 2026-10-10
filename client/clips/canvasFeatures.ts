@@ -11,9 +11,11 @@ import {
 	toRichText,
 } from 'tldraw'
 import { $aiNote, openComposeAssist, openFillAssist } from '../pipeline/assist'
-import { apiGenerateText, apiHttp } from '../pipeline/api/pipelineApi'
+import { apiGenerateText, apiHttp, apiImportImage, apiProbeImage } from '../pipeline/api/pipelineApi'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../pipeline/placeOnCanvas'
 import { isMermaid, looksLikeMarkdown } from '../../shared/clipText'
+import { pastePatch } from '../../shared/pasteTarget'
+import { NodeShape } from '../pipeline/nodes/NodeShapeUtil'
 import { shapeText } from './shapeText'
 
 export { shapeText }
@@ -272,6 +274,46 @@ export function registerClipHandlers(editor: Editor) {
 			},
 			meta: {},
 		})
+	})
+
+	/** A pasted link that points at an image: a resizable image shape, not a bookmark card. */
+	editor.registerExternalContentHandler('url', async (info) => {
+		const { url } = info
+		const point = info.point ?? editor.getViewportPageBounds().center
+		let isImage = /\.(png|jpe?g|gif|webp|bmp|avif|svg)(?:[?#].*)?$/i.test(url)
+		if (!isImage) {
+			try {
+				isImage = (await apiProbeImage(url)).isImage
+			} catch {
+				isImage = false
+			}
+		}
+		if (isImage) {
+			try {
+				const imageUrl = await apiImportImage(url)
+				const selected = editor.getOnlySelectedShape()
+				if (selected && editor.isShapeOfType<NodeShape>(selected, 'node')) {
+					const patch = pastePatch(selected.props.node as unknown as { type: string }, { imageUrl })
+					if (patch) {
+						editor.updateShape<NodeShape>({
+							id: selected.id,
+							type: 'node',
+							props: { node: { ...(selected.props.node as unknown as Record<string, unknown>), ...patch } as NodeShape['props']['node'], isOutOfDate: true },
+						})
+						return
+					}
+				}
+				await placeImageOnCanvas(editor, null, imageUrl, { maxSize: 640, name: url.split('/').pop(), at: point })
+				return
+			} catch {
+				// Fall through to the normal bookmark card below.
+			}
+		}
+		const asset = await editor.getAssetForExternalContent({ type: 'url', url })
+		if (!asset) return
+		const id = createShapeId()
+		editor.createShape({ id, type: 'bookmark', x: point.x - 150, y: point.y - 160, props: { url, assetId: asset.id } })
+		editor.select(id)
 	})
 
 	editor.registerExternalContentHandler('text', async (info) => {

@@ -53,9 +53,10 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	openrouter: { inn: [], out: ['output'] },
 	raw_model: { inn: ['prompt', 'model'], out: ['output'] },
 	video: { inn: ['url'], out: ['output'] },
-	file_in: { inn: [], out: ['output'] },
+	file_in: { inn: ['url'], out: ['output'] },
 	url_in: { inn: [], out: ['output'] },
 	sleep: { inn: ['input'], out: ['output'] },
+	image_gen: { inn: ['prompt', 'image', 'model'], out: ['output', 'images'] },
 }
 
 describe('llm usage', () => {
@@ -187,14 +188,5 @@ describe('examples', () => {
 				expect(to && PORTS[to.type].inn).toContain(wire.toPort)
 			}
 		}
-	})
-})
-
-describe('local image import', () => {
-	it('rejects a file that is not an image', async () => {
-		const { importLocalImage } = await import('../server/images')
-		const file = join(process.env.DATA_DIR!, 'note.txt')
-		writeFileSync(file, 'hello')
-		expect(() => importLocalImage(file)).toThrow(/png, jpeg, webp, or gif/)
 	})
 })

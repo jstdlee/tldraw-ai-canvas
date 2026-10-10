@@ -2287,3 +2287,81 @@ body {
 .DataPipe-fileRow > .UiSelect {
 	flex: 1 1 40%;
 }
+
+/* Generate image: a grid of results, each tile with hover actions. */
+.ImageGenNode-grid {
+	margin: var(--tl-space-2) var(--tl-space-4);
+	border-radius: var(--tl-radius-3);
+	border: 1px solid var(--tl-color-divider);
+	background: var(--tl-color-muted-0);
+	overflow: auto;
+	display: flex;
+	pointer-events: all;
+}
+
+.ImageGenNode-grid > .NodeRow-disconnected {
+	margin: auto;
+	font-size: 0.8em;
+}
+
+.ImageGenNode-tiles {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: var(--tl-space-2);
+	padding: var(--tl-space-2);
+	width: 100%;
+	align-content: start;
+}
+
+.ImageGenNode-tiles.is-grid {
+	grid-template-columns: 1fr 1fr;
+}
+
+.ImageGenNode-tile {
+	position: relative;
+	aspect-ratio: 1 / 1;
+	border-radius: var(--tl-radius-2);
+	overflow: hidden;
+	background-color: hsl(0 0% 96%);
+	border: 1px solid var(--tl-color-divider);
+
+	img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+}
+
+.ImageGenNode-tile-actions {
+	position: absolute;
+	inset: auto 0 0 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	padding: 4px;
+	background: linear-gradient(to top, color-mix(in srgb, black 55%, transparent), transparent);
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+
+.ImageGenNode-tile:hover .ImageGenNode-tile-actions,
+.ImageGenNode-tile:focus-within .ImageGenNode-tile-actions {
+	opacity: 1;
+}
+
+.ImageGenNode-tile-actions .tlui-button {
+	background: color-mix(in srgb, var(--tl-color-panel) 85%, transparent);
+}
+
+.tl-theme__dark .ImageGenNode-tile {
+	background-color: hsl(0 0% 14%);
+}
+
+/* Row labels look the same in every card, also outside the rows they were first styled for. */
+.NodeBody .NodeInputRow-label {
+	font-size: 0.74em;
+	color: var(--tl-color-text-3);
+	flex: 0 0 auto;
+	min-width: 48px;
+	white-space: nowrap;
+}

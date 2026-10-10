@@ -41,9 +41,10 @@ describe('chat text', () => {
 })
 
 describe('capability guesses', () => {
-	it('marks vision and image models', () => {
+	it('marks vision, image, and embedding/speech models', () => {
 		expect(guessCapabilities('openai-compatible', 'qwen3-vl:8b')).toContain('vision')
-		expect(guessCapabilities('openai', 'gpt-image-1')).toEqual([])
+		expect(guessCapabilities('openai', 'gpt-image-1')).toEqual(['image'])
+		expect(guessCapabilities('google', 'imagen-4.0-generate-001')).toEqual(['image'])
 		expect(guessCapabilities('openai-compatible', 'text-embedding-3-small')).toEqual([])
 	})
 })
@@ -88,7 +89,7 @@ describe('config', () => {
 })
 
 describe('older configs', () => {
-	it('drop image providers and image jobs', async () => {
+	it('drops providers of a kind that no longer exists (e.g. a retired ComfyUI provider)', async () => {
 		const { writeFileSync, mkdirSync } = await import('node:fs')
 		mkdirSync(process.env.DATA_DIR!, { recursive: true })
 		writeFileSync(
@@ -107,10 +108,11 @@ describe('older configs', () => {
 		)
 		const config = reloadConfig()
 		expect(config.providers.map((p) => p.id)).toEqual(['m'])
+		// 'image' is a real capability (WP9's Generate image node), so it is kept, not stripped.
 		expect(config.models).toEqual([
-			{ key: 'm/g', providerId: 'm', model: 'g', label: 'G', capabilities: ['chat', 'vision'] },
+			{ key: 'm/g', providerId: 'm', model: 'g', label: 'G', capabilities: ['chat', 'image', 'vision'] },
 		])
-		expect(config.defaults).toEqual({ chat: 'm/g' })
+		expect(config.defaults).toEqual({ image: 'comfy/sdxl', chat: 'm/g' })
 	})
 })
 

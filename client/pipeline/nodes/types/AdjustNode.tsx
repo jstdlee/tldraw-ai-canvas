@@ -11,6 +11,7 @@ import {
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues } from '../nodePorts'
+import { toImageUrl } from '../../imageOps'
 import { UiSlider } from '../../../ui'
 import { NodeShape } from '../NodeShapeUtil'
 import {
@@ -102,11 +103,12 @@ export class AdjustNodeDefinition extends NodeDefinition<AdjustNode> {
 		}
 	}
 	async execute(shape: NodeShape, node: AdjustNode, inputs: InputValues): Promise<ExecutionResult> {
-		const imageUrl = inputs.image as string | null
-		if (!imageUrl) {
+		const raw = inputs.image as string | null
+		if (!raw) {
 			updateNode<AdjustNode>(this.editor, shape, (n) => ({ ...n, lastResultUrl: null }))
 			return { output: null }
 		}
+		const imageUrl = await toImageUrl(raw)
 		const result = await adjustImage(imageUrl, node.brightness, node.contrast, node.saturation)
 		updateNode<AdjustNode>(this.editor, shape, (n) => ({
 			...n,
