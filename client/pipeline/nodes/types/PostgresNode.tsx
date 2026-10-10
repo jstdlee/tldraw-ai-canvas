@@ -35,7 +35,7 @@ import {
 
 const SQL_HEIGHT = 160
 const CSV_HEIGHT = 80
-const WIDTH = 380
+const WIDTH = 440
 
 export type PostgresNode = T.TypeOf<typeof PostgresNode>
 export const PostgresNode = T.object({

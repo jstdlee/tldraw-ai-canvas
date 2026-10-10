@@ -166,7 +166,7 @@ export class LogicNodeDefinition extends NodeDefinition<LogicNode> {
 		return { type: 'logic', op: 'and', lastResult: null }
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3
+		return NODE_ROW_HEIGHT_PX * 3 + 8
 	}
 	getPorts(_shape: NodeShape, node: LogicNode): Record<string, ShapePort> {
 		return {

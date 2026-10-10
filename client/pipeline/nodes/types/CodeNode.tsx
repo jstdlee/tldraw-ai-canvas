@@ -97,7 +97,7 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 		}
 	}
 	override getWidthPx() {
-		return 360
+		return 380
 	}
 	private inCount(node: CodeNode) {
 		return clampCodeCount(node.inputCount)

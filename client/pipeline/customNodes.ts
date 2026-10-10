@@ -1,4 +1,6 @@
 import { atom, createBindingId, createShapeId, Editor, TLBinding, TLShape, TLShapeId, VecModel } from 'tldraw'
+import { findFreeSpot } from '../../shared/placement'
+import { isPacked } from './subgraph'
 import { NodeShape } from './nodes/NodeShapeUtil'
 import type { SubgraphNode } from './nodes/types/SubgraphNode'
 
@@ -114,6 +116,22 @@ export function instantiateTemplate(editor: Editor, template: CustomNodeTemplate
 			}))
 		)
 		editor.createShape({ id: proxyId, type: 'node', x: point.x, y: point.y, props: { node: proxy, isOutOfDate: true } })
+		// The inner shapes are hidden (packedIn), so only the proxy card needs a free spot.
+		const bounds = editor.getShapePageBounds(proxyId)
+		if (bounds) {
+			const taken = editor
+				.getCurrentPageShapes()
+				.filter((s) => s.id !== proxyId && s.type !== 'connection' && !isPacked(s))
+				.map((s) => editor.getShapePageBounds(s.id))
+				.filter((b): b is NonNullable<typeof b> => !!b)
+				.map((b) => ({ x: b.x, y: b.y, w: b.width, h: b.height }))
+			const spot = findFreeSpot({ x: bounds.x, y: bounds.y }, { w: bounds.width, h: bounds.height }, taken)
+			if (spot.x !== bounds.x || spot.y !== bounds.y) {
+				const dx = spot.x - bounds.x
+				const dy = spot.y - bounds.y
+				editor.updateShape({ id: proxyId, type: 'node', x: point.x + dx, y: point.y + dy })
+			}
+		}
 		editor.select(proxyId)
 	})
 	return proxyId

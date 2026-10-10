@@ -31,8 +31,8 @@ const BASE = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 function end(id: string, row: number): ShapePort {
 	return { id, x: 0, y: BASE + NODE_ROW_HEIGHT_PX * (row + 0.5), terminal: 'end', dataType: 'text' }
 }
-function out(): ShapePort {
-	return { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' }
+function out(x: number = NODE_WIDTH_PX): ShapePort {
+	return { id: 'output', x, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' }
 }
 function info(shape: NodeShape, value: string | null, inputs: InfoValues): InfoValues {
 	return {
@@ -72,6 +72,7 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 	heading = 'Table'
 	icon = icon
 	category = categoryOf('table')
+	override defaultWidthPx = 440
 	getDefault(): TableNode {
 		return {
 			type: 'table',
@@ -89,11 +90,12 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 			error: null,
 		}
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 8
+	getBodyHeightPx(_shape: NodeShape, node: TableNode) {
+		// Rows: data, extra, format/op, columns, column, as/expr, pattern, with/sep, new name = 9.
+		return NODE_ROW_HEIGHT_PX * (9 + (node.error ? 1 : 0))
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { data: end('data', 0), extra: end('extra', 1), output: out() }
+	getPorts(shape: NodeShape, node: TableNode): Record<string, ShapePort> {
+		return { data: end('data', 0), extra: end('extra', 1), output: out(this.getWidthPx(shape, node)) }
 	}
 	async execute(shape: NodeShape, node: TableNode, inputs: InputValues): Promise<ExecutionResult> {
 		await sleep(30)
@@ -176,14 +178,16 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	icon = icon
 	category = categoryOf('chart')
 	override showsOutput = true
+	override defaultWidthPx = 440
 	getDefault(): ChartNode {
 		return { type: 'chart', text: SAMPLE, format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score', dualScale: false, error: null }
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 5 + 220
+		// Rows: data port, kind/x column, y columns, dual-axes = 4, then the chart area.
+		return NODE_ROW_HEIGHT_PX * 4 + 264
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { data: end('data', 0), output: out() }
+	getPorts(shape: NodeShape, node: ChartNode): Record<string, ShapePort> {
+		return { data: end('data', 0), output: out(this.getWidthPx(shape, node)) }
 	}
 	async execute(shape: NodeShape, node: ChartNode, inputs: InputValues): Promise<ExecutionResult> {
 		const text = getInputText(inputs, 'data') || node.text
@@ -326,14 +330,19 @@ export class SqliteNodeDefinition extends NodeDefinition<SqliteNode> {
 	heading = 'SQLite'
 	icon = icon
 	category = categoryOf('sqlite_in')
+	override defaultWidthPx = 440
 	getDefault(): SqliteNode {
 		return { type: 'sqlite_in', path: '', imported: '', importInfo: '', sql: 'SELECT 1 AS ready;', ask: '', error: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 5 + 96
+	getBodyHeightPx(_shape: NodeShape, node: SqliteNode) {
+		// Rows: input port, import button, ask, ask-ai button = 4, plus importInfo/error when set,
+		// plus the SQL text box.
+		return (
+			NODE_ROW_HEIGHT_PX * (4 + (node.importInfo ? 1 : 0) + (node.error ? 1 : 0)) + 140
+		)
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { input: end('input', 0), output: out() }
+	getPorts(shape: NodeShape, node: SqliteNode): Record<string, ShapePort> {
+		return { input: end('input', 0), output: out(this.getWidthPx(shape, node)) }
 	}
 	async execute(shape: NodeShape, node: SqliteNode, inputs: InputValues): Promise<ExecutionResult> {
 		const extra = getInputText(inputs, 'input')

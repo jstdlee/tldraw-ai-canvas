@@ -21,7 +21,7 @@ import {
 	updateNode,
 } from './shared'
 
-const WIDTH = 320
+const WIDTH = 380
 const BASE_Y = NODE_HEADER_HEIGHT_PX + 8
 
 /**
@@ -72,8 +72,10 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 	override getWidthPx() {
 		return WIDTH
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 7 + 96
+	getBodyHeightPx(_shape: NodeShape, node: RawModelNode) {
+		// Rows: prompt, model, URL, model id, key, temp, max tokens, think = 8, plus the
+		// system-prompt text box (72) and an error row when set.
+		return NODE_ROW_HEIGHT_PX * 8 + 72 + (node.error ? NODE_ROW_HEIGHT_PX : 0)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {

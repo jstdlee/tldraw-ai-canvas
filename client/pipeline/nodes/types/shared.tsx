@@ -88,9 +88,11 @@ export abstract class NodeDefinition<Node extends { type: string }> {
 	readonly hidden: boolean = false
 	/** If true, the card body already renders the node's result; auto-spill skips it. */
 	readonly showsOutput: boolean = false
+	/** Default card width for this node type's content at the default font. Falls back to NODE_WIDTH_PX. */
+	readonly defaultWidthPx?: number
 
 	getWidthPx(_shape: NodeShape, _node: Node): number {
-		return NODE_WIDTH_PX
+		return this.defaultWidthPx ?? NODE_WIDTH_PX
 	}
 
 	abstract getDefault(): Node

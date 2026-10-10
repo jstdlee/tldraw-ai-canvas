@@ -41,6 +41,7 @@ import {
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_BOTTOM_PADDING_PX,
 	NODE_ROW_HEADER_GAP_PX,
+	NODE_ROW_HEIGHT_PX,
 	PORT_RADIUS_PX,
 } from '../constants'
 import { executionState, startExecution, stopExecution } from '../execution/executionState'
@@ -314,6 +315,9 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 			})}
 			style={
 				{
+					'--node-header-h': `${NODE_HEADER_HEIGHT_PX}px`,
+					'--node-footer-h': `${NODE_FOOTER_HEIGHT_PX}px`,
+					'--node-row-h': `${NODE_ROW_HEIGHT_PX}px`,
 					...(fontSize ? { '--node-fs': `${fontSize}px` } : null),
 					...(accentColor ? { '--node-accent': accentColor } : null),
 				} as React.CSSProperties

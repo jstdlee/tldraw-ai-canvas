@@ -74,8 +74,12 @@ export class FileInNodeDefinition extends NodeDefinition<FileInNode> {
 	getDefault(): FileInNode {
 		return { type: 'file_in', mode: 'upload', path: '', action: 'text', fileName: '', content: '', hash: '', lastText: null, error: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + 24
+	getBodyHeightPx(_shape: NodeShape, node: FileInNode) {
+		// Rows: mode/action, path or picker = 2, plus the hash line and an error row when set.
+		return (
+			NODE_ROW_HEIGHT_PX * (2 + (node.error ? 1 : 0)) +
+			(node.lastText && node.action === 'sha256' ? 24 : 0)
+		)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { output: out() }
@@ -188,8 +192,8 @@ export class UrlInNodeDefinition extends NodeDefinition<UrlInNode> {
 	getDefault(): UrlInNode {
 		return { type: 'url_in', url: '', fetchBody: false, lastText: null, error: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 2
+	getBodyHeightPx(_shape: NodeShape, node: UrlInNode) {
+		return NODE_ROW_HEIGHT_PX * (2 + (node.error ? 1 : 0))
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { output: out() }

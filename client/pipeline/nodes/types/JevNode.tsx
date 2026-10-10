@@ -44,7 +44,7 @@ export const JevNode = T.object({
 	error: T.string.nullable(),
 })
 
-const W = 340
+const W = 380
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 const portY = (row: number) => BASE_Y + NODE_ROW_HEIGHT_PX * (row + 0.5)
 const QUESTION_PX = 56

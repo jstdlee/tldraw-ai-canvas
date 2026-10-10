@@ -13,6 +13,7 @@ import {
 	PortDataType,
 } from '../constants.tsx'
 import { getNodePortConnections, getNodePorts } from '../nodes/nodePorts'
+import { createNodeAt } from '../placeNode'
 import { PortId } from '../ports/Port'
 import { findFirstCompatiblePort } from './portCompatibility'
 
@@ -133,18 +134,14 @@ export class PointingPort extends StateNode {
 		onCanvasNodePickerState.set(this.editor, {
 			connectionShapeId,
 			location: 'end',
-			onPick: (nodeType, terminalInPageSpace) => {
-				const newNodeId = createShapeId()
-				this.editor.createShape({
-					type: 'node',
-					id: newNodeId,
-					x: terminalInPageSpace.x,
-					y: terminalInPageSpace.y,
-					props: {
-						node: nodeType,
-					},
+			// The picker opened at a fixed offset (no real "drop point" to preserve), so the new
+			// node is placed in a free spot to the right of the source node instead, and the
+			// connection binds to its first compatible input port wherever that lands.
+			onPick: (nodeType) => {
+				const newNodeId = createNodeAt(this.editor, nodeType, {
+					rightOf: this.info!.shapeId,
+					select: true,
 				})
-				this.editor.select(newNodeId)
 
 				const ports = getNodePorts(this.editor, newNodeId)
 				const firstCompatibleInputPort = findFirstCompatiblePort(
@@ -153,13 +150,6 @@ export class PointingPort extends StateNode {
 					this.info!.dataType
 				)
 				if (firstCompatibleInputPort) {
-					this.editor.updateShape({
-						id: newNodeId,
-						type: 'node',
-						x: terminalInPageSpace.x - firstCompatibleInputPort.x,
-						y: terminalInPageSpace.y - firstCompatibleInputPort.y,
-					})
-
 					createOrUpdateConnectionBinding(this.editor, connectionShapeId, newNodeId, {
 						portId: firstCompatibleInputPort.id,
 						terminal: 'end',

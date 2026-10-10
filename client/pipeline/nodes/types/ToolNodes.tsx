@@ -190,7 +190,7 @@ export class OpenRouterNodeDefinition extends NodeDefinition<OpenRouterNode> {
 		return { type: 'openrouter', model: '' }
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 2
+		return NODE_ROW_HEIGHT_PX
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { output: out() }

@@ -76,6 +76,7 @@ export class RandomNodeDefinition extends NodeDefinition<RandomNode> {
 	heading = 'Random'
 	icon = <NumberIcon />
 	category = categoryOf('random')
+	override defaultWidthPx = 280
 	resultKeys = ['lastValue'] as const
 	getDefault(): RandomNode {
 		return { type: 'random', mode: 'number', a: '1', b: '100', list: 'red\ngreen\nblue', lastValue: null }
@@ -83,12 +84,12 @@ export class RandomNodeDefinition extends NodeDefinition<RandomNode> {
 	getBodyHeightPx(_s: NodeShape, node: RandomNode) {
 		return NODE_ROW_HEIGHT_PX * 5 + (node.mode === 'pick' || node.mode === 'shuffle' ? 80 : 0)
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: RandomNode): Record<string, ShapePort> {
 		return {
 			list: { id: 'list', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
 			a: { id: 'a', x: 0, y: portY(1), terminal: 'end', dataType: 'any' },
 			b: { id: 'b', x: 0, y: portY(2), terminal: 'end', dataType: 'any' },
-			output: out(),
+			output: out('text', this.getWidthPx(shape, node)),
 		}
 	}
 	async execute(shape: NodeShape, node: RandomNode, inputs: InputValues): Promise<ExecutionResult> {
@@ -213,8 +214,8 @@ export class NetToolNodeDefinition extends NodeDefinition<NetToolNode> {
 	override getWidthPx() {
 		return 340
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 4
+	getBodyHeightPx(_shape: NodeShape, node: NetToolNode) {
+		return NODE_ROW_HEIGHT_PX * 4 + (node.error ? NODE_ROW_HEIGHT_PX : 0)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { target: { id: 'target', x: 0, y: portY(0), terminal: 'end', dataType: 'text' }, output: out('text', 340) }
@@ -339,6 +340,7 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 	heading = 'Summarize'
 	icon = <GenerateTextIcon />
 	category = categoryOf('summarize')
+	override defaultWidthPx = 380
 	resultKeys = ['lastResultText', 'lastKind', 'error'] as const
 	getDefault(): SummarizeNode {
 		return {
@@ -357,8 +359,11 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 	getBodyHeightPx(_s: NodeShape, node: SummarizeNode) {
 		return NODE_ROW_HEIGHT_PX * 5 + llmSettingsHeight(node)
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { input: { id: 'input', x: 0, y: portY(0), terminal: 'end', dataType: 'any' }, output: out() }
+	getPorts(shape: NodeShape, node: SummarizeNode): Record<string, ShapePort> {
+		return {
+			input: { id: 'input', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
+			output: out('text', this.getWidthPx(shape, node)),
+		}
 	}
 	async execute(shape: NodeShape, node: SummarizeNode, inputs: InputValues): Promise<ExecutionResult> {
 		// Bare hosts (www.wikipedia.com) get a scheme so they are read as a web page.

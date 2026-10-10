@@ -8,7 +8,6 @@ import {
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
 	NODE_ROW_HEIGHT_PX,
-	NODE_WIDTH_PX,
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
@@ -100,6 +99,7 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 	heading = 'AI text'
 	icon = <GenerateTextIcon />
 	category = categoryOf('text_ai')
+	override defaultWidthPx = 380
 	resultKeys = ['lastResultText', 'error'] as const
 	getDefault(): TextAINode {
 		return {
@@ -117,7 +117,7 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 		// The advanced job-prompt editor adds a block when settings are open.
 		return NODE_ROW_HEIGHT_PX * 3 + OPTION_HEIGHT_PX + llmSettingsHeight(node) + (node.showSettings ? 140 : 0)
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: TextAINode): Record<string, ShapePort> {
 		return {
 			input: {
 				id: 'input',
@@ -128,7 +128,7 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 			},
 			output: {
 				id: 'output',
-				x: NODE_WIDTH_PX,
+				x: this.getWidthPx(shape, node),
 				y: NODE_HEADER_HEIGHT_PX / 2,
 				terminal: 'start',
 				dataType: 'text',

@@ -2,7 +2,6 @@ import { cloneElement, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react'
 import { ContainerProvider, tlmenus } from '@tldraw/editor'
 import {
-	createShapeId,
 	Editor,
 	getPointerInfo,
 	onDragFromToolbarToCreateShape,
@@ -32,6 +31,7 @@ import {
 } from '../../ui'
 import { $customNodes, addCustomNodeToCanvas, deleteCustomNode, refreshCustomNodes, type CustomNodeMeta } from '../customNodes'
 import { getNodeDefinitions, NodeType } from '../nodes/nodeTypes'
+import { createNodeAt } from '../placeNode'
 
 const DRAG_DISTANCE_SQ = 36 // 6px
 const GROUPS_KEY = 'oh-my-tldraw:library-groups'
@@ -79,23 +79,7 @@ function groupIcon(id: string, fallback: TLUiIconJsx) {
 }
 
 function createNodeAtCenter(editor: Editor, node: NodeType) {
-	const shapeId = createShapeId()
-	editor.run(() => {
-		editor.createShape({
-			id: shapeId,
-			type: 'node',
-			props: { node },
-		})
-		const shapeBounds = editor.getShapePageBounds(shapeId)!
-		const center = editor.getViewportPageBounds().center
-		editor.updateShape({
-			id: shapeId,
-			type: 'node',
-			x: center.x - shapeBounds.width / 2,
-			y: center.y - shapeBounds.height / 2,
-		})
-		editor.select(shapeId)
-	})
+	createNodeAt(editor, node, { near: 'viewport' })
 }
 
 function matchesCustom(node: CustomNodeMeta, query: string) {

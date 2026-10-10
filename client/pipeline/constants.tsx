@@ -1,7 +1,7 @@
 export const CONNECTION_CENTER_HANDLE_SIZE_PX = 16
 export const CONNECTION_CENTER_HANDLE_HOVER_SIZE_PX = 24
 
-export const NODE_WIDTH_PX = 260
+export const NODE_WIDTH_PX = 320
 export const NODE_HEADER_HEIGHT_PX = 40
 export const NODE_ROW_HEADER_GAP_PX = 8
 export const NODE_ROW_BOTTOM_PADDING_PX = 8

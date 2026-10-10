@@ -6,7 +6,6 @@ import {
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
 	NODE_ROW_HEIGHT_PX,
-	NODE_WIDTH_PX,
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
@@ -51,6 +50,7 @@ export class TextToolNodeDefinition extends NodeDefinition<TextToolNode> {
 	heading = 'Text tools'
 	icon = <PromptConcatIcon />
 	category = categoryOf('text_tool')
+	override defaultWidthPx = 380
 	resultKeys = ['lastResultText', 'error'] as const
 	getDefault(): TextToolNode {
 		return { type: 'text_tool', op: 'template', a: '{{input}}', b: '', lastResultText: null, error: null }
@@ -58,11 +58,11 @@ export class TextToolNodeDefinition extends NodeDefinition<TextToolNode> {
 	getBodyHeightPx() {
 		return NODE_ROW_HEIGHT_PX * 5
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: TextToolNode): Record<string, ShapePort> {
 		return {
 			input: { id: 'input', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'any' },
 			input2: { id: 'input2', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 1.5, terminal: 'end', dataType: 'any' },
-			output: { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
+			output: { id: 'output', x: this.getWidthPx(shape, node), y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}
 	async execute(shape: NodeShape, node: TextToolNode, inputs: InputValues): Promise<ExecutionResult> {

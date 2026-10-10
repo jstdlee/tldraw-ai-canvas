@@ -2,7 +2,7 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { PromptIcon } from '../../components/icons/PromptIcon'
 import { TextAreaField } from '../../editors/CodeArea'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
+import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
@@ -27,6 +27,7 @@ export class PromptNodeDefinition extends NodeDefinition<PromptNode> {
 	heading = 'Prompt'
 	icon = <PromptIcon />
 	category = categoryOf('prompt')
+	override defaultWidthPx = 380
 	getDefault(): PromptNode {
 		return {
 			type: 'prompt',
@@ -34,13 +35,14 @@ export class PromptNodeDefinition extends NodeDefinition<PromptNode> {
 		}
 	}
 	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 2
+		// One growing text box; roomy enough at the default font not to feel crowded.
+		return NODE_ROW_HEIGHT_PX * 3
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: PromptNode): Record<string, ShapePort> {
 		return {
 			output: {
 				id: 'output',
-				x: NODE_WIDTH_PX,
+				x: this.getWidthPx(shape, node),
 				y: NODE_HEADER_HEIGHT_PX / 2,
 				terminal: 'start',
 				dataType: 'text',

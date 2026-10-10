@@ -8,7 +8,6 @@ import {
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
 	NODE_ROW_HEIGHT_PX,
-	NODE_WIDTH_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues } from '../nodePorts'
@@ -54,6 +53,7 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 	heading = 'Generate text'
 	icon = <GenerateTextIcon />
 	category = categoryOf('generate_text')
+	override defaultWidthPx = 380
 	resultKeys = ['lastResultText'] as const
 	getDefault(): GenerateTextNode {
 		return {
@@ -67,7 +67,7 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 		// input row + prompt row + model row (44 each) + settings + result area (88 + 8 margin)
 		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node)
 	}
-	getPorts(_shape: NodeShape, _node: GenerateTextNode): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: GenerateTextNode): Record<string, ShapePort> {
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 		return {
 			input: {
@@ -86,7 +86,7 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 			},
 			output: {
 				id: 'output',
-				x: NODE_WIDTH_PX,
+				x: this.getWidthPx(shape, node),
 				y: NODE_HEADER_HEIGHT_PX / 2,
 				terminal: 'start',
 				dataType: 'text',

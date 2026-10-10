@@ -9,7 +9,6 @@ import {
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
 	NODE_ROW_HEIGHT_PX,
-	NODE_WIDTH_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues, getNodePortConnections, NodePortConnection } from '../nodePorts'
@@ -73,6 +72,7 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 	icon = <GenerateTextIcon />
 	category = categoryOf('chat')
 	override showsOutput = true
+	override defaultWidthPx = 380
 	resultKeys = ['assistantMessage', 'error'] as const
 	getDefault(): ChatNode {
 		return {
@@ -87,7 +87,7 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 	getBodyHeightPx(_shape: NodeShape, node: ChatNode) {
 		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node) + MESSAGE_HEIGHT_PX
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: ChatNode): Record<string, ShapePort> {
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 		return {
 			parent: {
@@ -106,7 +106,7 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 			},
 			output: {
 				id: 'output',
-				x: NODE_WIDTH_PX,
+				x: this.getWidthPx(shape, node),
 				y: NODE_HEADER_HEIGHT_PX / 2,
 				terminal: 'start',
 				dataType: 'text',

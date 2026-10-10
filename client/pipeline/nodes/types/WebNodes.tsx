@@ -125,8 +125,9 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 		return HTTP_WIDTH_PX
 	}
 	getBodyHeightPx(_shape: NodeShape, node: HttpNode) {
+		// Rows: method, URL, auth, body port, "web page -> text" checkbox, status = 6.
 		return (
-			NODE_ROW_HEIGHT_PX * 4 +
+			NODE_ROW_HEIGHT_PX * 6 +
 			HTTP_QUERY_HEIGHT_PX +
 			HTTP_HEADERS_HEIGHT_PX +
 			HTTP_BODY_HEIGHT_PX +
@@ -322,6 +323,7 @@ export class DownloadNodeDefinition extends NodeDefinition<DownloadNode> {
 	heading = 'Download'
 	icon = <LoadImageIcon />
 	category = categoryOf('download')
+	override defaultWidthPx = 380
 	resultKeys = ['lastPath', 'lastInfo', 'lastText', 'lastImageUrl', 'error'] as const
 	getDefault(): DownloadNode {
 		return {
@@ -338,10 +340,10 @@ export class DownloadNodeDefinition extends NodeDefinition<DownloadNode> {
 	getBodyHeightPx(_shape: NodeShape, node: DownloadNode) {
 		return NODE_ROW_HEIGHT_PX * 3 + (node.lastImageUrl ? DOWNLOAD_RESULT_HEIGHT_PX : 0)
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: DownloadNode): Record<string, ShapePort> {
 		return {
 			url: { id: 'url', x: 0, y: portY(0), terminal: 'end', dataType: 'text' },
-			output: { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'any' },
+			output: { id: 'output', x: this.getWidthPx(shape, node), y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'any' },
 		}
 	}
 	async execute(shape: NodeShape, node: DownloadNode, inputs: InputValues): Promise<ExecutionResult> {
