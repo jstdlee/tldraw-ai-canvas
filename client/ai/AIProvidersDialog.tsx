@@ -12,6 +12,7 @@ import {
 	PublicProviderConfig,
 	ReasoningEffort,
 } from '../../shared/aiConfig'
+import { UiField, UiTextInput } from '../ui'
 import { $aiConfig, fetchProviderModels, saveAIConfig } from './aiConfig'
 
 type DraftProvider = PublicProviderConfig & { apiKey?: string }
@@ -195,12 +196,31 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 											</option>
 										))}
 									</select>
-									<label>Base URL</label>
-									<input
-										value={provider.baseURL ?? ''}
-										placeholder={kindInfo?.defaultBaseURL}
-										onChange={(e) => updateProvider({ baseURL: e.target.value })}
-									/>
+									{provider.kind === 'cloudflare' ? (
+										<>
+											<label>Account ID</label>
+											<UiField
+												label=""
+												hint="Token needs the Workers AI permission. Account ID is on the Cloudflare dashboard home page."
+											>
+												<UiTextInput
+													value={provider.accountId ?? ''}
+													placeholder="32 hex characters"
+													mono
+													onChange={(accountId) => updateProvider({ accountId })}
+												/>
+											</UiField>
+										</>
+									) : (
+										<>
+											<label>Base URL</label>
+											<input
+												value={provider.baseURL ?? ''}
+												placeholder={kindInfo?.defaultBaseURL}
+												onChange={(e) => updateProvider({ baseURL: e.target.value })}
+											/>
+										</>
+									)}
 									<label>API key</label>
 									<div className="ai-row">
 										<input

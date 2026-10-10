@@ -3,7 +3,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { LanguageModel, streamText } from 'ai'
-import { ModelConfig, ProviderConfig } from '../shared/aiConfig'
+import { cloudflareBase, ModelConfig, ProviderConfig } from '../shared/aiConfig'
 import { ConfigError } from './config'
 
 /** Build an AI SDK language model from a user-defined provider and model. */
@@ -23,6 +23,13 @@ export function getLanguageModel(provider: ProviderConfig, model: ModelConfig): 
 			return createAnthropic({ apiKey: provider.apiKey, baseURL })(model.model)
 		case 'google':
 			return createGoogleGenerativeAI({ apiKey: provider.apiKey, baseURL })(model.model)
+		case 'cloudflare':
+			if (!provider.accountId) throw new ConfigError(`Provider "${provider.name}" needs a Cloudflare account id.`)
+			return createOpenAICompatible({
+				name: 'cloudflare',
+				baseURL: `${cloudflareBase(provider.accountId)}/v1`,
+				apiKey: provider.apiKey,
+			}).chatModel(model.model)
 		default:
 			throw new ConfigError(
 				`Provider "${provider.name}" (${provider.kind}) cannot run language models.`
@@ -40,6 +47,7 @@ export function getProviderOptions(provider: ProviderConfig, model: ModelConfig)
 		case 'openai':
 			return { openai: { reasoningEffort: effort } }
 		case 'openai-compatible':
+		case 'cloudflare':
 			return { [provider.id]: { reasoningEffort: effort } }
 		case 'anthropic':
 			return effort === 'none'
@@ -111,5 +119,25 @@ export async function listProviderModels(provider: ProviderConfig): Promise<Prov
 				.filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
 				.map((m: any) => ({ id: String(m.name).replace(/^models\//, ''), label: m.displayName }))
 		}
+		case 'cloudflare': {
+			if (!provider.accountId) throw new Error(`Provider "${provider.name}" needs a Cloudflare account id.`)
+			const data = await json(`${cloudflareBase(provider.accountId)}/models/search?per_page=200`, {
+				Authorization: `Bearer ${provider.apiKey ?? ''}`,
+			})
+			const models: ProviderModelInfo[] = (data.result ?? [])
+				.filter((m: any) => m.task?.name === 'Text Generation' || m.task?.name === 'Image-to-Text')
+				.map((m: any) => {
+					const name = String(m.name)
+					const vision = /(vision|llava)/i.test(name) || m.task?.name === 'Image-to-Text'
+					return { id: name, label: name, ...(vision ? { vision: true } : {}) }
+				})
+			return [...CLOUDFLARE_CLEF_MODELS, ...models]
+		}
 	}
 }
+
+/** Clef decision models aren't listed by the model search endpoint; always offer them. */
+const CLOUDFLARE_CLEF_MODELS: ProviderModelInfo[] = [
+	{ id: '@cf/cloudflare/clef', label: 'Clef (decisions)' },
+	{ id: '@cf/cloudflare/clef-flash', label: 'Clef Flash (fast decisions)' },
+]

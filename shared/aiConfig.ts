@@ -6,7 +6,7 @@
  * client only sees `hasApiKey`.
  */
 
-export type ProviderKind = 'openai-compatible' | 'openai' | 'anthropic' | 'google' | 'systemone'
+export type ProviderKind = 'openai-compatible' | 'openai' | 'anthropic' | 'google' | 'systemone' | 'cloudflare'
 
 /** What a model can be used for. */
 export type ModelCapability =
@@ -31,6 +31,8 @@ export interface ProviderConfig {
 	baseURL?: string
 	apiKey?: string
 	enabled: boolean
+	/** Cloudflare: the account the token belongs to (32 hex chars). Not secret. */
+	accountId?: string
 }
 
 /** A provider as the client sees it: the key is replaced by a flag. */
@@ -117,6 +119,22 @@ export const PROVIDER_KINDS: Record<ProviderKind, ProviderKindInfo> = {
 		capabilities: ['agent', 'chat', 'vision', 'jev'],
 		local: false,
 	},
+	cloudflare: {
+		label: 'Cloudflare Workers AI (chat + Clef decisions)',
+		needsApiKey: true,
+		capabilities: ['agent', 'chat', 'vision', 'jev'],
+		local: false,
+	},
+}
+
+/** Base URL for the Cloudflare Workers AI REST API for an account. */
+export function cloudflareBase(accountId: string) {
+	return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai`
+}
+
+/** A Cloudflare account id is 32 hex characters. */
+export function isValidCloudflareAccountId(accountId: string): boolean {
+	return /^[0-9a-f]{32}$/i.test(accountId)
 }
 
 /** Ready-made provider entries for the "Add provider" menu. */
@@ -155,6 +173,10 @@ export const PROVIDER_PRESETS: { label: string; provider: Omit<ProviderConfig, '
 	{ label: 'OpenAI', provider: { name: 'OpenAI', kind: 'openai', enabled: true } },
 	{ label: 'Anthropic', provider: { name: 'Anthropic', kind: 'anthropic', enabled: true } },
 	{ label: 'Google Gemini', provider: { name: 'Google', kind: 'google', enabled: true } },
+	{
+		label: 'Cloudflare Workers AI',
+		provider: { name: 'Cloudflare Workers AI', kind: 'cloudflare', enabled: true },
+	},
 ]
 
 export function modelKey(providerId: string, model: string) {
@@ -177,6 +199,7 @@ export function getDefaultModelKey(
 export function guessCapabilities(kind: ProviderKind, model: string): ModelCapability[] {
 	const id = model.toLowerCase()
 	if (kind === 'systemone') return ['jev']
+	if (kind === 'cloudflare' && id.startsWith('@cf/cloudflare/clef')) return ['jev']
 	// Image generators, embeddings and speech models can't chat.
 	if (/(dall-e|gpt-image|flux|sdxl|stable-diffusion|imagen|embed|whisper|tts|rerank)/.test(id)) return []
 	const caps: ModelCapability[] = ['chat']

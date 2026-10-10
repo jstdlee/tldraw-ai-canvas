@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path'
 import {
 	AIConfig,
 	getDefaultModelKey,
+	isValidCloudflareAccountId,
 	MODEL_CAPABILITIES,
 	ModelCapability,
 	PROVIDER_KINDS,
@@ -91,6 +92,13 @@ export function mergeClientConfig(incoming: ClientAIConfig): AIConfig {
 		const key = apiKey === undefined ? stored : apiKey || undefined
 		return { ...p, ...(key ? { apiKey: key } : {}) }
 	})
+	for (const p of providers) {
+		if (p.kind === 'cloudflare' && p.accountId && !isValidCloudflareAccountId(p.accountId)) {
+			throw new ConfigError(
+				`Provider "${p.name}": Cloudflare account id must be 32 hex characters (found on the Cloudflare dashboard home page).`
+			)
+		}
+	}
 	const providerIds = new Set(providers.map((p) => p.id))
 	return {
 		providers,

@@ -1,10 +1,13 @@
 import { generateText } from 'ai'
+import { cloudflareBase } from '../shared/aiConfig'
 import { ConfigError, resolveModel } from './config'
 import { getLanguageModel } from './llm'
 
 /**
  * JEV decisions: a question + context → probabilities over answers.
  *  - System One API (e.g. Julia-1 /v1/systemone): native choice / yes-no / score.
+ *  - Cloudflare Clef / Clef Flash (`@cf/cloudflare/clef*`): same request/response shape as
+ *    System One, run through Workers AI.
  *  - Any chat model: asked for calibrated probabilities as JSON.
  */
 
@@ -54,7 +57,54 @@ export async function decide(req: JevRequest): Promise<JevResult> {
 
 	const { model, provider } = resolveModel(req.model, 'jev')
 	if (provider.kind === 'systemone') return systemOne(provider.baseURL, provider.apiKey, model.model, req, options, levels)
+	if (provider.kind === 'cloudflare' && model.model.startsWith('@cf/cloudflare/clef')) {
+		if (!provider.accountId) throw new ConfigError(`Provider "${provider.name}" needs a Cloudflare account id.`)
+		return clef(provider.accountId, provider.apiKey, model.model, req, options, levels)
+	}
 	return llmDecision(req, options, levels, getLanguageModel(provider, model), model.key)
+}
+
+/** The "state + questions" body System One (and Clef, which shares the same shape) expects. */
+export function buildSystemOneBody(
+	modelName: string,
+	req: JevRequest,
+	options: { label: string; description: string }[],
+	levels: string[]
+) {
+	const question: Record<string, unknown> = { type: req.type, instructions: req.question.trim() }
+	if (req.type === 'choice') question.criteria = Object.fromEntries(options.map((o) => [o.label, o.description]))
+	if (req.type === 'score') question.criteria = levels
+	return {
+		model: modelName || 'auto',
+		// The model reads at most ~8k tokens of state.
+		state: (req.context ?? '').slice(0, 24_000) || '(no context)',
+		questions: { decision: question },
+	}
+}
+
+/** Parse a System One / Clef `{ answers: { decision: … } }` response into a `JevResult` (minus `source`). */
+export function parseSystemOneAnswer(
+	data: any,
+	req: JevRequest,
+	levels: string[]
+): Omit<JevResult, 'source'> {
+	const a = data?.answers?.decision
+	if (!a) throw new Error('No answer in response')
+	if (req.type === 'noul') {
+		const p = Number(a.noul)
+		return { type: 'noul', answer: p >= 0.5 ? 'yes' : 'no', probabilities: { yes: p, no: 1 - p }, confidence: a.confidence ?? null }
+	}
+	if (req.type === 'choice') {
+		const probs = normalize(a.probabilities ?? { [a.choice]: 1 })
+		return { type: 'choice', answer: a.choice ?? top(probs), probabilities: probs, confidence: a.confidence ?? a.max_probability ?? null }
+	}
+	// Clef names levels with `legend` (index -> label); fall back to the levels we sent.
+	const legend = a.legend as Record<string, string> | undefined
+	const nameFor = (i: number) => legend?.[String(i)] ?? levels[i] ?? String(i)
+	const raw = (a.probabilities ?? {}) as Record<string, number>
+	const probs = normalize(Object.fromEntries(Object.entries(raw).map(([i, p]) => [nameFor(Number(i)), p])))
+	const idx = Math.round(Number(a.score))
+	return { type: 'score', answer: nameFor(idx), probabilities: probs, confidence: a.confidence ?? null }
 }
 
 async function systemOne(
@@ -66,36 +116,43 @@ async function systemOne(
 	levels: string[]
 ): Promise<JevResult> {
 	const base = (baseURL ?? 'http://127.0.0.1:8011').replace(/\/+$/, '').replace(/\/v1$/, '')
-	const question: Record<string, unknown> = { type: req.type, instructions: req.question.trim() }
-	if (req.type === 'choice') question.criteria = Object.fromEntries(options.map((o) => [o.label, o.description]))
-	if (req.type === 'score') question.criteria = levels
 	const res = await fetch(`${base}/v1/systemone`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
-		body: JSON.stringify({
-			model: modelId || 'auto',
-			// The model reads at most ~8k tokens of state.
-			state: (req.context ?? '').slice(0, 24_000) || '(no context)',
-			questions: { decision: question },
-		}),
+		body: JSON.stringify(buildSystemOneBody(modelId, req, options, levels)),
 		signal: AbortSignal.timeout(60_000),
 	})
 	const data = (await res.json().catch(() => ({}))) as any
 	if (!res.ok) throw new Error(`System One API ${res.status}: ${data?.detail ?? data?.error ?? JSON.stringify(data).slice(0, 300)}`)
-	const a = data.answers?.decision
-	if (!a) throw new Error('System One API returned no answer')
-	if (req.type === 'noul') {
-		const p = Number(a.noul)
-		return { type: 'noul', answer: p >= 0.5 ? 'yes' : 'no', probabilities: { yes: p, no: 1 - p }, confidence: a.confidence ?? null, source: data.model ?? 'systemone' }
+	const parsed = parseSystemOneAnswer(data, req, levels)
+	return { ...parsed, source: data.model ?? 'systemone' }
+}
+
+/** Cloudflare Workers AI Clef / Clef Flash decision models. */
+async function clef(
+	accountId: string,
+	apiKey: string | undefined,
+	modelId: string,
+	req: JevRequest,
+	options: { label: string; description: string }[],
+	levels: string[]
+): Promise<JevResult> {
+	const modelName = modelId.replace(/^@cf\/cloudflare\//, '')
+	const res = await fetch(`${cloudflareBase(accountId)}/run/${modelId}`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey ?? ''}` },
+		body: JSON.stringify(buildSystemOneBody(modelName, req, options, levels)),
+		signal: AbortSignal.timeout(60_000),
+	})
+	const raw = (await res.json().catch(() => ({}))) as any
+	if (!res.ok) {
+		const message = raw?.errors?.[0]?.message ?? JSON.stringify(raw).slice(0, 300)
+		throw new Error(`Cloudflare Clef ${res.status}: ${message}`)
 	}
-	if (req.type === 'choice') {
-		const probs = normalize(a.probabilities ?? { [a.choice]: 1 })
-		return { type: 'choice', answer: a.choice ?? top(probs), probabilities: probs, confidence: a.confidence ?? a.max_probability ?? null, source: data.model ?? 'systemone' }
-	}
-	const raw = (a.probabilities ?? {}) as Record<string, number>
-	const probs = normalize(Object.fromEntries(Object.entries(raw).map(([i, p]) => [levels[Number(i)] ?? i, p])))
-	const idx = Math.round(Number(a.score))
-	return { type: 'score', answer: levels[idx] ?? String(a.score), probabilities: probs, confidence: a.confidence ?? null, source: data.model ?? 'systemone' }
+	// Some newer Workers AI models return the body unwrapped.
+	const data = raw.result ?? raw
+	const parsed = parseSystemOneAnswer(data, req, levels)
+	return { ...parsed, source: `cloudflare/${modelId}` }
 }
 
 async function llmDecision(
