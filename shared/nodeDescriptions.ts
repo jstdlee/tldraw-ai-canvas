@@ -163,19 +163,19 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		keywords: ['save', 'export', 'file', 'write'],
 	},
 	table: {
-		title: 'Table',
-		description: 'Edits a CSV/TSV table: filter, sort, add a column, and more.',
-		keywords: ['table', 'csv', 'tsv', 'data', 'spreadsheet'],
+		title: 'DataPipe',
+		description: 'One table operation at a time: filter, sort, add a column, join, and more. Chain several to build a pipeline.',
+		keywords: ['table', 'csv', 'tsv', 'xlsx', 'data', 'spreadsheet', 'pipe'],
 	},
 	chart: {
 		title: 'Chart',
 		description: 'Draws a bar, line or pie chart from a table.',
 		keywords: ['chart', 'graph', 'plot', 'visualization', 'bar', 'line', 'pie'],
 	},
-	sqlite_in: {
-		title: 'SQLite import',
-		description: 'Imports a SQLite/.db file and runs a query against it.',
-		keywords: ['sqlite', 'database', 'import', 'sql'],
+	database: {
+		title: 'Database',
+		description: 'Opens a SQLite/.db file and runs a query against it. Click a table to query it.',
+		keywords: ['sqlite', 'database', 'sql', 'table', 'query'],
 	},
 	openrouter: {
 		title: 'OpenRouter free',

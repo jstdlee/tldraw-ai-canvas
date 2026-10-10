@@ -1,0 +1,131 @@
+import { describe, expect, it } from 'vitest'
+import { opSpec, runTable, TABLE_OPS, type TableJob } from '../shared/tableOps'
+
+const CSV = 'name,city,score\nAda,Paris,3\nLin,Oslo,5\nBea,Paris,7'
+
+function job(patch: Partial<TableJob>): TableJob {
+	return {
+		format: 'auto',
+		op: 'select',
+		columns: '',
+		column: '',
+		as: '',
+		expr: '',
+		sep: '',
+		pattern: '',
+		with: '',
+		name: '',
+		extra: '',
+		...patch,
+	}
+}
+
+describe('opSpec / TABLE_OPS', () => {
+	it('finds a spec by id and hides the old join alias', () => {
+		expect(opSpec('filter')?.label).toBe('Filter rows')
+		expect(opSpec('join')?.hidden).toBe(true)
+		expect(opSpec('nope')).toBeUndefined()
+	})
+})
+
+describe('auto format detection', () => {
+	it('detects TSV from a tab in the first line, else CSV', () => {
+		expect(runTable('a\tb\n1\t2', job({ op: 'select', columns: 'b' }))).toBe('b\n2')
+		expect(runTable('a,b\n1,2', job({ op: 'select', columns: 'b' }))).toBe('b\n2')
+	})
+
+	it('csv/tsv still force the format', () => {
+		expect(() => runTable('a,b\n1,2', job({ format: 'tsv', op: 'select', columns: 'b' }))).toThrow()
+	})
+})
+
+describe('new column ops', () => {
+	it('drop removes the named columns', () => {
+		expect(runTable(CSV, job({ op: 'drop', columns: 'city' }))).toBe('name,score\nAda,3\nLin,5\nBea,7')
+	})
+
+	it('rename renames one column', () => {
+		expect(runTable(CSV, job({ op: 'rename', column: 'city', name: 'town' }))).toContain('name,town,score')
+	})
+})
+
+describe('filter rows', () => {
+	it('compares text and numbers, and supports empty checks', () => {
+		expect(runTable(CSV, job({ op: 'filter', column: 'city', as: '=', with: 'Paris' }))).toContain('Ada')
+		expect(runTable(CSV, job({ op: 'filter', column: 'score', as: '>', with: '4' }))).not.toContain('Ada,Paris,3')
+		expect(runTable(CSV, job({ op: 'filter', column: 'city', as: 'notempty' }))).toContain('Lin')
+	})
+
+	it('names the operation and missing column in its error', () => {
+		expect(() => runTable(CSV, job({ op: 'filter', column: '' }))).toThrow(/Filter rows: choose a column/)
+		expect(() => runTable(CSV, job({ op: 'rename', column: 'nme', name: 'x' }))).toThrow(/No column named nme/)
+	})
+})
+
+describe('head and replicate', () => {
+	it('head keeps first or last N rows', () => {
+		expect(runTable(CSV, job({ op: 'head', with: '1' }))).toBe('name,city,score\nAda,Paris,3')
+		expect(runTable(CSV, job({ op: 'head', with: '-1' }))).toBe('name,city,score\nBea,Paris,7')
+	})
+
+	it('replicate repeats each row in place, or the whole table', () => {
+		const each = runTable('n\na\nb', job({ op: 'replicate', with: '2', as: 'each' }))
+		expect(each).toBe('n\na\na\nb\nb')
+		const table = runTable('n\na\nb', job({ op: 'replicate', with: '2', as: 'table' }))
+		expect(table).toBe('n\na\nb\na\nb')
+	})
+})
+
+describe('fill', () => {
+	it('fills down and up, and with a fixed value', () => {
+		expect(runTable('n,v\na,1\nb,\nc,3', job({ op: 'fill', columns: 'v', as: 'down' }))).toBe('n,v\na,1\nb,1\nc,3')
+		expect(runTable('n,v\na,\nb,2', job({ op: 'fill', columns: 'v', as: 'up' }))).toBe('n,v\na,2\nb,2')
+		expect(runTable('n,v\na,\nb,2', job({ op: 'fill', columns: 'v', as: 'value', with: 'x' }))).toBe('n,v\na,x\nb,2')
+	})
+})
+
+describe('split', () => {
+	it('splits a column into numbered parts', () => {
+		expect(runTable('full\na-b\nc-d-e', job({ op: 'split', column: 'full', sep: '-', name: 'part' }))).toBe(
+			'part_1,part_2,part_3\na,b,\nc,d,e'
+		)
+	})
+})
+
+describe('append', () => {
+	it('matches columns by name and fills missing with empty', () => {
+		const out = runTable('a,b\n1,2', job({ op: 'append' }), 'b,c\n9,8')
+		expect(out).toBe('a,b\n1,2\n,9')
+	})
+
+	it('errors when the second table is missing', () => {
+		expect(() => runTable('a\n1', job({ op: 'append' }))).toThrow(/wire the second table/)
+	})
+})
+
+describe('lookup', () => {
+	const left = 'id,name\n1,Ada\n2,Lin'
+	const right = 'id,city\n1,Paris\n3,Oslo'
+
+	it('inner join drops unmatched rows', () => {
+		const out = runTable(left, job({ op: 'lookup', column: 'id', as: 'inner' }), right)
+		expect(out).toBe('id,name,city\n1,Ada,Paris')
+	})
+
+	it('left join keeps unmatched rows with empty cells', () => {
+		const out = runTable(left, job({ op: 'lookup', column: 'id', as: 'left' }), right)
+		expect(out).toBe('id,name,city\n1,Ada,Paris\n2,Lin,')
+	})
+
+	it('errors naming the missing right-side key', () => {
+		expect(() => runTable(left, job({ op: 'lookup', column: 'id', with: 'nope' }), right)).toThrow(/no column named nope/)
+	})
+})
+
+describe('every visible op has a spec entry', () => {
+	it('covers the table', () => {
+		for (const id of ['select', 'drop', 'rename', 'filter', 'regexp', 'sort', 'dedupe', 'head', 'replicate', 'convert', 'replace', 'fill', 'split', 'formula', 'concat', 'newcol', 'append', 'lookup', 'groupby', 'pivot']) {
+			expect(TABLE_OPS.some((spec) => spec.id === id)).toBe(true)
+		}
+	})
+})

@@ -210,7 +210,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ from: 'topic', fromPort: 'output', to: 'sql', toPort: 'input' },
 		],
 	},
-	step('table-columns', 'Pick table columns', 'A CSV prompt feeds Table. Select keeps name and score.', [
+	step('table-columns', 'Pick table columns', 'A CSV prompt feeds DataPipe. Keep columns keeps name and score.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 		{ id: 'b', type: 'table', x: 460, y: 0, props: { format: 'csv', op: 'select', columns: 'name,score' } },
 		{ id: 'c', type: 'output', x: 980, y: 0 },
@@ -218,7 +218,7 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'data' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
-	step('table-new-column', 'New column from a formula', 'Table builds a label with upper(name). Extra lines can fill a column when the formula is empty.', [
+	step('table-new-column', 'New column from a formula', 'DataPipe builds a label with upper(name). Extra lines can fill a column when the formula is empty.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 		{ id: 'b', type: 'prompt', x: 0, y: 240, props: { text: 'lead\nreview' } },
 		{ id: 'c', type: 'table', x: 460, y: 40, props: { format: 'csv', op: 'newcol', expr: 'upper(name)', name: 'label' } },
@@ -230,13 +230,17 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 		{ id: 'b', type: 'chart', x: 460, y: 0, props: { format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'data' }]),
-	step('sqlite-query', 'SQLite into PGlite', 'Import a .sqlite or .db file (read in the browser, loaded into PGlite). Ask writes SQL. Play runs it. Nothing runs until you press Play.', [
-		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'ready' } },
-		{ id: 'b', type: 'sqlite_in', x: 460, y: 0, props: { sql: "SELECT '$input' AS note;", ask: 'Show one note column' } },
-		{ id: 'c', type: 'output', x: 980, y: 0 },
+	step('database-open', 'Open a SQLite file', 'Upload a .sqlite file, click a table to query it, or type your own SQL. Nothing runs until you press Play.', [
+		{ id: 'a', type: 'database', x: 0, y: 0 },
+		{ id: 'b', type: 'output', x: 560, y: 0 },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
+	step('datapipe-chain', 'DataPipe chain', 'Inline CSV goes through Filter rows, then Group and summarise, then Chart. Each DataPipe does one step.', [
+		{ id: 'a', type: 'table', x: 0, y: 0, props: { text: CSV, format: 'auto', op: 'filter', column: 'score', as: '>', with: '4' } },
+		{ id: 'b', type: 'table', x: 520, y: 0, props: { format: 'auto', op: 'groupby', column: 'name', columns: 'score:sum' } },
+		{ id: 'c', type: 'chart', x: 1040, y: 0, props: { format: 'csv', kind: 'bar', xCol: 'name', yCol: 'sum_score' } },
 	], [
-		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' },
-		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
+		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'data' },
+		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'data' },
 	]),
 	step('local-grep', 'Keep matching lines', 'Text tools keeps lines that contain ada. The match runs in the page.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
@@ -318,7 +322,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ id: 'view', type: 'output', x: 0, y: 840 },
 			{ id: 'file', type: 'save', x: 460, y: 840, props: { fileName: 'scores.csv' } },
 			{ id: 'sql', type: 'postgres', x: 980, y: 840, props: { sql: "SELECT '$input' AS src;" } },
-			{ id: 'lite', type: 'sqlite_in', x: 1500, y: 840, props: { sql: 'SELECT 1 AS ready;' } },
+			{ id: 'lite', type: 'database', x: 1500, y: 840 },
 		],
 		wires: [
 			{ from: 'csv', fromPort: 'output', to: 'pick', toPort: 'data' },
@@ -331,7 +335,6 @@ export const EXAMPLES: CanvasExample[] = [
 			{ from: 'wait', fromPort: 'output', to: 'view', toPort: 'input' },
 			{ from: 'join', fromPort: 'output', to: 'file', toPort: 'input' },
 			{ from: 'csv', fromPort: 'output', to: 'sql', toPort: 'input' },
-			{ from: 'csv', fromPort: 'output', to: 'lite', toPort: 'input' },
 		],
 	},
 	{

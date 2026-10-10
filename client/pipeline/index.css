@@ -2251,6 +2251,19 @@ body {
 	color: var(--tl-color-text-3);
 }
 
+/* Database node: one clickable row per table. */
+.DatabaseNode-table {
+	cursor: pointer;
+	gap: 6px;
+	border-radius: var(--tl-radius-1);
+}
+.DatabaseNode-table:hover {
+	background: var(--tl-color-low);
+}
+.DatabaseNode-table .NodeHint {
+	margin-left: auto;
+}
+
 /* Video node: a fixed 16:9 frame so YouTube embeds and plain files both fit the card. */
 .VideoNode-player {
 	display: block;
@@ -2262,4 +2275,15 @@ body {
 	border-radius: var(--tl-radius-2);
 	background: #000;
 	object-fit: contain;
+}
+
+/* DataPipe file row: the file name gets the room, the sheet picker the rest. */
+.DataPipe-fileRow > .tlui-button {
+	flex: 1 1 60%;
+	min-width: 0;
+	justify-content: flex-start;
+}
+
+.DataPipe-fileRow > .UiSelect {
+	flex: 1 1 40%;
 }

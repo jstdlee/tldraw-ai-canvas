@@ -39,7 +39,7 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	save: { in: ['input'], out: ['output'], fields: ['fileName'] },
 	table: { in: ['data', 'extra'], out: ['output'], fields: ['text', 'format', 'op', 'columns', 'column', 'expr', 'pattern', 'name'] },
 	chart: { in: ['data'], out: ['output'], fields: ['kind', 'xCol', 'yCol', 'text', 'dualScale'] },
-	sqlite_in: { in: ['input'], out: ['output'], fields: ['path', 'sql', 'ask'] },
+	database: { in: ['sql'], out: ['output', 'schema'], fields: ['sql'] },
 	openrouter: { in: [], out: ['output'], fields: ['model'] },
 	raw_model: { in: ['prompt', 'model'], out: ['output'], fields: ['url', 'model', 'system', 'temperature', 'thinking', 'maxTokens'] },
 	video: { in: ['url'], out: ['output'], fields: ['url', 'autoplay'] },

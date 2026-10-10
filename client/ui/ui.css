@@ -525,3 +525,46 @@ button.UiChip {
 .NodeAiButton.tlui-button:hover:not(:disabled) {
 	color: var(--tl-color-selected);
 }
+
+/* One type scale inside node cards: a field is 0.8em of the card font; its controls must not shrink again. */
+.UiField .UiSelect-trigger.tlui-button,
+.UiField .UiInput,
+.UiField .UiTextArea {
+	font-size: 1em;
+}
+
+.UiField .UiSegmented-item.tlui-button {
+	font-size: 0.9em;
+}
+
+.UiSegmented-item.tlui-button {
+	flex: 1 0 auto;
+}
+
+/* Kit blocks placed straight in a node body line up with NodeRow's side padding. */
+.NodeBody > .UiField,
+.NodeBody > .NodeHint,
+.NodeBody > .UiTable,
+.NodeBody > .UiEmpty,
+.NodeBody > .UiSection {
+	margin-inline: var(--tl-space-4);
+}
+
+.NodeBody > .UiField {
+	margin-block: 0.2em;
+}
+
+.NodeHint {
+	font-size: 0.65em;
+	line-height: 1.35;
+	color: var(--tl-color-text-3);
+}
+
+.NodeBody > .NodeHint {
+	margin-block: 0.1em 0.3em;
+}
+
+.UiField-label {
+	font-size: 0.9em;
+	color: var(--tl-color-text-3);
+}

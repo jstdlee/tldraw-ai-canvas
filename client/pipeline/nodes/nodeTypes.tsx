@@ -34,7 +34,8 @@ import { NumberNodeDefinition } from './types/NumberNode'
 import { PromptConcatNodeDefinition } from './types/PromptConcatNode'
 import { PromptNodeDefinition } from './types/PromptNode'
 import { RouterNodeDefinition } from './types/RouterNode'
-import { ChartNodeDefinition, SqliteNodeDefinition, TableNodeDefinition } from './types/DataNodes'
+import { ChartNodeDefinition, TableNodeDefinition } from './types/DataNodes'
+import { DatabaseNodeDefinition } from './types/DatabaseNode'
 import { FileInNodeDefinition, UrlInNodeDefinition } from './types/InputNodes'
 import { RawModelNodeDefinition } from './types/RawModelNode'
 import { OpenRouterNodeDefinition, SleepNodeDefinition, VideoNodeDefinition } from './types/ToolNodes'
@@ -85,7 +86,7 @@ export const NodeDefinitions = {
 	save: SaveNodeDefinition,
 	table: TableNodeDefinition,
 	chart: ChartNodeDefinition,
-	sqlite_in: SqliteNodeDefinition,
+	database: DatabaseNodeDefinition,
 	openrouter: OpenRouterNodeDefinition,
 	raw_model: RawModelNodeDefinition,
 	video: VideoNodeDefinition,
@@ -117,6 +118,7 @@ const RemovedNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {
 	terminal: removedNodeDefinition('terminal', 'Terminal'),
 	agent_run: removedNodeDefinition('agent_run', 'Local agent'),
 	local_tool: removedNodeDefinition('local_tool', 'Local tool'),
+	sqlite_in: removedNodeDefinition('sqlite_in', 'SQLite import'),
 }
 
 const AllNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {

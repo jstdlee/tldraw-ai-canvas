@@ -49,7 +49,7 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	save: { inn: ['input'], out: ['output'] },
 	table: { inn: ['data', 'extra'], out: ['output'] },
 	chart: { inn: ['data'], out: ['output'] },
-	sqlite_in: { inn: ['input'], out: ['output'] },
+	database: { inn: ['sql'], out: ['output', 'schema'] },
 	openrouter: { inn: [], out: ['output'] },
 	raw_model: { inn: ['prompt', 'model'], out: ['output'] },
 	video: { inn: ['url'], out: ['output'] },

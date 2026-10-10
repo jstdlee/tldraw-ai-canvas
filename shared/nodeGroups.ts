@@ -52,7 +52,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	table: 'data',
 	chart: 'data',
 	postgres: 'data',
-	sqlite_in: 'data',
+	database: 'data',
 	// Net
 	http: 'net',
 	download: 'net',

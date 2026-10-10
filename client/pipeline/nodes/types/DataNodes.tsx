@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { sqliteFileToPgStatements } from '../../sqliteWasm'
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { chartOption, resolveColumns } from '../../../../shared/chartOption'
-import { parseTable, runTable, splitList } from '../../../../shared/tableOps'
+import { opSpec, parseTable, runTable, splitList, TABLE_OPS } from '../../../../shared/tableOps'
 import type { TableJob } from '../../../../shared/tableOps'
-import { T, useEditor, useValue } from 'tldraw'
+import { createShapeId, Editor, TLShapeId, T, useEditor, useValue } from 'tldraw'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
-import { runSql } from '../../pg'
+import { createOrUpdateConnectionBinding } from '../../connection/ConnectionBindingUtil'
+import { getNextConnectionIndex } from '../../connection/keepConnectionsAtBottom'
+import { createNodeAt } from '../../placeNode'
+import { readSpreadsheet } from '../../excel'
+import { storeFile, loadFileBytes } from '../../fileStore'
 import { sleep } from '../../utils/sleep'
 import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiButton, UiCheckbox, UiTextArea, UiTextInput } from '../../../ui'
-import { NodeMultiSelect, PortRow, stopEvent, NodeSelect } from './fields'
+import { UiButton, UiCheckbox, UiEmpty, UiField, UiSegmented, UiSelect, UiTable, UiTextArea, UiTextInput } from '../../../ui'
+import { IconPlus, IconTable, IconUpload } from '../../../ui/icons'
+import { NodeMultiSelect, PortRow, stopEvent, NodeSelect, useInputConnected } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -25,7 +29,6 @@ import {
 	updateNode,
 } from './shared'
 
-const icon = <span className="NodeShape-emoji">▦</span>
 const BASE = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 
 function end(id: string, row: number): ShapePort {
@@ -46,6 +49,10 @@ function info(shape: NodeShape, value: string | null, inputs: InfoValues): InfoV
 
 const SAMPLE = 'name,city,score\nAda,Paris,3\nLin,Oslo,5'
 
+// ---------------------------------------------------------------------------
+// DataPipe (type id stays "table" so saved canvases keep loading).
+// ---------------------------------------------------------------------------
+
 export type TableNode = T.TypeOf<typeof TableNode>
 export const TableNode = T.object({
 	type: T.literal('table'),
@@ -61,23 +68,44 @@ export const TableNode = T.object({
 	with: T.string,
 	name: T.string,
 	error: T.string.nullable(),
+	// New, optional (WP5): source picker, uploaded file, and the last run's preview.
+	source: T.string.optional(),
+	fileUrl: T.string.optional(),
+	fileName: T.string.optional(),
+	sheet: T.string.optional(),
+	sheets: T.arrayOf(T.string).optional(),
+	lastOutput: T.string.nullable().optional(),
+	lastInfo: T.string.optional(),
 })
 
-const OPS = ['select', 'convert', 'formula', 'concat', 'replace', 'join', 'regexp', 'newcol', 'groupby', 'pivot', 'dedupe', 'sort'] as const
+/** Where DataPipe's rows land, so ports and body height agree. */
+function layout(node: TableNode) {
+	const spec = opSpec(node.op)
+	const params = spec?.params ?? []
+	let row = 0
+	const dataRow = row++
+	const fileRow = node.source === 'file' ? row++ : null
+	const opRow = row++
+	const paramStart = row
+	row += params.length
+	const secondRow = spec?.second ? row++ : null
+	return { dataRow, fileRow, opRow, paramStart, paramCount: params.length, secondRow, rowsCount: row, spec, params }
+}
 
 export class TableNodeDefinition extends NodeDefinition<TableNode> {
 	static type = 'table'
 	static validator = TableNode
-	title = 'Table'
-	heading = 'Table'
-	icon = icon
+	title = 'DataPipe'
+	heading = 'DataPipe'
+	icon = <IconTable />
 	category = categoryOf('table')
+	override showsOutput = true
 	override defaultWidthPx = 440
 	getDefault(): TableNode {
 		return {
 			type: 'table',
 			text: SAMPLE,
-			format: 'csv',
+			format: 'auto',
 			op: 'select',
 			columns: 'name,score',
 			column: 'score',
@@ -88,73 +116,373 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 			with: 'A',
 			name: 'next',
 			error: null,
+			source: 'inline',
+			fileUrl: '',
+			fileName: '',
+			sheet: '',
+			sheets: [],
+			lastOutput: null,
+			lastInfo: '',
 		}
 	}
 	getBodyHeightPx(_shape: NodeShape, node: TableNode) {
-		// Rows: data, extra, format/op, columns, column, as/expr, pattern, with/sep, new name = 9.
-		return NODE_ROW_HEIGHT_PX * (9 + (node.error ? 1 : 0))
+		const { rowsCount } = layout(node)
+		const inlineExtra = (node.source ?? 'inline') === 'inline' ? 90 : 0
+		const descriptionExtra = 20
+		const previewExtra = 240
+		return NODE_ROW_HEIGHT_PX * rowsCount + inlineExtra + descriptionExtra + previewExtra
 	}
 	getPorts(shape: NodeShape, node: TableNode): Record<string, ShapePort> {
-		return { data: end('data', 0), extra: end('extra', 1), output: out(this.getWidthPx(shape, node)) }
+		const { dataRow, secondRow } = layout(node)
+		return {
+			data: end('data', dataRow),
+			extra: end('extra', secondRow ?? dataRow),
+			output: out(this.getWidthPx(shape, node)),
+		}
 	}
 	async execute(shape: NodeShape, node: TableNode, inputs: InputValues): Promise<ExecutionResult> {
 		await sleep(30)
 		const text = getInputText(inputs, 'data') || node.text
-		const job: TableJob = { ...node, extra: getInputText(inputs, 'extra') }
+		const extra = getInputText(inputs, 'extra')
+		const job: TableJob = { ...node, extra }
 		try {
-			const output = runTable(text, job)
-			updateNode<TableNode>(this.editor, shape, (n) => ({ ...n, error: null }), false)
+			const output = runTable(text, job, extra)
+			const rows = output.includes('\n') ? output.split('\n').length - 1 : 0
+			const cols = output.split('\n')[0]?.split(',').length ?? 0
+			updateNode<TableNode>(
+				this.editor,
+				shape,
+				(n) => ({ ...n, error: null, lastOutput: output.slice(0, 200_000), lastInfo: `${rows} row${rows === 1 ? '' : 's'} × ${cols} column${cols === 1 ? '' : 's'}` }),
+				false
+			)
 			return { output }
 		} catch (error) {
 			updateNode<TableNode>(this.editor, shape, (n) => ({ ...n, error: (error as Error).message }), false)
 			throw error
 		}
 	}
-	getOutputInfo(shape: NodeShape, _node: TableNode, inputs: InfoValues): InfoValues {
-		return info(shape, null, inputs)
+	getOutputInfo(shape: NodeShape, node: TableNode, inputs: InfoValues): InfoValues {
+		return info(shape, node.lastOutput ?? null, inputs)
 	}
 	Component = TableComponent
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+const OP_OPTIONS = TABLE_OPS.filter((spec) => !spec.hidden).map((spec) => ({
+	value: spec.id,
+	label: spec.label,
+	group: spec.group,
+}))
+
+/** A column picker backed by the input table's real headers, falling back to free text. */
+function ColumnField({
+	label,
+	value,
+	headers,
+	onChange,
+}: {
+	label: string
+	value: string
+	headers: string[]
+	onChange: (value: string) => void
+}) {
+	if (!headers.length) {
+		return (
+			<UiField label={label}>
+				<UiTextInput value={value} onChange={onChange} placeholder="column name" />
+			</UiField>
+		)
+	}
 	return (
-		<NodeRow>
-			<span className="NodeInputRow-label">{label}</span>
-			<UiTextInput value={value} onChange={onChange} />
-		</NodeRow>
+		<UiField label={label}>
+			<UiSelect
+				value={value}
+				placeholder="Choose a column"
+				options={headers.map((h) => ({ value: h, label: h }))}
+				onChange={onChange}
+			/>
+		</UiField>
 	)
+}
+
+function ColumnsField({
+	label,
+	value,
+	headers,
+	onChange,
+}: {
+	label: string
+	value: string
+	headers: string[]
+	onChange: (value: string) => void
+}) {
+	if (!headers.length) {
+		return (
+			<UiField label={label}>
+				<UiTextInput value={value} onChange={onChange} placeholder="a, b, c" />
+			</UiField>
+		)
+	}
+	return (
+		<UiField label={label}>
+			<NodeMultiSelect
+				emptyLabel="Choose columns"
+				values={splitList(value).filter((v) => headers.includes(v))}
+				options={headers.map((h) => ({ value: h, label: h }))}
+				onChange={(next) => onChange(next.join(','))}
+			/>
+		</UiField>
+	)
+}
+
+function ParamField({
+	param,
+	node,
+	headers,
+	set,
+}: {
+	param: ReturnType<typeof layout>['params'][number]
+	node: TableNode
+	headers: string[]
+	set: (patch: Partial<TableNode>) => void
+}) {
+	const value = (node as unknown as Record<string, string>)[param.field] ?? ''
+	const onChange = (next: string) => set({ [param.field]: next } as Partial<TableNode>)
+	if (param.kind === 'column') return <ColumnField label={param.label} value={value} headers={headers} onChange={onChange} />
+	if (param.kind === 'columns') return <ColumnsField label={param.label} value={value} headers={headers} onChange={onChange} />
+	if (param.kind === 'enum') {
+		return (
+			<UiField label={param.label} hint={param.hint}>
+				<UiSelect value={value || param.options?.[0]?.value || ''} options={param.options ?? []} onChange={onChange} />
+			</UiField>
+		)
+	}
+	if (param.kind === 'number') {
+		return (
+			<UiField label={param.label} hint={param.hint}>
+				<UiTextInput value={value} onChange={onChange} inputMode="decimal" placeholder={param.placeholder} />
+			</UiField>
+		)
+	}
+	// 'formula' and 'regex' both render as a mono text input.
+	return (
+		<UiField label={param.label} hint={param.hint}>
+			<UiTextInput mono value={value} onChange={onChange} placeholder={param.placeholder} />
+		</UiField>
+	)
+}
+
+function wireOutputToInput(editor: Editor, fromShapeId: TLShapeId, toShapeId: TLShapeId) {
+	const connectionId = createShapeId()
+	editor.createShape({
+		type: 'connection',
+		id: connectionId,
+		x: 0,
+		y: 0,
+		index: getNextConnectionIndex(editor),
+	})
+	createOrUpdateConnectionBinding(editor, connectionId, fromShapeId, { portId: 'output', terminal: 'start', order: 0 })
+	createOrUpdateConnectionBinding(editor, connectionId, toShapeId, { portId: 'data', terminal: 'end', order: 0 })
 }
 
 function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 	const editor = useEditor()
+	const fileRef = useRef<HTMLInputElement>(null)
+	const [busy, setBusy] = useState(false)
 	const set = (patch: Partial<TableNode>) => updateNode<TableNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
+	const dataWired = useInputConnected(shape.id, 'data')
+	const extraWired = useInputConnected(shape.id, 'extra')
+	const source = node.source ?? (dataWired ? 'input' : 'inline')
+	const spec = opSpec(node.op) ?? TABLE_OPS[0]
+
+	const effectiveText = useValue(
+		'datapipe input text',
+		() => {
+			const wired = getNodeInputPortValues(editor, shape.id).data?.value
+			if (typeof wired === 'string' && wired.trim()) return wired
+			return node.text
+		},
+		[editor, shape.id, node.text]
+	)
+	const headers = useMemo(() => {
+		try {
+			return parseTable(effectiveText, 'auto').headers
+		} catch {
+			return []
+		}
+	}, [effectiveText])
+
+	const uploadFile = async (file: File) => {
+		setBusy(true)
+		try {
+			const stored = await storeFile(file)
+			const bytes = await loadFileBytes(stored.url)
+			const sheet = await readSpreadsheet(bytes, file.name)
+			const firstSheet = sheet.sheets[0]
+			set({
+				source: 'file',
+				fileUrl: stored.url,
+				fileName: file.name,
+				sheets: sheet.sheets,
+				sheet: firstSheet,
+				text: sheet.toCsv(firstSheet),
+				format: 'csv',
+				error: null,
+			})
+		} catch (error) {
+			set({ error: (error as Error).message })
+		} finally {
+			setBusy(false)
+			if (fileRef.current) fileRef.current.value = ''
+		}
+	}
+
+	const chooseSheet = async (sheetName: string) => {
+		if (!node.fileUrl || !node.fileName) return
+		setBusy(true)
+		try {
+			const bytes = await loadFileBytes(node.fileUrl)
+			const sheet = await readSpreadsheet(bytes, node.fileName)
+			set({ sheet: sheetName, text: sheet.toCsv(sheetName) })
+		} catch (error) {
+			set({ error: (error as Error).message })
+		} finally {
+			setBusy(false)
+		}
+	}
+
+	const addStep = () => {
+		editor.run(() => {
+			const nextShapeId = createNodeAt(
+				editor,
+				{
+					type: 'table',
+					...TableDefaultForChain(),
+				},
+				{ rightOf: shape.id }
+			)
+			wireOutputToInput(editor, shape.id, nextShapeId)
+		})
+	}
+
+	const preview = useMemo(() => {
+		if (!node.lastOutput) return null
+		try {
+			return parseTable(node.lastOutput, 'auto')
+		} catch {
+			return null
+		}
+	}, [node.lastOutput])
+
 	return (
 		<>
-			<PortRow shapeId={shape.id} portId="data" label="CSV / TSV" dataType="text" />
-			<PortRow shapeId={shape.id} portId="extra" label="New values" dataType="text" hint="one line per row" />
+			{dataWired ? (
+				<PortRow shapeId={shape.id} portId="data" label="Input" dataType="text" />
+			) : (
+				<NodeRow>
+					<span className="NodePortLabel">Input</span>
+					<UiSegmented
+						value={source === 'file' ? 'file' : 'inline'}
+						options={[
+							{ value: 'inline', label: 'Inline' },
+							{ value: 'file', label: 'File' },
+						]}
+						onChange={(next) => set({ source: next })}
+					/>
+				</NodeRow>
+			)}
+			{!dataWired && source === 'inline' && (
+				<UiTextArea
+					className="NodeField-textarea"
+					mono
+					rows={4}
+					value={node.text}
+					onChange={(text) => set({ text })}
+				/>
+			)}
+			{!dataWired && source === 'file' && (
+				<>
+					<NodeRow className="DataPipe-fileRow">
+						<input
+							ref={fileRef}
+							type="file"
+							accept=".csv,.tsv,.txt,.xls,.xlsx,.ods"
+							style={{ display: 'none' }}
+							onChange={(e) => {
+								const file = e.currentTarget.files?.[0]
+								if (file) void uploadFile(file)
+							}}
+						/>
+						<UiButton
+							size="sm"
+							variant="low"
+							icon={<IconUpload />}
+							disabled={busy}
+							label={busy ? 'Reading…' : node.fileName || 'Upload CSV, TSV, XLS, XLSX'}
+							onClick={() => fileRef.current?.click()}
+						/>
+						{(node.sheets?.length ?? 0) > 1 && (
+							<UiSelect
+								value={node.sheet || node.sheets![0]}
+								options={node.sheets!.map((s) => ({ value: s, label: s }))}
+								onChange={(sheetName) => void chooseSheet(sheetName)}
+							/>
+						)}
+					</NodeRow>
+				</>
+			)}
+			<UiField label="Operation">
+				<UiSelect value={node.op} options={OP_OPTIONS} onChange={(op) => set({ op })} />
+			</UiField>
+			<div className="NodeHint">{spec.description}</div>
+			{spec.params.map((param) => (
+				<ParamField key={param.field} param={param} node={node} headers={headers} set={set} />
+			))}
+			{spec.second && (
+				<PortRow shapeId={shape.id} portId="extra" label={spec.second.label} dataType="text" hint={spec.second.hint} />
+			)}
+			{preview ? (
+				<>
+					<UiTable columns={preview.headers} rows={preview.rows} maxRows={50} />
+					<div className="NodeHint">{node.lastInfo}</div>
+				</>
+			) : (
+				<UiEmpty text="Press Run to see the result" />
+			)}
 			<NodeRow>
-				<NodeSelect className="NodeField-select" value={node.format} onPointerDown={stopEvent} onChange={(e) => set({ format: e.target.value })}>
-					<option value="csv">CSV</option>
-					<option value="tsv">TSV</option>
-				</NodeSelect>
-				<NodeSelect className="NodeField-select" value={node.op} onPointerDown={stopEvent} onChange={(e) => set({ op: e.target.value })}>
-					{OPS.map((op) => (
-						<option key={op} value={op}>
-							{op}
-						</option>
-					))}
-				</NodeSelect>
+				<UiButton size="sm" variant="low" icon={<IconPlus />} label="Add next step" onClick={addStep} />
 			</NodeRow>
-			<Field label="Columns" value={node.columns} onChange={(columns) => set({ columns })} />
-			<Field label="Column" value={node.column} onChange={(column) => set({ column })} />
-			<Field label="As / expr" value={node.op === 'formula' || node.op === 'newcol' ? node.expr : node.as} onChange={(value) => set(node.op === 'formula' || node.op === 'newcol' ? { expr: value } : { as: value })} />
-			<Field label="Pattern" value={node.pattern} onChange={(pattern) => set({ pattern })} />
-			<Field label="With / sep" value={node.op === 'replace' ? node.with : node.sep} onChange={(value) => set(node.op === 'replace' ? { with: value } : { sep: value })} />
-			<Field label="New name" value={node.name} onChange={(name) => set({ name })} />
-			{node.error && <NodeRow><span className="NodeStatus is-error">{node.error}</span></NodeRow>}
 		</>
 	)
 }
+
+/** Default parameters for a freshly chained DataPipe step (Keep columns, nothing picked yet). */
+function TableDefaultForChain(): Omit<TableNode, 'type'> {
+	return {
+		text: '',
+		format: 'auto',
+		op: 'select',
+		columns: '',
+		column: '',
+		as: '',
+		expr: '',
+		sep: ' ',
+		pattern: '',
+		with: '',
+		name: '',
+		error: null,
+		source: 'input',
+		fileUrl: '',
+		fileName: '',
+		sheet: '',
+		sheets: [],
+		lastOutput: null,
+		lastInfo: '',
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Chart (unchanged behaviour; still reads a CSV/TSV table).
+// ---------------------------------------------------------------------------
 
 export type ChartNode = T.TypeOf<typeof ChartNode>
 export const ChartNode = T.object({
@@ -200,6 +528,8 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	}
 	Component = ChartComponent
 }
+
+const icon = <span className="NodeShape-emoji">▦</span>
 
 function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	const editor = useEditor()
@@ -307,119 +637,5 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 			<div ref={ref} className="ChartNode-view" />
 			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
 		</div>
-	)
-}
-
-export type SqliteNode = T.TypeOf<typeof SqliteNode>
-export const SqliteNode = T.object({
-	type: T.literal('sqlite_in'),
-	path: T.string,
-	/** The converted Postgres (CREATE + INSERT) from the last imported file. Replayed on run. */
-	imported: T.string,
-	/** Summary of the last import, e.g. "3 tables, 1,204 rows". */
-	importInfo: T.string,
-	sql: T.string,
-	ask: T.string,
-	error: T.string.nullable(),
-})
-
-export class SqliteNodeDefinition extends NodeDefinition<SqliteNode> {
-	static type = 'sqlite_in'
-	static validator = SqliteNode
-	title = 'SQLite import'
-	heading = 'SQLite'
-	icon = icon
-	category = categoryOf('sqlite_in')
-	override defaultWidthPx = 440
-	getDefault(): SqliteNode {
-		return { type: 'sqlite_in', path: '', imported: '', importInfo: '', sql: 'SELECT 1 AS ready;', ask: '', error: null }
-	}
-	getBodyHeightPx(_shape: NodeShape, node: SqliteNode) {
-		// Rows: input port, import button, ask, ask-ai button = 4, plus importInfo/error when set,
-		// plus the SQL text box.
-		return (
-			NODE_ROW_HEIGHT_PX * (4 + (node.importInfo ? 1 : 0) + (node.error ? 1 : 0)) + 140
-		)
-	}
-	getPorts(shape: NodeShape, node: SqliteNode): Record<string, ShapePort> {
-		return { input: end('input', 0), output: out(this.getWidthPx(shape, node)) }
-	}
-	async execute(shape: NodeShape, node: SqliteNode, inputs: InputValues): Promise<ExecutionResult> {
-		const extra = getInputText(inputs, 'input')
-		let sql = node.sql
-		if (extra) sql = sql.replaceAll('$input', extra.replace(/'/g, "''"))
-		// The imported file's schema and rows load first, then the node's own query runs.
-		const full = node.imported ? `${node.imported}\n${sql}` : sql
-		const output = await runSql(full)
-		updateNode<SqliteNode>(this.editor, shape, (n) => ({ ...n, error: null }), false)
-		return { output }
-	}
-	getOutputInfo(shape: NodeShape, _node: SqliteNode, inputs: InfoValues): InfoValues {
-		return info(shape, null, inputs)
-	}
-	Component = SqliteComponent
-}
-
-function SqliteComponent({ shape, node }: NodeComponentProps<SqliteNode>) {
-	const editor = useEditor()
-	const fileRef = useRef<HTMLInputElement>(null)
-	const [busy, setBusy] = useState(false)
-	const set = (patch: Partial<SqliteNode>) => updateNode<SqliteNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
-	const ask = async () => {
-		const { apiGenerateText } = await import('../../api/pipelineApi')
-		const { text } = await apiGenerateText({
-			temperature: 0.1,
-			system: 'Write one SQLite-compatible SQL statement for PGlite. SQL only.',
-			prompt: node.ask || 'Show the tables',
-		})
-		set({ sql: text.replace(/```sql|```/g, '').trim() })
-	}
-	const importFile = async (file: File) => {
-		setBusy(true)
-		try {
-			const bytes = new Uint8Array(await file.arrayBuffer())
-			const { tables, rows, statements } = await sqliteFileToPgStatements(bytes)
-			set({ imported: statements.join('\n'), importInfo: `${tables} table${tables === 1 ? '' : 's'}, ${rows.toLocaleString()} rows`, path: file.name, error: null })
-		} catch (e) {
-			set({ error: (e as Error).message, imported: '', importInfo: '' })
-		} finally {
-			setBusy(false)
-			if (fileRef.current) fileRef.current.value = ''
-		}
-	}
-	return (
-		<>
-			<PortRow shapeId={shape.id} portId="input" label="Value" dataType="text" hint="replaces $input" />
-			<NodeRow>
-				<input
-					ref={fileRef}
-					type="file"
-					accept=".sqlite,.sqlite3,.db"
-					style={{ display: 'none' }}
-					onChange={(e) => {
-						const file = e.currentTarget.files?.[0]
-						if (file) void importFile(file)
-					}}
-				/>
-				<UiButton
-					size="sm"
-					variant="low"
-					disabled={busy}
-					label={busy ? 'Importing…' : node.imported ? `Re-import ${node.path || 'file'}` : 'Import .sqlite / .db file'}
-					onClick={() => fileRef.current?.click()}
-				/>
-			</NodeRow>
-			{node.importInfo && (
-				<NodeRow>
-					<span className="NodeHint">{node.importInfo} — replayed on every run.</span>
-				</NodeRow>
-			)}
-			<Field label="Ask" value={node.ask} onChange={(ask) => set({ ask })} />
-			<NodeRow>
-				<UiButton size="sm" variant="low" label="Ask AI for SQL" onClick={() => void ask()} />
-			</NodeRow>
-			<UiTextArea className="NodeField-textarea" mono value={node.sql} onChange={(sql) => set({ sql })} />
-			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
-		</>
 	)
 }

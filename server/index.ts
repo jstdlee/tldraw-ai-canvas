@@ -19,6 +19,7 @@ import {
 	toPublicConfig,
 } from './config'
 import { importLocalImage, importRemoteImage, readImage, resolveImage, saveImage, toDataUrl } from './images'
+import { isValidFileId, MAX_FILE_BYTES, readFile, saveFile } from './files'
 import { downloadUrl, httpRequest, HttpRequestInput, saveContent, unfurl } from './http'
 import { deleteCustomNode, listCustomNodes, readCustomNode, saveCustomNode } from './customNodes'
 import { decide, JevRequest } from './jev'
@@ -59,7 +60,7 @@ app.use('*', async (c, next) => {
 	// A cross-site form can POST text/plain without a preflight; require real JSON for JSON routes.
 	if ((c.req.method === 'POST' || c.req.method === 'PUT') && c.req.path.startsWith('/api/')) {
 		const type = c.req.header('content-type') ?? ''
-		const raw = c.req.path.startsWith('/api/images/') // image uploads send raw bytes
+		const raw = c.req.path.startsWith('/api/images/') || c.req.path.startsWith('/api/files/') // image/file uploads send raw bytes
 		if (!raw && !type.includes('application/json')) return c.text('Expected application/json', 415)
 	}
 	await next()
@@ -362,6 +363,37 @@ app.get('/api/images/:imageId/data-url', (c) => {
 	const image = readImage(c.req.param('imageId'))
 	if (!image) return c.text('Not found', 404)
 	return c.text(toDataUrl(image))
+})
+
+// --- Generic file store (DataPipe uploads, Database files) -----------------
+
+app.post('/api/files/:fileId', async (c) => {
+	const fileId = c.req.param('fileId')
+	if (!isValidFileId(fileId)) return c.json({ error: 'Invalid file id' }, 400)
+	const mime = c.req.header('content-type') ?? 'application/octet-stream'
+	const nameHeader = c.req.header('x-file-name') ?? ''
+	let name = fileId
+	try {
+		name = nameHeader ? decodeURIComponent(nameHeader) : fileId
+	} catch {
+		name = nameHeader || fileId
+	}
+	const bytes = new Uint8Array(await c.req.arrayBuffer())
+	if (bytes.byteLength > MAX_FILE_BYTES) return c.json({ error: 'File is larger than 50 MB' }, 413)
+	saveFile(fileId, bytes, mime, name)
+	return c.json({ ok: true, url: `/api/files/${fileId}`, name, size: bytes.byteLength })
+})
+
+app.get('/api/files/:fileId', (c) => {
+	const file = readFile(c.req.param('fileId'))
+	if (!file) return c.text('Not found', 404)
+	return new Response(new Uint8Array(file.bytes), {
+		headers: {
+			'Content-Type': file.mime,
+			'Content-Disposition': `inline; filename="${file.name.replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+			'Cache-Control': 'public, max-age=31536000, immutable',
+		},
+	})
 })
 
 registerBatchRoutes(app)
