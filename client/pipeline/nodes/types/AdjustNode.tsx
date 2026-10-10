@@ -67,6 +67,7 @@ export class AdjustNodeDefinition extends NodeDefinition<AdjustNode> {
 	heading = 'Adjust'
 	icon = <AdjustIcon />
 	category = categoryOf('adjust')
+	override showsOutput = true
 	override hidden = true
 	resultKeys = ['lastResultUrl'] as const
 	getDefault(): AdjustNode {

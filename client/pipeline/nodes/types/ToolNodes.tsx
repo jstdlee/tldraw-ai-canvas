@@ -58,6 +58,7 @@ export class VideoNodeDefinition extends NodeDefinition<VideoNode> {
 	heading = 'Video'
 	icon = mark
 	category = categoryOf('video')
+	override showsOutput = true
 	getDefault(): VideoNode {
 		return { type: 'video', url: '', autoplay: false }
 	}

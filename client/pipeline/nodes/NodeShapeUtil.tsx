@@ -2,6 +2,7 @@ import classNames from 'classnames'
 import { useCallback, useRef, useState } from 'react'
 import {
 	Circle2d,
+	getColorValue,
 	Group2d,
 	HTMLContainer,
 	RecordProps,
@@ -45,7 +46,7 @@ import {
 import { executionState, startExecution, stopExecution } from '../execution/executionState'
 import { Port } from '../ports/Port'
 import { getNodeOutputPortInfo, getNodePorts } from './nodePorts'
-import { getNodeDefinition, getNodeHeightPx, getNodeWidthPx, NodeBody, NodeType } from './nodeTypes'
+import { getNodeDefinition, getNodeHeightPx, getNodeWidthPx, NodeBody, NodeType, shouldSpillOutput } from './nodeTypes'
 import { resizeNode } from './resizeNode'
 import { unpack } from '../subgraph'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../placeOnCanvas'
@@ -59,6 +60,8 @@ import { STOP_EXECUTION } from './types/shared'
 import { $notesAll, $notesOpen, toggleNoteOpen } from '../../shell/shellState'
 
 const NODE_TYPE = 'node'
+/** Matches --tl-radius-3, the card's own border radius. */
+const NODE_CARD_RADIUS_PX = 9
 
 declare module 'tldraw' {
 	export interface TLGlobalShapePropsMap {
@@ -79,6 +82,10 @@ declare module 'tldraw' {
 			spillId?: string
 			/** Output history shapes, newest first. The newest sits beside the node; older ones shift right. */
 			spillIds?: string[]
+			/** Whether the unconnected output is also put on the canvas. Undefined = 'auto' (skip when the card already shows the result). */
+			spill?: 'auto' | 'always' | 'never'
+			/** Accent colour for the card header (one of tldraw's colour names). */
+			color?: string
 			/** Name drawn on the top edge. */
 			label?: string
 			/** Free text note kept with the node. */
@@ -103,6 +110,8 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		deleteLocked: T.boolean.optional(),
 		spillId: T.string.optional(),
 		spillIds: T.arrayOf(T.string).optional(),
+		spill: T.literalEnum('auto', 'always', 'never').optional(),
+		color: T.string.optional(),
 		label: T.string.optional(),
 		note: T.string.optional(),
 		fontSize: T.number.optional(),
@@ -134,8 +143,10 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 	override hideSelectionBoundsBg(shape: NodeShape) {
 		return !this.canResize(shape)
 	}
-	override hideSelectionBoundsFg(shape: NodeShape) {
-		return !this.canResize(shape)
+	override hideSelectionBoundsFg(_shape: NodeShape) {
+		// tldraw's own selection rectangle is hidden; getIndicatorPath draws the single
+		// rounded edge (and resize handles still show through hideResizeHandles).
+		return true
 	}
 	override isAspectRatioLocked(_shape: NodeShape) {
 		return false
@@ -229,7 +240,8 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		const width = getNodeWidthPx(this.editor, shape)
 		const height = getNodeHeightPx(this.editor, shape)
 		const path = new Path2D()
-		path.rect(0, 0, width, height)
+		// Same radius as the card (--tl-radius-3), so the indicator sits exactly on its edge.
+		path.roundRect(0, 0, width, height, NODE_CARD_RADIUS_PX)
 		const ports = Object.values(getNodePorts(this.editor, shape))
 		for (const port of ports) {
 			path.moveTo(port.x + PORT_RADIUS_PX, port.y)
@@ -276,6 +288,9 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 	const [hiddenBanner, setHiddenBanner] = useState<string | null>(null)
 	const showBanner = !!bannerMessage && hiddenBanner !== bannerMessage
 	const fontSize = shape.props.fontSize
+	const accentColor = shape.props.color
+		? getColorValue(editor.getCurrentTheme().colors[editor.getColorMode()], shape.props.color, 'solid')
+		: undefined
 	const runClass =
 		isExecuting || run?.status === 'running'
 			? 'NodeShape_running'
@@ -295,8 +310,14 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				NodeShape_collapsed: !!shape.props.collapsed,
 				NodeShape_pinned: !!shape.props.pinned,
 				NodeShape_fs: !!fontSize,
+				NodeShape_accent: !!accentColor,
 			})}
-			style={fontSize ? ({ '--node-fs': `${fontSize}px` } as React.CSSProperties) : undefined}
+			style={
+				{
+					...(fontSize ? { '--node-fs': `${fontSize}px` } : null),
+					...(accentColor ? { '--node-accent': accentColor } : null),
+				} as React.CSSProperties
+			}
 			onContextMenu={(e) => {
 				const target = e.target as HTMLElement
 				const tag = target.tagName
@@ -566,6 +587,15 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 	const pinned = !!shape.props.pinned
 	const deleteLocked = !!shape.props.deleteLocked
 	const fontSize = shape.props.fontSize ?? DEFAULT_NODE_FONT_PX
+	const spills = shouldSpillOutput(editor, shape)
+
+	const toggleSpill = () => {
+		editor.updateShape<NodeShape>({
+			id: shape.id,
+			type: 'node',
+			props: { spill: spills ? 'never' : 'always' },
+		})
+	}
 
 	const stepFont = (delta: number) => {
 		const next = Math.max(MIN_NODE_FONT_PX, Math.min(MAX_NODE_FONT_PX, fontSize + delta))
@@ -686,6 +716,16 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 							>
 								<TldrawUiButtonCheck checked={deleteLocked} />
 								<TldrawUiButtonLabel>{deleteLocked ? 'Allow delete' : 'Lock delete'}</TldrawUiButtonLabel>
+							</TldrawUiButton>
+						</TldrawUiDropdownMenuItem>
+						<TldrawUiDropdownMenuItem noClose>
+							<TldrawUiButton
+								type="menu"
+								title="When on, the output also appears as a shape next to the node"
+								onClick={toggleSpill}
+							>
+								<TldrawUiButtonCheck checked={spills} />
+								<TldrawUiButtonLabel>Put output on canvas</TldrawUiButtonLabel>
 							</TldrawUiButton>
 						</TldrawUiDropdownMenuItem>
 						<TldrawUiDropdownMenuItem noClose>

@@ -2,6 +2,7 @@ import { createShapeId, Editor, TLShapeId, toRichText } from 'tldraw'
 import { capTextForCanvas } from './capOutput'
 import { ExecutionResult, STOP_EXECUTION } from './nodes/types/shared'
 import { getNodePortConnections, getNodePorts } from './nodes/nodePorts'
+import { shouldSpillOutput } from './nodes/nodeTypes'
 import { NodeShape } from './nodes/NodeShapeUtil'
 import { placeImageOnCanvas } from './placeOnCanvas'
 
@@ -69,6 +70,7 @@ export async function spillUnconnectedOutput(editor: Editor, shape: NodeShape, o
 		(connection) => connection.terminal === 'start' && connection.ownPortId === out.id
 	)
 	if (wired) return
+	if (!shouldSpillOutput(editor, shape)) return
 	const value = outputs[out.id]
 	if (value == null || value === STOP_EXECUTION || value === '') return
 	const raw = String(value)

@@ -175,6 +175,7 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	heading = 'Chart'
 	icon = icon
 	category = categoryOf('chart')
+	override showsOutput = true
 	getDefault(): ChartNode {
 		return { type: 'chart', text: SAMPLE, format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score', dualScale: false, error: null }
 	}

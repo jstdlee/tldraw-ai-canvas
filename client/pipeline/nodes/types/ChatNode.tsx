@@ -72,6 +72,7 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 	heading = 'Chat'
 	icon = <GenerateTextIcon />
 	category = categoryOf('chat')
+	override showsOutput = true
 	resultKeys = ['assistantMessage', 'error'] as const
 	getDefault(): ChatNode {
 		return {

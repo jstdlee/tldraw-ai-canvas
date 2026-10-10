@@ -39,8 +39,26 @@ import {
 	saveCustomNode,
 } from '../pipeline/customNodes'
 import { imagesKeepRatio, toggleImageRatio, toggleTextWrap } from './shapeOptions'
+import { startColorChord } from '../shell/shellState'
 import { EXAMPLES } from '../../shared/examples'
 import { loadExample } from '../pipeline/loadExample'
+
+/**
+ * Delete the selection, skipping nodes whose "Lock delete" is on. Used by the
+ * "erase-selection" action override and by the Ctrl/Cmd+E key handler in
+ * ShellChrome, so there is exactly one place that implements the behaviour.
+ */
+export function eraseSelection(editor: Editor, notify: Notify) {
+	const selected = editor.getSelectedShapes()
+	const locked = selected.filter(
+		(shape) => shape.type === 'node' && (shape.props as { deleteLocked?: boolean }).deleteLocked
+	)
+	const toDelete = selected.filter((shape) => !locked.includes(shape))
+	if (toDelete.length) editor.deleteShapes(toDelete.map((shape) => shape.id))
+	if (locked.length) {
+		notify(`${locked.length} locked node${locked.length === 1 ? '' : 's'} kept`, 'warning')
+	}
+}
 
 function centerView(editor: Editor) {
 	const selected = editor.getSelectionPageBounds()
@@ -100,7 +118,13 @@ export function canvasActionOverrides(
 		...a('find-on-canvas', 'Find on canvas', () => $findOpen.set(true), '$!f'),
 		...a('center-view', 'Center view', () => centerView(editor)),
 		...a('reset-zoom', 'Reset zoom', () => resetZoom(editor)),
-		...a('erase-selection', 'Erase', () => editor.deleteShapes(editor.getSelectedShapeIds()), '$e'),
+		...a('erase-selection', 'Delete (erase)', () => eraseSelection(editor, notify), '$e'),
+		...a(
+			'color-chord',
+			'Colour selection… (then C, then G/K/B/R/Y)',
+			() => startColorChord(),
+			'$b'
+		),
 		...a('fetch-page', 'Web page → Markdown…', () => fetchPageAsMarkdown(editor, notify)),
 		...a('new-markdown', 'New Markdown clip', () => createClipAtCenter(editor, 'markdown'), '?m'),
 		...a('new-mermaid', 'New Mermaid diagram', () => createClipAtCenter(editor, 'mermaid'), '?g'),
@@ -310,6 +334,8 @@ export function CanvasToolsMenuGroup() {
 				<TldrawUiMenuActionItem actionId="word-count" />
 				<TldrawUiMenuActionItem actionId="qr-code" />
 				<TldrawUiMenuActionItem actionId="edit-image" />
+				<TldrawUiMenuActionItem actionId="erase-selection" />
+				<TldrawUiMenuActionItem actionId="color-chord" />
 			</TldrawUiMenuGroup>
 		</TldrawUiMenuSubmenu>
 	)

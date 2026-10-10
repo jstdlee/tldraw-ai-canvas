@@ -1,22 +1,96 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Editor, TLShapeId, useEditor, useValue } from 'tldraw'
+import { DefaultColorStyle, Editor, TLDefaultColorStyle, TLShapeId, useActions, useEditor, useValue } from 'tldraw'
 import { FEATURE_ROWS } from '../../shared/featureList'
 import { getNodeDefinitions } from '../pipeline/nodes/nodeTypes'
 import { createShapeId } from 'tldraw'
 import { diveGroup, groupPlainText, leaveGroup } from '../pipeline/groups/groupActions'
 import { $findOpen } from '../clips/FindBar'
-import { $backup, $featuresOpen, $libraryRail, $mapOpen, $paletteOpen, $searchHits, loadBackup } from './shellState'
+import {
+	$backup,
+	$colorChordOpen,
+	$featuresOpen,
+	$libraryRail,
+	$mapOpen,
+	$paletteOpen,
+	$searchHits,
+	advanceColorChordToColor,
+	cancelColorChord,
+	getColorChordStep,
+	loadBackup,
+	startColorChord,
+} from './shellState'
 
 function stop(event: { stopPropagation: () => void; target?: EventTarget | null; currentTarget?: EventTarget | null }) {
 	event.stopPropagation()
 }
 
+/** Colour keys for the Ctrl/Cmd+B, C, <key> chord. */
+const CHORD_COLORS: Record<string, string> = {
+	g: 'green',
+	k: 'black',
+	d: 'black',
+	b: 'blue',
+	r: 'red',
+	y: 'yellow',
+}
+function applyChordColor(editor: Editor, color: string) {
+	const value = color as TLDefaultColorStyle
+	editor.setStyleForSelectedShapes(DefaultColorStyle, value)
+	editor.setStyleForNextShapes(DefaultColorStyle, value)
+	const nodeIds = editor
+		.getSelectedShapes()
+		.filter((shape) => shape.type === 'node')
+		.map((shape) => shape.id)
+	if (nodeIds.length) {
+		editor.run(() => {
+			for (const id of nodeIds) {
+				editor.updateShape({ id, type: 'node', props: { color } })
+			}
+		})
+	}
+}
+
 export function ShellChrome() {
 	const editor = useEditor()
+	const actions = useActions()
+
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
 			const tag = (event.target as HTMLElement | null)?.tagName
 			const typing = tag === 'INPUT' || tag === 'TEXTAREA' || (event.target as HTMLElement | null)?.isContentEditable
+
+			const chordStep = getColorChordStep()
+			if (chordStep !== 'idle') {
+				if (event.key === 'Escape') {
+					event.preventDefault()
+					cancelColorChord()
+					return
+				}
+				const key = event.key.toLowerCase()
+				if (chordStep === 'wait-c') {
+					if (key === 'c') {
+						event.preventDefault()
+						advanceColorChordToColor()
+						return
+					}
+					if (key in CHORD_COLORS) {
+						// A colour key straight after Ctrl+B is also accepted.
+						event.preventDefault()
+						applyChordColor(editor, CHORD_COLORS[key])
+						cancelColorChord()
+						return
+					}
+					cancelColorChord()
+				} else if (chordStep === 'wait-color') {
+					if (key in CHORD_COLORS) {
+						event.preventDefault()
+						applyChordColor(editor, CHORD_COLORS[key])
+					}
+					cancelColorChord()
+					return
+				}
+			}
+
 			if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'p' && !event.shiftKey) {
 				event.preventDefault()
 				event.stopPropagation()
@@ -26,17 +100,23 @@ export function ShellChrome() {
 				event.preventDefault()
 				$libraryRail.set(!$libraryRail.get())
 			}
+			if (!typing && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'b') {
+				// Ctrl/Cmd+B opens the colour chord; prevented only outside text fields so
+				// bold-text shortcuts in a text field still work.
+				event.preventDefault()
+				startColorChord()
+				return
+			}
 			if (!typing && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'e') {
-				const ids = editor.getSelectedShapeIds()
-				if (!ids.length) return
 				event.preventDefault()
 				event.stopPropagation()
-				editor.deleteShapes(ids)
+				actions['erase-selection']?.onSelect('kbd')
 			}
 		}
 		window.addEventListener('keydown', onKey, true)
 		return () => window.removeEventListener('keydown', onKey, true)
-	}, [editor])
+	}, [editor, actions])
+
 	return (
 		<>
 			<GroupBack editor={editor} />
@@ -44,7 +124,19 @@ export function ShellChrome() {
 			<MapView editor={editor} />
 			<FeaturePanel />
 			<BackupClock editor={editor} />
+			<ColorChordHint />
 		</>
+	)
+}
+
+/** Floating hint shown while the Ctrl/Cmd+B colour chord is active. */
+function ColorChordHint() {
+	const open = useValue('color chord open', () => $colorChordOpen.get(), [])
+	if (!open) return null
+	return (
+		<div className="ColorChordHint" onPointerDown={stop}>
+			Colour: G green · K default · B blue · R red · Y yellow
+		</div>
 	)
 }
 

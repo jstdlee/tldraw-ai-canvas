@@ -351,7 +351,9 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 					</div>
 				</div>
 			)}
-			<CodeArea value={node.code} lang={node.lang} height={CODE_HEIGHT_PX} onChange={(code) => set({ code })} />
+			<div className="NodeGrow" style={{ minHeight: CODE_HEIGHT_PX }}>
+				<CodeArea value={node.code} lang={node.lang} onChange={(code) => set({ code })} />
+			</div>
 		</>
 	)
 }

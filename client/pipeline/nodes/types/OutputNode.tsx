@@ -50,6 +50,7 @@ export class OutputNodeDefinition extends NodeDefinition<OutputNode> {
 	heading = 'Output'
 	icon = <PreviewIcon />
 	category = categoryOf('output')
+	override showsOutput = true
 	resultKeys = ['lastValue'] as const
 	getDefault(): OutputNode {
 		return { type: 'output', kind: 'auto', lastValue: null }

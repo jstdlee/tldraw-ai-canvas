@@ -150,13 +150,15 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 			<Field label="URL">{text('url', 'https://api.openai.com/v1')}</Field>
 			<Field label="Model">{text('model', 'model id, or wire one')}</Field>
 			<Field label="Key">{text('apiKey', 'optional', 'password')}</Field>
-			<UiTextArea
-				className="NodeField-textarea"
-				placeholder="System prompt"
-				style={{ height: 72 }}
-				value={node.system}
-				onChange={(system) => set({ system })}
-			/>
+			<div className="NodeGrow" style={{ minHeight: 72 }}>
+				<UiTextArea
+					className="NodeField-textarea"
+					grow
+					placeholder="System prompt"
+					value={node.system}
+					onChange={(system) => set({ system })}
+				/>
+			</div>
 			<Field label="Temp">{text('temperature', 'default', 'number')}</Field>
 			<Field label="Max tok">{text('maxTokens', 'default', 'number')}</Field>
 			<Field label="Think">

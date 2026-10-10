@@ -577,15 +577,132 @@ body {
 	.OnCanvasNodePicker-content {
 		position: absolute;
 		margin-top: calc(-1 * var(--top));
-		width: 170px;
+		width: 340px;
 		border-radius: var(--tl-radius-3);
 		background: var(--tl-color-panel);
 		box-shadow: var(--node-shadow-highlight);
+		overflow: hidden;
 	}
 
 	&.OnCanvasNodePicker_middle .OnCanvasNodePicker-content {
-		margin-left: -85px;
+		margin-left: -170px;
 	}
+}
+
+.NodeSearchPicker {
+	display: flex;
+	flex-direction: column;
+	max-height: 420px;
+	font-size: 13px;
+}
+
+.NodeSearchPicker-search {
+	display: flex;
+	align-items: center;
+	gap: var(--tl-space-2);
+	padding: var(--tl-space-3) var(--tl-space-4);
+	border-bottom: 1px solid var(--tl-color-divider);
+	color: var(--tl-color-text-3);
+	flex: 0 0 auto;
+
+	.UiInput {
+		border: none;
+		background: transparent;
+		padding: 0;
+	}
+}
+
+.NodeSearchPicker-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--tl-space-2) 0;
+}
+
+.NodeSearchPicker-section {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: var(--tl-space-2) var(--tl-space-4) 2px;
+	font-size: 0.78em;
+	color: var(--tl-color-text-3);
+}
+
+.NodeSearchPicker-jev {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--tl-color-primary);
+}
+
+.NodeSearchPicker-row {
+	display: flex;
+	align-items: center;
+	gap: var(--tl-space-3);
+	width: 100%;
+	padding: 6px var(--tl-space-4);
+	border: none;
+	background: none;
+	text-align: left;
+	cursor: pointer;
+	color: var(--tl-color-text-1);
+}
+
+.NodeSearchPicker-row:hover,
+.NodeSearchPicker-row.is-active {
+	background: var(--tl-color-hint);
+}
+
+.NodeSearchPicker-row-icon {
+	display: flex;
+	flex: 0 0 auto;
+}
+
+.NodeSearchPicker-row-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+}
+
+.NodeSearchPicker-row-title {
+	font-size: 0.95em;
+}
+
+.NodeSearchPicker-row-desc {
+	font-size: 0.78em;
+	color: var(--tl-color-text-3);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.NodeSearchPicker-others {
+	display: block;
+	width: 100%;
+	padding: 6px var(--tl-space-4);
+	border: none;
+	background: none;
+	text-align: left;
+	font-size: 0.85em;
+	color: var(--tl-color-text-3);
+	cursor: pointer;
+}
+
+.NodeSearchPicker-others:hover {
+	color: var(--tl-color-text-1);
+}
+
+.NodeSearchPicker-empty {
+	padding: var(--tl-space-3) var(--tl-space-4);
+	font-size: 0.85em;
+	color: var(--tl-color-text-3);
+}
+
+.NodeSearchPicker-footer {
+	flex: 0 0 auto;
+	padding: var(--tl-space-2) var(--tl-space-4);
+	border-top: 1px solid var(--tl-color-divider);
 }
 
 /* ---- Pipeline regions ---- */
@@ -1347,53 +1464,112 @@ body {
 	font-variant-numeric: tabular-nums;
 }
 
-/* Run state borders */
+/* Run state borders: the card's own 1px edge changes colour, no second ring. */
 
 @keyframes node-run-pulse {
+	0%,
+	100% {
+		box-shadow:
+			0 0 0 1px var(--tl-color-selected),
+			var(--node-shadows);
+	}
 	50% {
-		outline-color: transparent;
+		box-shadow:
+			0 0 0 1px color-mix(in srgb, var(--tl-color-selected) 35%, transparent),
+			var(--node-shadows);
 	}
 }
 
 .NodeShape_running {
-	outline: 2px solid var(--tl-color-selected);
-	outline-offset: 2px;
 	animation: node-run-pulse 1s ease-in-out infinite;
 }
 
+@keyframes node-ok-fade {
+	0%,
+	60% {
+		box-shadow:
+			0 0 0 1px var(--tl-color-success),
+			var(--node-shadows);
+	}
+	100% {
+		box-shadow: var(--node-shadow-border);
+	}
+}
+
 .NodeShape_ok {
-	outline: 2px solid var(--tl-color-success);
-	outline-offset: 2px;
+	animation: node-ok-fade 1.5s ease forwards;
 }
 
 .NodeShape_error,
 .NodeShape_missing {
-	outline: 2px solid var(--tl-color-danger);
-	outline-offset: 2px;
+	box-shadow:
+		0 0 0 1px var(--tl-color-danger),
+		var(--node-shadows);
+}
+
+/* Node colour (the Ctrl/Cmd+B chord): a top accent bar and a tinted header icon. */
+.NodeShape_accent {
+	position: relative;
+}
+
+.NodeShape_accent::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 4px;
+	border-radius: var(--tl-radius-3) var(--tl-radius-3) 0 0;
+	background: var(--node-accent);
+	pointer-events: none;
+}
+
+.NodeShape_accent .NodeShape-icon {
+	color: var(--node-accent);
 }
 
 /* Large editors, code area, max button */
 
 .FieldMax {
 	position: absolute;
-	top: 4px;
-	right: 4px;
+	top: var(--tl-space-1);
+	right: var(--tl-space-1);
 	z-index: 2;
-	width: 22px;
-	height: 22px;
-	border: 1px solid var(--tl-color-divider);
-	border-radius: 4px;
-	background: var(--tl-color-panel);
-	color: var(--tl-color-text-2);
-	cursor: pointer;
+	background: color-mix(in srgb, var(--tl-color-panel) 85%, transparent);
+	border-radius: var(--tl-radius-2);
+	opacity: 0;
+	transition: opacity 120ms ease;
 	pointer-events: all;
-	line-height: 1;
+}
+
+.NodeImagePreview:hover .FieldMax,
+.NodeImagePreview:focus-within .FieldMax,
+.TextAreaField:hover .FieldMax,
+.TextAreaField:focus-within .FieldMax,
+.FieldMax:focus-visible {
+	opacity: 1;
 }
 
 .TextAreaField {
 	position: relative;
 	margin: 0 var(--tl-space-4) 4px;
 	min-height: 0;
+}
+
+/* The node's main text area: a .NodeGrow wrapper fills the free body space (resize grows it),
+   and the field inside stretches to fill the wrapper. */
+.NodeGrow {
+	display: flex;
+	flex-direction: column;
+	min-height: calc(3 * 1.4em);
+	min-width: 0;
+}
+
+.NodeGrow > .TextAreaField,
+.NodeGrow > .CodeArea {
+	flex: 1;
+	min-height: 0;
+	height: auto;
 }
 
 .TextAreaField .NodeField-textarea,
@@ -1495,6 +1671,7 @@ body {
 
 .CodeArea-tools .FieldMax {
 	position: static;
+	opacity: 1;
 }
 
 .tok-key { color: #7c3aed; }
@@ -1504,14 +1681,13 @@ body {
 
 .LargeEditor-backdrop {
 	position: fixed;
-	top: 64px;
-	left: 50%;
+	inset: 0;
 	z-index: 800;
-	width: max-content;
-	max-width: calc(100vw - 24px);
-	transform: translateX(-50%);
-	background: transparent;
-	pointer-events: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, var(--tl-color-text-1) 25%, transparent);
+	pointer-events: all;
 }
 
 .LargeEditor,
@@ -1520,28 +1696,35 @@ body {
 }
 
 .LargeEditor {
-	width: min(560px, calc(100vw - 48px));
-	height: min(420px, 70vh);
+	width: min(960px, 90vw);
+	height: min(720px, 85vh);
 	display: flex;
 	flex-direction: column;
 	background: var(--tl-color-panel);
-	border: 1px solid var(--tl-color-divider);
-	border-radius: 12px;
-	box-shadow: var(--tl-shadow-3);
+	border-radius: var(--tl-radius-4);
+	box-shadow: var(--tl-shadow-4);
 	overflow: hidden;
 }
 
 .LargeEditor-image {
-	width: min(1000px, calc(100vw - 48px));
-	height: auto;
-	max-height: 86vh;
+	width: min(960px, 90vw);
+	height: min(720px, 85vh);
 }
 
-.LargeEditor-image img {
-	max-width: 100%;
-	max-height: calc(86vh - 44px);
-	object-fit: contain;
+.LargeEditor-image-body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	background: var(--tl-color-low);
+	overflow: hidden;
+}
+
+.LargeEditor-image-body img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
 }
 
 .LargeEditor-bar {
@@ -1555,23 +1738,22 @@ body {
 
 .LargeEditor-actions {
 	display: flex;
+	align-items: center;
 	gap: 6px;
-}
-
-.LargeEditor-actions button,
-.LargeEditor-bar > button {
-	height: 28px;
-	padding: 0 10px;
-	border: 1px solid var(--tl-color-divider);
-	border-radius: 6px;
-	background: var(--tl-color-panel);
-	cursor: pointer;
 }
 
 .LargeEditor-body {
 	flex: 1;
 	min-height: 0;
 	display: flex;
+}
+
+.LargeEditor-footer {
+	padding: 6px 12px;
+	border-top: 1px solid var(--tl-color-divider);
+	font-size: 0.78em;
+	color: var(--tl-color-text-3);
+	text-align: right;
 }
 
 .LargeEditor-text,
@@ -1582,7 +1764,7 @@ body {
 	height: 100%;
 	border: none;
 	resize: none;
-	font-family: ui-monospace, monospace;
+	font-family: var(--tl-font-mono);
 	font-size: 0.87em;
 	line-height: 1.5;
 }

@@ -59,6 +59,7 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 	heading = 'JEV'
 	icon = <RouterIcon />
 	category = categoryOf('jev')
+	override showsOutput = true
 	resultKeys = ['lastResult', 'lastFinal', 'error'] as const
 	getDefault(): JevNode {
 		return {
@@ -212,9 +213,10 @@ function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 				{node.kind === 'noul' && <span className="CodeNode-outLabel">yes →</span>}
 			</div>
 			<NodeRow className="NodeRow-right">{node.kind === 'noul' ? <span className="CodeNode-outLabel-static">no →</span> : null}</NodeRow>
-			<div className="NodeField-block" style={{ height: QUESTION_PX }}>
+			<div className="NodeGrow" style={{ minHeight: QUESTION_PX }}>
 				<UiTextArea
 					className="NodeField-textarea"
+					grow
 					disabled={questionWired}
 					placeholder="Question for JEV"
 					value={questionWired ? '(from the Question input)' : node.question}
@@ -230,9 +232,10 @@ function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 				<ModelSelect className="node-model-select" capability="jev" value={node.model} onChange={(model) => set({ model }, false)} />
 			</NodeRow>
 			{node.kind !== 'noul' && (
-				<div className="NodeField-block" style={{ height: OPTIONS_PX }}>
+				<div className="NodeGrow" style={{ minHeight: OPTIONS_PX }}>
 					<UiTextArea
 						className="NodeField-textarea"
+						grow
 						placeholder={node.kind === 'choice' ? 'One option per line: label: description' : 'Levels, worst first, one per line'}
 						value={node.options}
 						onChange={(options) => set({ options })}

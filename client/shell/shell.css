@@ -168,6 +168,24 @@
 	white-space: nowrap;
 }
 
+/* Floating hint for the Ctrl/Cmd+B colour chord, near the bottom toolbar. */
+.ColorChordHint {
+	position: fixed;
+	left: 50%;
+	bottom: 64px;
+	transform: translateX(-50%);
+	z-index: 400;
+	padding: 6px 12px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-3);
+	background: var(--tl-color-panel);
+	box-shadow: var(--tl-shadow-2);
+	font-size: 12px;
+	color: var(--tl-color-text-1);
+	pointer-events: none;
+	white-space: nowrap;
+}
+
 .app-layout {
 	grid-template-columns: auto minmax(0, 1fr);
 }

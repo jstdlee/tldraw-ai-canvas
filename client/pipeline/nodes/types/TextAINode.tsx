@@ -193,10 +193,14 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 					))}
 				</NodeSelect>
 			</NodeRow>
-			<div className="NodeField-block" style={{ height: OPTION_HEIGHT_PX }}>
+			<div
+				className={op.id === 'custom' ? 'NodeGrow' : 'NodeField-block'}
+				style={op.id === 'custom' ? { minHeight: OPTION_HEIGHT_PX } : { height: OPTION_HEIGHT_PX }}
+			>
 				{op.id === 'custom' ? (
 					<UiTextArea
 						className="NodeField-textarea"
+						grow
 						placeholder="Instruction, e.g. Turn this into a tweet"
 						value={node.instruction}
 						onChange={(instruction) => set({ instruction }, false)}

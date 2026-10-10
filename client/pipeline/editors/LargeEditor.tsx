@@ -1,7 +1,10 @@
-import { forwardRef, useEffect, useState } from 'react'
+import { forwardRef, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCode, highlightCode } from '../../../shared/codeFormat'
-import { stopEvent } from '../nodes/types/fields'
+import { IconClose, IconExpand, UiButton, UiIconButton } from '../../ui'
+import { placeImageOnCanvas } from '../placeOnCanvas'
+import { NodeShape } from '../nodes/NodeShapeUtil'
+import type { Editor } from 'tldraw'
 
 export function editorLang(lang: string): string {
 	if (lang === 'py' || lang === 'js' || lang === 'sql' || lang === 'json' || lang === 'text') return lang
@@ -24,39 +27,51 @@ export function LargeEditor({
 	readOnly?: boolean
 }) {
 	const [draft, setDraft] = useState(value)
+	const [copied, setCopied] = useState(false)
+	const changed = !readOnly && draft !== value
+
+	const apply = () => {
+		onChange(draft)
+		onClose()
+	}
+	const requestClose = () => {
+		if (changed && !window.confirm('Discard changes?')) return
+		onClose()
+	}
+
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') onClose()
+			if (event.key === 'Escape') requestClose()
+			if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !readOnly) {
+				event.preventDefault()
+				apply()
+			}
 		}
 		window.addEventListener('keydown', onKey)
 		return () => window.removeEventListener('keydown', onKey)
-	}, [onClose])
+	})
 	const code = lang !== 'text'
 	return createPortal(
-		<div className="LargeEditor-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+		<div className="LargeEditor-backdrop" onPointerDown={(event) => event.target === event.currentTarget && requestClose()}>
 			<div className="LargeEditor" role="dialog" aria-label={title}>
 				<div className="LargeEditor-bar">
 					<strong>{title}</strong>
 					<div className="LargeEditor-actions">
-						{!readOnly && (
-							<button type="button" onClick={() => setDraft(formatCode(draft, lang))}>
-								Format
-							</button>
+						{!readOnly && code && (
+							<UiButton size="sm" variant="low" label="Format" onClick={() => setDraft(formatCode(draft, lang))} />
 						)}
-						{!readOnly && (
-							<button
-								type="button"
-								onClick={() => {
-									onChange(draft)
-									onClose()
-								}}
-							>
-								Apply
-							</button>
-						)}
-						<button type="button" onClick={onClose} aria-label="Close">
-							×
-						</button>
+						<UiButton
+							size="sm"
+							variant="low"
+							label={copied ? 'Copied' : 'Copy'}
+							onClick={() => {
+								void navigator.clipboard.writeText(draft)
+								setCopied(true)
+								window.setTimeout(() => setCopied(false), 900)
+							}}
+						/>
+						{!readOnly && <UiButton size="sm" variant="primary" label="Apply" onClick={apply} />}
+						<UiIconButton icon={<IconClose />} title="Close" onClick={requestClose} />
 					</div>
 				</div>
 				<div className="LargeEditor-body">
@@ -75,6 +90,7 @@ export function LargeEditor({
 						/>
 					</div>
 				</div>
+				{!readOnly && <div className="LargeEditor-footer">Ctrl+Enter apply · Esc close</div>}
 			</div>
 		</div>,
 		document.body
@@ -92,28 +108,53 @@ export const Gutter = forwardRef<HTMLDivElement, { text: string }>(function Gutt
 	)
 })
 
+/** Small button in the corner of a field that opens its large editor; fades in on hover/focus. */
 export function FieldMax({ title, onClick }: { title: string; onClick: () => void }) {
 	return (
-		<button className="FieldMax" type="button" title={title} onPointerDown={stopEvent} onClick={onClick}>
-			<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-				<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-			</svg>
-		</button>
+		<UiIconButton className="FieldMax" icon={<IconExpand size={13} />} title={title} onClick={onClick} />
 	)
 }
 
 /** Large view for an image result or an image input. */
-export function ImageZoom({ src, onClose }: { src: string; onClose: () => void }) {
+export function ImageZoom({
+	src,
+	onClose,
+	editor,
+	nextTo,
+}: {
+	src: string
+	onClose: () => void
+	/** When given with `nextTo`, shows "Place on canvas". */
+	editor?: Editor
+	nextTo?: NodeShape | null
+}) {
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') onClose()
+		}
+		window.addEventListener('keydown', onKey)
+		return () => window.removeEventListener('keydown', onKey)
+	}, [onClose])
 	return createPortal(
 		<div className="LargeEditor-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
 			<div className="LargeEditor LargeEditor-image" role="dialog" aria-label="Image">
 				<div className="LargeEditor-bar">
 					<strong>Image</strong>
-					<button type="button" onClick={onClose} aria-label="Close">
-						×
-					</button>
+					<div className="LargeEditor-actions">
+						{editor && (
+							<UiButton
+								size="sm"
+								variant="low"
+								label="Place on canvas"
+								onClick={() => void placeImageOnCanvas(editor, nextTo ?? null, src)}
+							/>
+						)}
+						<UiIconButton icon={<IconClose />} title="Close" onClick={onClose} />
+					</div>
 				</div>
-				<img src={src} alt="" />
+				<div className="LargeEditor-image-body">
+					<img src={src} alt="" />
+				</div>
 			</div>
 		</div>,
 		document.body

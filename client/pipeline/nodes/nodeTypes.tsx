@@ -156,6 +156,14 @@ export function getNodeDefinition(
 	] as NodeDefinition<NodeType>
 }
 
+/** Whether an unconnected output should be spilled onto the canvas, given the node's spill mode. */
+export function shouldSpillOutput(editor: Editor, shape: NodeShape): boolean {
+	const mode = shape.props.spill ?? 'auto'
+	if (mode === 'always') return true
+	if (mode === 'never') return false
+	return !getNodeDefinition(editor, shape.props.node).showsOutput
+}
+
 /** The node's own width, before the user resized it. */
 export function getNodeBaseWidthPx(editor: Editor, shape: NodeShape): number {
 	return getNodeDefinition(editor, shape.props.node).getWidthPx(shape, shape.props.node)

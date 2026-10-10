@@ -302,3 +302,22 @@ export function IconSidebarExpand({ size }: IconProps) {
 		</Svg>
 	)
 }
+
+/** Magnifying glass. Search. */
+export function IconSearch({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<circle cx="6.8" cy="6.8" r="4.2" />
+			<path d="M13.2 13.2 10 10" strokeLinecap="round" />
+		</Svg>
+	)
+}
+
+/** Four-pointed sparkle, smaller than IconSparkle. Marks an AI-ranked result. */
+export function IconJevMark({ size }: IconProps) {
+	return (
+		<Svg size={size} fill="currentColor">
+			<path d="M8 2.2 9.2 6.8 13.8 8 9.2 9.2 8 13.8 6.8 9.2 2.2 8 6.8 6.8Z" />
+		</Svg>
+	)
+}

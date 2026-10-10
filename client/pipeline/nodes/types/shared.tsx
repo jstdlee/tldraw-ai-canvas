@@ -86,6 +86,8 @@ export abstract class NodeDefinition<Node extends { type: string }> {
 	readonly canResizeNode: boolean = false
 	/** If true, this node type is hidden from the toolbar and on-canvas picker. */
 	readonly hidden: boolean = false
+	/** If true, the card body already renders the node's result; auto-spill skips it. */
+	readonly showsOutput: boolean = false
 
 	getWidthPx(_shape: NodeShape, _node: Node): number {
 		return NODE_WIDTH_PX

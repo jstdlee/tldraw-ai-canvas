@@ -11,7 +11,6 @@ import {
 	InfoValues,
 	NodeComponentProps,
 	NodeDefinition,
-	NodeRow,
 	updateNode,
 } from './shared'
 
@@ -67,14 +66,13 @@ export class PromptNodeDefinition extends NodeDefinition<PromptNode> {
 function PromptNodeComponent({ shape, node }: NodeComponentProps<PromptNode>) {
 	const editor = useEditor()
 	return (
-		<NodeRow className="PromptNode-row">
+		<div className="NodeGrow PromptNode-row">
 			<TextAreaField
 				title="Prompt"
-				height={80}
 				placeholder="Enter your prompt..."
 				value={node.text}
 				onChange={(text) => updateNode<PromptNode>(editor, shape, (n) => ({ ...n, text }), false)}
 			/>
-		</NodeRow>
+		</div>
 	)
 }

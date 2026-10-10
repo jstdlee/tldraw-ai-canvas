@@ -58,7 +58,8 @@ export function CodeArea({
 	value: string
 	lang: string
 	onChange: (value: string) => void
-	height: number
+	/** Fixed height in px. Omit to fill the parent (wrap in .NodeGrow to grow on resize). */
+	height?: number
 }) {
 	const inputRef = useRef<HTMLTextAreaElement>(null)
 	const highlightRef = useRef<HTMLPreElement>(null)
@@ -77,7 +78,7 @@ export function CodeArea({
 	}
 
 	return (
-		<div className="CodeArea NodeScroll" style={{ height }}>
+		<div className="CodeArea NodeScroll" style={height ? { height } : undefined}>
 			<Gutter text={value} ref={gutterRef} />
 			<div className="CodeArea-main">
 				<pre

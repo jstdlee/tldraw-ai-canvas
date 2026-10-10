@@ -1,7 +1,7 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { useEffect, useRef, useState } from 'react'
 import { T, TldrawUiButton, useEditor } from 'tldraw'
-import { IconExpand, UiNumberInput, UiSlider, UiTextInput } from '../../../ui'
+import { UiNumberInput, UiSlider, UiTextInput } from '../../../ui'
 import { AdjustIcon } from '../../components/icons/AdjustIcon'
 import { CaptureIcon } from '../../components/icons/CaptureIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
@@ -29,7 +29,7 @@ import {
 } from '../../imageOps'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { ImageZoom } from '../../editors/LargeEditor'
+import { FieldMax, ImageZoom } from '../../editors/LargeEditor'
 import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -57,7 +57,18 @@ const imageOut = (): ShapePort => ({
 	dataType: 'image',
 })
 
-function Preview({ url, error, loading }: { url: string | null; error?: string | null; loading?: boolean }) {
+function Preview({
+	url,
+	error,
+	loading,
+	shape,
+}: {
+	url: string | null
+	error?: string | null
+	loading?: boolean
+	shape?: NodeShape
+}) {
+	const editor = useEditor()
 	const [open, setOpen] = useState(false)
 	return (
 		<div
@@ -69,14 +80,14 @@ function Preview({ url, error, loading }: { url: string | null; error?: string |
 			) : url ? (
 				<>
 					<NodeImage src={url} alt="result" />
-					<button className="FieldMax" type="button" title="Open the image" onPointerDown={stopEvent} onClick={() => setOpen(true)}>
-						<IconExpand size={12} />
-					</button>
+					<FieldMax title="Open the image" onClick={() => setOpen(true)} />
 				</>
 			) : (
 				<span className="NodeRow-disconnected">Press ▶ Play</span>
 			)}
-			{open && url && <ImageZoom src={url} onClose={() => setOpen(false)} />}
+			{open && url && (
+				<ImageZoom src={url} onClose={() => setOpen(false)} editor={editor} nextTo={shape} />
+			)}
 		</div>
 	)
 }
@@ -133,6 +144,7 @@ export class CameraNodeDefinition extends NodeDefinition<CameraNode> {
 	heading = 'Camera'
 	icon = <CaptureIcon />
 	category = categoryOf('camera')
+	override showsOutput = true
 	resultKeys = ['lastResultUrl', 'error'] as const
 	getDefault(): CameraNode {
 		return { type: 'camera', lastResultUrl: null, error: null }
@@ -250,6 +262,7 @@ export class CropNodeDefinition extends NodeDefinition<CropNode> {
 	heading = 'Crop'
 	icon = <CaptureIcon />
 	category = categoryOf('crop')
+	override showsOutput = true
 	resultKeys = ['lastResultUrl', 'error'] as const
 	getDefault(): CropNode {
 		return { type: 'crop', aspect: '1:1', x: 10, y: 10, w: 80, h: 80, lastResultUrl: null, error: null }
@@ -322,7 +335,7 @@ function CropNodeComponent({ shape, node }: NodeComponentProps<CropNode>) {
 					</NodeRow>
 				</>
 			)}
-			<Preview url={node.lastResultUrl} error={node.error} />
+			<Preview url={node.lastResultUrl} error={node.error} shape={shape} />
 		</>
 	)
 }
@@ -348,6 +361,7 @@ export class ImageResizeNodeDefinition extends NodeDefinition<ImageResizeNode> {
 	heading = 'Resize'
 	icon = <UpscaleIcon />
 	category = categoryOf('image_resize')
+	override showsOutput = true
 	resultKeys = ['lastResultUrl', 'error'] as const
 	getDefault(): ImageResizeNode {
 		return { type: 'image_resize', mode: 'fit', value: 1024, value2: 1024, lastResultUrl: null, error: null }
@@ -405,7 +419,7 @@ function ImageResizeNodeComponent({ shape, node }: NodeComponentProps<ImageResiz
 					<NumberField label="H" value={node.value2} suffix="px" onChange={(value2) => set({ value2 })} />
 				)}
 			</NodeRow>
-			<Preview url={node.lastResultUrl} error={node.error} />
+			<Preview url={node.lastResultUrl} error={node.error} shape={shape} />
 		</>
 	)
 }
@@ -449,6 +463,7 @@ export class ImageFilterNodeDefinition extends NodeDefinition<ImageFilterNode> {
 	heading = 'Filter'
 	icon = <AdjustIcon />
 	category = categoryOf('image_filter')
+	override showsOutput = true
 	resultKeys = ['lastResultUrl', 'error'] as const
 	getDefault(): ImageFilterNode {
 		return { type: 'image_filter', ...NO_FILTER, lastResultUrl: null, error: null }
@@ -523,7 +538,7 @@ function ImageFilterNodeComponent({ shape, node }: NodeComponentProps<ImageFilte
 					Restore default
 				</TldrawUiButton>
 			</NodeRow>
-			<Preview url={node.lastResultUrl} error={node.error} />
+			<Preview url={node.lastResultUrl} error={node.error} shape={shape} />
 		</>
 	)
 }
@@ -550,6 +565,7 @@ export class ImageToolNodeDefinition extends NodeDefinition<ImageToolNode> {
 	heading = 'Image tools'
 	icon = <AdjustIcon />
 	category = categoryOf('image_tool')
+	override showsOutput = true
 	resultKeys = ['lastResultUrl', 'lastText', 'error'] as const
 	getDefault(): ImageToolNode {
 		return { type: 'image_tool', tool: 'info', a: '', b: '', lastResultUrl: null, lastText: null, error: null }
@@ -644,7 +660,7 @@ function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNod
 					<pre className="ValuePreview-text is-mono">{node.lastText.length > 2000 ? node.lastText.slice(0, 2000) + '…' : node.lastText}</pre>
 				</div>
 			) : (
-				<Preview url={node.lastResultUrl} error={node.error} />
+				<Preview url={node.lastResultUrl} error={node.error} shape={shape} />
 			)}
 		</>
 	)

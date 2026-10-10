@@ -39,6 +39,7 @@ export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
 	heading = 'Image'
 	icon = <LoadImageIcon />
 	category = categoryOf('load_image')
+	override showsOutput = true
 	getDefault(): LoadImageNode {
 		return {
 			type: 'load_image',
@@ -222,7 +223,9 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 					</div>
 				)}
 			</div>
-			{zoom && node.imageUrl && <ImageZoom src={node.imageUrl} onClose={() => setZoom(false)} />}
+			{zoom && node.imageUrl && (
+				<ImageZoom src={node.imageUrl} onClose={() => setZoom(false)} editor={editor} nextTo={shape} />
+			)}
 		</>
 	)
 }

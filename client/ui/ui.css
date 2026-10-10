@@ -123,6 +123,16 @@
 	font-family: var(--tl-font-sans);
 }
 
+/* A growing text area always fills its container (width, height, box-sizing), even nested
+   inside a .NodeRow: this comes after (and so beats, on an equal-specificity tie) the rule
+   above that would otherwise reset its height back to auto. */
+textarea.UiTextArea.UiTextArea_grow {
+	width: 100%;
+	height: 100%;
+	box-sizing: border-box;
+	resize: none;
+}
+
 .UiSelect {
 	display: flex;
 	min-width: 0;

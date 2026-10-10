@@ -1,6 +1,43 @@
 import { atom, TLShapeId } from 'tldraw'
 
 export const $paletteOpen = atom('command palette', false)
+
+// --- Colour chord: Ctrl/Cmd+B, then C, then a colour key (G/K/D/B/R/Y). ---
+// Shared (not per-component) so the shortcuts-dialog/menu entry and the global key
+// handler in ShellChrome both drive the same, single state machine.
+export const $colorChordOpen = atom<boolean>('color chord open', false)
+export type ColorChordStep = 'idle' | 'wait-c' | 'wait-color'
+let colorChordStepValue: ColorChordStep = 'idle'
+let colorChordTimer: ReturnType<typeof setTimeout> | undefined
+const COLOR_CHORD_TIMEOUT_MS = 2000
+
+export function getColorChordStep(): ColorChordStep {
+	return colorChordStepValue
+}
+
+function armColorChordTimer() {
+	clearTimeout(colorChordTimer)
+	colorChordTimer = setTimeout(cancelColorChord, COLOR_CHORD_TIMEOUT_MS)
+}
+
+/** Ctrl/Cmd+B (or picking the menu item): open the hint, wait for "c". */
+export function startColorChord() {
+	colorChordStepValue = 'wait-c'
+	$colorChordOpen.set(true)
+	armColorChordTimer()
+}
+
+/** "c" was pressed: wait for the colour key. */
+export function advanceColorChordToColor() {
+	colorChordStepValue = 'wait-color'
+	armColorChordTimer()
+}
+
+export function cancelColorChord() {
+	colorChordStepValue = 'idle'
+	clearTimeout(colorChordTimer)
+	$colorChordOpen.set(false)
+}
 export const $mapOpen = atom('map view', false)
 export const $historyOpen = atom('history open', false)
 export const $featuresOpen = atom('feature list', false)
