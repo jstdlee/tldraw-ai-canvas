@@ -84,6 +84,15 @@ body {
 		white-space: nowrap;
 	}
 
+	.NodeShape-kindBadge {
+		flex: 0 0 auto;
+		font-size: 0.7em;
+		font-weight: 500;
+		color: var(--tl-color-text-3);
+		text-transform: uppercase;
+		letter-spacing: 0.02em;
+	}
+
 	/* Enable pointer events on the entire node body so all interactive
 	   elements work, and so the whole card (including gaps between fields)
 	   blocks clicks from reaching a node stacked underneath. The heading
@@ -2069,13 +2078,35 @@ body {
 	font-size: 0.74em;
 }
 
-/* Packed group node */
+/* Group box node */
+
+.Subgraph-portRow {
+	justify-content: space-between;
+}
+
+.Subgraph-portCell {
+	display: flex;
+	align-items: center;
+	gap: var(--tl-space-3);
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.Subgraph-portCell-out {
+	justify-content: flex-end;
+}
+
+.Subgraph-portLabel {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 
 .Subgraph-thumb {
 	margin: var(--tl-space-2) var(--tl-space-4);
-	border-radius: var(--tl-radius-3);
+	border-radius: var(--tl-radius-2);
 	border: 1px dashed var(--tl-color-divider);
-	background: var(--tl-color-muted-0);
+	background: var(--tl-color-low);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -2088,6 +2119,15 @@ body {
 	max-width: 100%;
 	max-height: 100%;
 	object-fit: contain;
+}
+
+.Subgraph-footer {
+	justify-content: space-between;
+}
+
+.Subgraph-count {
+	font-size: 0.74em;
+	color: var(--tl-color-text-3);
 }
 
 /* JEV probability bars */

@@ -1,4 +1,6 @@
 import { GroupShapeUtil, HTMLContainer, SVGContainer, TLGroupShape } from '@tldraw/editor'
+import { IconCollapse, IconGroup, UiButton } from '../../ui'
+import { closeGroup } from '../subgraph'
 
 /**
  * tldraw refuses a second shape util with type "group".
@@ -7,17 +9,44 @@ import { GroupShapeUtil, HTMLContainer, SVGContainer, TLGroupShape } from '@tldr
  */
 export function installKeepGroup() {
 	GroupShapeUtil.prototype.component = function (this: GroupShapeUtil, shape: TLGroupShape) {
-		const bounds = this.editor.getShapeGeometry(shape).bounds
+		const editor = this.editor
+		const bounds = editor.getShapeGeometry(shape).bounds
+		const boxId = typeof shape.meta?.boxOf === 'string' ? shape.meta.boxOf : null
 		const label = typeof shape.meta?.label === 'string' && shape.meta.label ? shape.meta.label : 'Group'
 		return (
 			<>
 				<SVGContainer>
-					<rect className="GroupOutline" x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} fill="none" />
+					<rect
+						className={boxId ? 'GroupOutline GroupOutline_box' : 'GroupOutline'}
+						x={bounds.x}
+						y={bounds.y}
+						width={bounds.width}
+						height={bounds.height}
+						fill="none"
+					/>
 				</SVGContainer>
 				<HTMLContainer>
-					<div className="GroupEdgeLabel" style={{ left: bounds.x, top: bounds.y - 18 }}>
-						{label}
-					</div>
+					{boxId ? (
+						<div
+							className="GroupEdgeLabel GroupEdgeLabel_box"
+							style={{ left: bounds.x, top: bounds.y - 24 }}
+							onPointerDown={(e) => e.stopPropagation()}
+						>
+							<IconGroup size={13} />
+							<span className="GroupEdgeLabel-text">{label}</span>
+							<UiButton
+								size="sm"
+								variant="low"
+								icon={<IconCollapse size={13} />}
+								label="Close to box"
+								onClick={() => void closeGroup(editor, shape.id)}
+							/>
+						</div>
+					) : (
+						<div className="GroupEdgeLabel" style={{ left: bounds.x, top: bounds.y - 18 }}>
+							{label}
+						</div>
+					)}
 				</HTMLContainer>
 			</>
 		)

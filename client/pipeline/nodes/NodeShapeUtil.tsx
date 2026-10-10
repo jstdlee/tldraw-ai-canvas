@@ -49,7 +49,7 @@ import { Port } from '../ports/Port'
 import { getNodeOutputPortInfo, getNodePorts } from './nodePorts'
 import { getNodeDefinition, getNodeHeightPx, getNodeWidthPx, NodeBody, NodeType, shouldSpillOutput } from './nodeTypes'
 import { resizeNode } from './resizeNode'
-import { unpack } from '../subgraph'
+import { openGroup } from '../subgraph'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../placeOnCanvas'
 import { formatRunMs } from '../../../shared/llmUsage'
 import { pastePatch } from '../../../shared/pasteTarget'
@@ -129,8 +129,8 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		return false
 	}
 	override onDoubleClick(shape: NodeShape) {
-		// Double-click a packed group to open it.
-		if (shape.props.node.type === 'subgraph') unpack(this.editor, shape.id)
+		// Double-click a box to open it in place.
+		if (shape.props.node.type === 'subgraph') openGroup(this.editor, shape.id)
 	}
 	override canResize(shape: NodeShape) {
 		return !shape.props.collapsed && !shape.props.pinned
@@ -358,7 +358,16 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 							}
 							const trimmed = next.trim()
 							// An empty name goes back to the node type's own name.
-							editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { label: trimmed || undefined } })
+							const node = shape.props.node
+							editor.updateShape<NodeShape>({
+								id: shape.id,
+								type: 'node',
+								props: {
+									label: trimmed || undefined,
+									// A box's name is also kept on node.title (used when saving it to My nodes).
+									node: node.type === 'subgraph' && trimmed ? { ...node, title: trimmed } : node,
+								},
+							})
 							setNaming(false)
 						}}
 						onKeyDown={(event) => {
@@ -380,6 +389,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 						{title}
 					</div>
 				)}
+				{shape.props.node.type === 'subgraph' && <span className="NodeShape-kindBadge">Group box</span>}
 				{output !== undefined && shape.props.node.type !== 'subgraph' && <Port shapeId={shape.id} portId="output" />}
 			</div>
 			<NodeBody shape={shape} />

@@ -133,6 +133,10 @@
 	stroke-width: 1.5;
 }
 
+.GroupOutline_box {
+	stroke-dasharray: 5 4;
+}
+
 .GroupEdgeLabel {
 	position: absolute;
 	padding: 0 6px;
@@ -142,6 +146,23 @@
 	font-size: 11px;
 	line-height: 16px;
 	pointer-events: none;
+}
+
+.GroupEdgeLabel_box {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 6px;
+	pointer-events: all;
+	box-shadow: var(--tl-shadow-2);
+}
+
+.GroupEdgeLabel-text {
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 200px;
 }
 
 .GroupBack {

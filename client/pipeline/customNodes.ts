@@ -1,6 +1,6 @@
 import { atom, createBindingId, createShapeId, Editor, TLBinding, TLShape, TLShapeId, VecModel } from 'tldraw'
 import { findFreeSpot } from '../../shared/placement'
-import { isPacked } from './subgraph'
+import { closeGroup, isBoxOpen, isPacked } from './subgraph'
 import { NodeShape } from './nodes/NodeShapeUtil'
 import type { SubgraphNode } from './nodes/types/SubgraphNode'
 
@@ -58,7 +58,7 @@ async function toDataUrl(url: string | null): Promise<string | null> {
 /** Build a template from a packed node on the canvas. */
 export async function templateFromPacked(editor: Editor, proxyId: TLShapeId): Promise<CustomNodeTemplate> {
 	const proxy = editor.getShape<NodeShape>(proxyId)
-	if (!proxy || proxy.props.node.type !== 'subgraph') throw new Error('Select a packed node (right-click → Pack into one node)')
+	if (!proxy || proxy.props.node.type !== 'subgraph') throw new Error('Select a box (right-click a selection → Group as box)')
 	const node = structuredClone(proxy.props.node as SubgraphNode)
 	const inner = new Set(node.innerIds as TLShapeId[])
 	const shapes = [...inner].map((id) => editor.getShape(id)).filter((s): s is TLShape => !!s)
@@ -137,7 +137,22 @@ export function instantiateTemplate(editor: Editor, template: CustomNodeTemplate
 	return proxyId
 }
 
-export async function saveCustomNode(editor: Editor, proxyId: TLShapeId, name: string, description = '') {
+/** Saves a box to "My nodes". Returns null (without saving) if the user cancels an overwrite. */
+export async function saveCustomNode(
+	editor: Editor,
+	proxyId: TLShapeId,
+	name: string,
+	description = ''
+): Promise<CustomNodeMeta | null> {
+	// Saving a box that is open closes it first, so the saved template matches the canvas.
+	const proxy = editor.getShape<NodeShape>(proxyId)
+	if (proxy && isBoxOpen(proxy)) {
+		await closeGroup(editor, proxy.meta.boxOpen as TLShapeId)
+	}
+	const existing = $customNodes.get().find((n) => n.name === name)
+	if (existing && !window.confirm(`Replace "${name}" in My nodes?`)) {
+		return null
+	}
 	const template = await templateFromPacked(editor, proxyId)
 	template.proxy.title = name
 	const saved = await readJson<CustomNodeMeta>(

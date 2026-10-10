@@ -30,7 +30,7 @@ import {
 import { $findOpen } from './FindBar'
 import { $imageEditorTarget } from './ImageEditor'
 import { diveGroup, groupSelection, leaveGroup, renameSelection } from '../pipeline/groups/groupActions'
-import { packSelection, unpack } from '../pipeline/subgraph'
+import { closeGroup, openGroup, packSelection, unpack } from '../pipeline/subgraph'
 import {
 	exportCustomNodeFile,
 	importCustomNodeFile,
@@ -69,6 +69,16 @@ function centerView(editor: Editor) {
 
 function resetZoom(editor: Editor) {
 	editor.resetZoom(editor.getViewportScreenCenter(), { animation: { duration: 200 } })
+}
+
+/** The open-box group among the selection: the group itself, or any of its members. */
+function findOpenBoxGroup(editor: Editor) {
+	for (const shape of editor.getSelectedShapes()) {
+		if (shape.type === 'group' && typeof shape.meta?.boxOf === 'string') return shape.id
+		const parent = editor.getShape(shape.parentId)
+		if (parent?.type === 'group' && typeof parent.meta?.boxOf === 'string') return parent.id
+	}
+	return null
 }
 
 export const MarkdownIcon = (
@@ -138,19 +148,29 @@ export function canvasActionOverrides(
 			if (!toggleImageRatio(editor)) notify('Select images first', 'warning')
 			else notify(keep ? 'Image can now stretch freely' : 'Image keeps its ratio')
 		}, '?r'),
-		...a('pack-nodes', 'Pack into one node', async () => {
-			if (!(await packSelection(editor))) notify('Select at least one node to pack', 'warning')
+		...a('pack-nodes', 'Group as box', async () => {
+			if (!(await packSelection(editor))) notify('Select at least one node to group', 'warning')
 		}, '$!p'),
+		...a('open-group', 'Open group', () => {
+			const s = editor.getOnlySelectedShape()
+			if (!(s?.type === 'node' && (s.props as any).node?.type === 'subgraph')) return
+			openGroup(editor, s.id)
+		}),
+		...a('close-to-box', 'Close to box', async () => {
+			const groupId = findOpenBoxGroup(editor)
+			if (!groupId) return
+			const removed = await closeGroup(editor, groupId)
+			if (removed) notify(`${removed} wire${removed === 1 ? '' : 's'} removed`, 'warning')
+		}),
 		...a('save-custom-node', 'Save as my node…', async () => {
 			const s = editor.getOnlySelectedShape()
 			if (!(s?.type === 'node' && (s.props as any).node?.type === 'subgraph')) {
-				return notify('Pack nodes first (Ctrl+Shift+P), then select the packed node', 'warning')
+				return notify('Group nodes first (Ctrl+Shift+P), then select the box', 'warning')
 			}
 			const name = window.prompt('Name for this node:', (s.props as any).node.title)
 			if (!name) return
 			try {
-				await saveCustomNode(editor, s.id, name)
-				notify(`Saved "${name}" to My nodes`, 'success')
+				if (await saveCustomNode(editor, s.id, name)) notify(`Saved "${name}" to My nodes`, 'success')
 			} catch (e) {
 				notify((e as Error).message, 'error')
 			}
@@ -190,7 +210,7 @@ export function canvasActionOverrides(
 		...a('leave-group', 'Back from group', () => {
 			if (!leaveGroup(editor)) notify('You are not inside a group', 'warning')
 		}),
-		...a('unpack-node', 'Unpack', () => {
+		...a('unpack-node', 'Ungroup box', () => {
 			const s = editor.getOnlySelectedShape()
 			if (s?.type === 'node' && (s.props as any).node?.type === 'subgraph') unpack(editor, s.id)
 		}),
@@ -212,6 +232,7 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 		},
 		[editor]
 	)
+	const openBoxGroupId = useValue('open box group', () => findOpenBoxGroup(editor), [editor])
 	return (
 		<DefaultContextMenu {...props}>
 			<TldrawUiMenuGroup id="view-tools">
@@ -241,14 +262,17 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 					<TldrawUiMenuActionItem actionId="leave-group" />
 				</TldrawUiMenuGroup>
 			)}
-			{(hasNodes || isPackedNode) && (
+			{(hasNodes || isPackedNode || openBoxGroupId) && (
 				<TldrawUiMenuGroup id="pack-tools">
 					{isPackedNode ? (
 						<>
+							<TldrawUiMenuActionItem actionId="open-group" />
 							<TldrawUiMenuActionItem actionId="unpack-node" />
 							<TldrawUiMenuActionItem actionId="save-custom-node" />
 							<TldrawUiMenuActionItem actionId="export-node-file" />
 						</>
+					) : openBoxGroupId ? (
+						<TldrawUiMenuActionItem actionId="close-to-box" />
 					) : (
 						<TldrawUiMenuActionItem actionId="pack-nodes" />
 					)}

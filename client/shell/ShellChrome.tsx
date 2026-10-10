@@ -91,6 +91,16 @@ export function ShellChrome() {
 				}
 			}
 
+			if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'p' && event.shiftKey) {
+				// Ctrl/Cmd+Shift+P groups the selection as a box. Handled here (not left to
+				// tldraw's own kbd dispatch for the 'pack-nodes' action) so it is never
+				// swallowed by the browser's own reserved Ctrl/Cmd+Shift+P shortcut, and so
+				// the plain Ctrl/Cmd+P branch below only ever sees the palette toggle.
+				event.preventDefault()
+				event.stopPropagation()
+				actions['pack-nodes']?.onSelect('kbd')
+				return
+			}
 			if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'p' && !event.shiftKey) {
 				event.preventDefault()
 				event.stopPropagation()

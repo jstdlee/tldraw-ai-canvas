@@ -1,16 +1,15 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
-import { T, TldrawUiButton, TLShapeId, useEditor } from 'tldraw'
-import { TemplateIcon } from '../../components/icons/TemplateIcon'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX, PortDataType } from '../../constants'
+import { T, TLShapeId, useEditor } from 'tldraw'
+import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, PortDataType } from '../../constants'
 import { ExecutionGraph } from '../../execution/ExecutionGraph'
 import { ShapePort } from '../../ports/Port'
-import { unpack } from '../../subgraph'
+import { openGroup } from '../../subgraph'
 import { shapeText } from '../../../clips/shapeText'
 import { concatMemberText } from '../../../../shared/groupText'
 import { Port } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiTextInput } from '../../../ui'
-import { PortRow, stopEvent } from './fields'
+import { IconGroup, UiButton, UiEmpty } from '../../../ui'
+import { stopEvent } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -19,6 +18,7 @@ import {
 	InputValues,
 	NodeComponentProps,
 	NodeDefinition,
+	NodePortLabel,
 	NodeRow,
 	PipelineValue,
 	STOP_EXECUTION,
@@ -52,45 +52,57 @@ export const SubgraphNode = T.object({
 	thumbnail: T.string.nullable(),
 	lastOutputs: T.string.nullable(),
 	error: T.string.nullable(),
+	/** Connection shapes fully inside the box (both ends members); hidden and restored with them. */
+	connectionIds: T.arrayOf(T.string).optional(),
 })
 
-const THUMB_PX = 150
-const RESULT_PX = 90
+const BOX_WIDTH_PX = 360
+const THUMB_PX = 170
+const FOOTER_ROW_PX = NODE_ROW_HEIGHT_PX
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 
 /**
- * A packed group of nodes: shows a thumbnail, exposes only the inputs that came
- * from outside and the final outputs. Double-click (or "Unpack") to open it.
+ * A group shown as a box: port rows (inputs left, outputs right, same row index so the
+ * dots line up with their labels), a thumbnail of its members, and an Open button.
+ * Double-click (or "Open group") opens it in place; "Ungroup box" dissolves it.
  */
 export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 	static type = 'subgraph'
 	static validator = SubgraphNode
-	title = 'Packed group'
-	heading = 'Packed'
-	icon = <TemplateIcon />
+	title = 'Group box'
+	heading = 'Box'
+	icon = <IconGroup />
 	category = categoryOf('subgraph')
 	override hidden = true
 	resultKeys = ['lastOutputs', 'error'] as const
 	getDefault(): SubgraphNode {
-		return { type: 'subgraph', title: 'Packed', innerIds: [], inputs: [], outputs: [], thumbnail: null, lastOutputs: null, error: null }
+		return {
+			type: 'subgraph',
+			title: 'Group box',
+			innerIds: [],
+			inputs: [],
+			outputs: [],
+			thumbnail: null,
+			lastOutputs: null,
+			error: null,
+			connectionIds: [],
+		}
 	}
 	override getWidthPx() {
-		return 300
+		return BOX_WIDTH_PX
 	}
 	private rows(node: SubgraphNode) {
-		return Math.max(node.inputs.length, node.outputs.length - 1, 0)
+		return Math.max(node.inputs.length, node.outputs.length, 1)
 	}
 	getBodyHeightPx(_shape: NodeShape, node: SubgraphNode) {
-		return NODE_ROW_HEIGHT_PX * (Math.max(this.rows(node), 1) + 1) + THUMB_PX
+		return NODE_ROW_HEIGHT_PX * this.rows(node) + THUMB_PX + FOOTER_ROW_PX
 	}
 	getPorts(_shape: NodeShape, node: SubgraphNode): Record<string, ShapePort> {
 		const ports: Record<string, ShapePort> = {}
-		const inputs = node.inputs.length ? node.inputs : [{ id: 'input', label: 'In', dataType: 'any' as const, nodeId: '', portId: 'input' }]
-		const outputs = node.outputs.length ? node.outputs : [{ id: 'output', label: 'Out', dataType: 'any' as const, nodeId: '', portId: 'output' }]
-		inputs.forEach((p, i) => {
+		node.inputs.forEach((p, i) => {
 			ports[p.id] = { id: p.id, x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * (i + 0.5), terminal: 'end', dataType: p.dataType }
 		})
-		outputs.forEach((p, i) => {
+		node.outputs.forEach((p, i) => {
 			ports[p.id] = {
 				id: p.id,
 				x: this.getWidthPx(),
@@ -138,40 +150,67 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 	getOutputInfo(shape: NodeShape, node: SubgraphNode, inputs: InfoValues): InfoValues {
 		const last = node.lastOutputs ? (JSON.parse(node.lastOutputs) as Record<string, string | null>) : {}
 		const isOutOfDate = areAnyInputsOutOfDate(inputs) || shape.props.isOutOfDate
-		const outputs = node.outputs.length ? node.outputs : [{ id: 'output', dataType: 'text' as const }]
-		return Object.fromEntries(outputs.map((p) => [p.id, { value: last[p.id] ?? null, isOutOfDate, dataType: p.dataType }]))
+		return Object.fromEntries(node.outputs.map((p) => [p.id, { value: last[p.id] ?? null, isOutOfDate, dataType: p.dataType }]))
 	}
 	Component = SubgraphNodeComponent
 }
 
 function SubgraphNodeComponent({ shape, node }: NodeComponentProps<SubgraphNode>) {
 	const editor = useEditor()
-	const inputs = node.inputs.length ? node.inputs : [{ id: 'input', label: 'In', dataType: 'any' as const }]
-	const outputs = node.outputs.length ? node.outputs : [{ id: 'output', label: 'Out', dataType: 'any' as const }]
+	const rows = Math.max(node.inputs.length, node.outputs.length, 1)
 	return (
 		<>
-			{inputs.map((port) => (
-				<PortRow key={port.id} shapeId={shape.id} portId={port.id} label={port.label} dataType={port.dataType} hint="" />
-			))}
-			{outputs.map((port) => (
-				<div key={port.id} className="NodeRow NodeRow-right">
-					<span className="CodeNode-outLabel">{port.label} →</span>
-					<Port shapeId={shape.id} portId={port.id} />
-				</div>
-			))}
-			<div className="Subgraph-thumb NodeGrow" style={{ height: THUMB_PX }} onDoubleClick={() => unpack(editor, shape.id)} title="Double-click to unpack">
-				{node.thumbnail ? <img src={node.thumbnail} alt="packed nodes" draggable={false} /> : <span className="NodeRow-disconnected">{node.innerIds.length} shapes inside</span>}
+			{Array.from({ length: rows }, (_, i) => {
+				const input = node.inputs[i]
+				const output = node.outputs[i]
+				return (
+					<NodeRow key={i} className="Subgraph-portRow">
+						<span className="Subgraph-portCell Subgraph-portCell-in">
+							{input && (
+								<>
+									<Port shapeId={shape.id} portId={input.id} />
+									<NodePortLabel dataType={input.dataType}>
+										<span className="Subgraph-portLabel" title={input.label}>
+											{input.label}
+										</span>
+									</NodePortLabel>
+								</>
+							)}
+						</span>
+						<span className="Subgraph-portCell Subgraph-portCell-out">
+							{output && (
+								<>
+									<NodePortLabel dataType={output.dataType}>
+										<span className="Subgraph-portLabel" title={output.label}>
+											{output.label}
+										</span>
+									</NodePortLabel>
+									<Port shapeId={shape.id} portId={output.id} />
+								</>
+							)}
+						</span>
+					</NodeRow>
+				)
+			})}
+			<div
+				className="Subgraph-thumb NodeGrow"
+				style={{ height: THUMB_PX }}
+				onPointerDown={stopEvent}
+				onDoubleClick={() => openGroup(editor, shape.id)}
+				title="Double-click to open"
+			>
+				{node.thumbnail ? (
+					<img src={node.thumbnail} alt="group members" draggable={false} />
+				) : (
+					<UiEmpty icon={<IconGroup />} text={`${node.innerIds.length} node${node.innerIds.length === 1 ? '' : 's'} inside`} />
+				)}
 			</div>
-			<NodeRow>
-				<UiTextInput
-					value={node.title}
-					onChange={(title) => updateNode<SubgraphNode>(editor, shape, (n) => ({ ...n, title }), false)}
-				/>
-				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => unpack(editor, shape.id)}>
-					Unpack
-				</TldrawUiButton>
+			<NodeRow className="Subgraph-footer">
+				<span className="Subgraph-count">
+					{node.innerIds.length} node{node.innerIds.length === 1 ? '' : 's'} inside
+				</span>
+				<UiButton size="sm" label="Open" onClick={() => openGroup(editor, shape.id)} />
 			</NodeRow>
-			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
 		</>
 	)
 }
