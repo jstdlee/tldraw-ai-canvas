@@ -17,6 +17,7 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } fro
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { CodeArea } from '../../editors/CodeArea'
+import { UiButton, UiCheckbox, UiNumberInput, UiTextArea, UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -194,70 +195,58 @@ function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>
 			{importing && (
 				<>
 					<NodeRow>
-						<input
-							className="NodeField-input"
+						<UiTextInput
 							placeholder="https://example.com/data.csv"
 							title="Load a CSV or TSV from a URL"
 							value={node.sourceUrl ?? ''}
-							onPointerDown={stopEvent}
-							onKeyDown={stopEvent}
-							onChange={(e) => set({ sourceUrl: e.target.value })}
+							onChange={(sourceUrl) => set({ sourceUrl })}
 						/>
-						<button
-							type="button"
-							className="NodeField-button"
+						<UiButton
+							size="sm"
+							variant="low"
 							title="Download the URL into the box below"
-							onPointerDown={stopEvent}
+							label="Load"
 							onClick={() => {
 								void textFromUrl(node.sourceUrl ?? '')
 									.then((csv) => set({ csv, error: null }))
 									.catch((error) => set({ error: (error as Error).message }))
 							}}
-						>
-							Load
-						</button>
+						/>
 					</NodeRow>
-					<textarea
+					<UiTextArea
 						className="NodeField-textarea"
 						style={{ height: CSV_HEIGHT }}
 						placeholder="name,score&#10;Ada,9"
 						value={node.csv ?? ''}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ csv: e.target.value })}
+						onChange={(csv) => set({ csv })}
 					/>
 					<NodeRow>
-						<input
-							className="NodeField-input"
+						<UiTextInput
 							title="Table name"
 							placeholder="table"
 							value={recipe?.table ?? ''}
 							disabled={!recipe}
-							onPointerDown={stopEvent}
-							onKeyDown={stopEvent}
-							onChange={(e) => recipe && saveRecipe({ ...recipe, table: e.target.value })}
+							onChange={(table) => recipe && saveRecipe({ ...recipe, table })}
 						/>
-						<label className="NodeField-check" title="First row is the header" onPointerDown={stopEvent}>
-							<input type="checkbox" checked={recipe?.header ?? true} disabled={!recipe} onChange={(e) => reshape({ header: e.target.checked })} /> header
-						</label>
-						<input
-							className="NodeField-input"
-							type="number"
-							min={0}
+						<UiCheckbox
+							title="First row is the header"
+							label="header"
+							checked={recipe?.header ?? true}
+							disabled={!recipe}
+							onChange={(header) => reshape({ header })}
+						/>
+						<UiNumberInput
 							title="Data rows to ignore"
+							min={0}
 							value={recipe?.skip ?? 0}
 							disabled={!recipe}
-							onPointerDown={stopEvent}
-							onKeyDown={stopEvent}
-							onChange={(e) => reshape({ skip: Number(e.target.value) || 0 })}
+							onChange={(skip) => reshape({ skip: skip ?? 0 })}
 						/>
-						<button type="button" className="NodeField-button" title="Guess columns and types from the CSV" onPointerDown={stopEvent} onClick={guess}>
-							Guess
-						</button>
+						<UiButton size="sm" variant="low" title="Guess columns and types from the CSV" label="Guess" onClick={guess} />
 					</NodeRow>
 					{recipe?.columns.map((column, index) => (
 						<NodeRow key={index}>
-							<input className="NodeField-input" value={column.name} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => setColumn(index, { name: e.target.value })} />
+							<UiTextInput value={column.name} onChange={(name) => setColumn(index, { name })} />
 							<NodeSelect className="NodeField-select" value={column.type} onPointerDown={stopEvent} onChange={(e) => setColumn(index, { type: e.target.value as PgType })}>
 								{PG_TYPES.map((type) => (
 									<option key={type} value={type}>{type}</option>

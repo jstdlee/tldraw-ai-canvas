@@ -1,12 +1,12 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { isValidElement, type ReactNode } from 'react'
+import { isValidElement, type PointerEvent, type ReactNode } from 'react'
+import { UiMultiSelect, UiSelect, type UiSelectOption } from '../../../ui'
 
 export interface SelectOption {
 	value: string
 	label: string
 	disabled?: boolean
 	group?: string
+	hint?: string
 }
 
 /** Read `<option>` / `<optgroup>` children so existing menus can switch over. */
@@ -25,9 +25,11 @@ export function optionsFromChildren(children: ReactNode): SelectOption[] {
 			return
 		}
 		if (node.type === 'option') {
+			const label = textOf(props.children) || (props.value ?? '')
+			// A native option with no value attribute uses its text.
 			options.push({
-				value: props.value ?? '',
-				label: textOf(props.children) || (props.value ?? ''),
+				value: props.value ?? label,
+				label: label || (props.value ?? ''),
 				disabled: !!props.disabled,
 				group,
 			})
@@ -35,14 +37,6 @@ export function optionsFromChildren(children: ReactNode): SelectOption[] {
 	}
 	visit(children)
 	return options
-}
-
-/** The menu is portaled to body, so it must carry the canvas theme itself. */
-function themeName(anchor: HTMLElement | null): string {
-	const node = anchor?.closest('.tl-theme__dark, .tl-theme__light')
-	if (node?.classList.contains('tl-theme__dark')) return 'tl-theme__dark'
-	if (document.querySelector('.tl-theme__dark') && !document.querySelector('.tl-theme__light')) return 'tl-theme__dark'
-	return 'tl-theme__light'
 }
 
 function textOf(node: ReactNode): string {
@@ -54,8 +48,7 @@ function textOf(node: ReactNode): string {
 }
 
 /**
- * Menu styled like a tldraw control. The list is portaled, so a node underneath
- * cannot open it, and the list is not the browser's native popup.
+ * Menu styled like a tldraw control. Keeps the old `<option>` children API.
  */
 export function NodeSelect({
 	value,
@@ -73,20 +66,20 @@ export function NodeSelect({
 	title?: string
 	children: ReactNode
 	className?: string
-	onPointerDown?: (event: React.PointerEvent) => void
+	onPointerDown?: (event: PointerEvent) => void
 	onFocus?: () => void
 }) {
-	const options = optionsFromChildren(children)
 	return (
-		<OptionMenu
+		<UiSelect
+			className={className}
 			value={value}
-			options={options}
+			options={optionsFromChildren(children)}
 			disabled={disabled}
 			title={title}
-			className={className}
+			placeholder="Choose"
 			onPointerDown={onPointerDown}
 			onFocus={onFocus}
-			onPick={(next) => onChange({ target: { value: next }, currentTarget: { value: next } })}
+			onChange={(next) => onChange({ target: { value: next }, currentTarget: { value: next } })}
 		/>
 	)
 }
@@ -106,152 +99,15 @@ export function NodeMultiSelect({
 	title?: string
 	emptyLabel?: string
 }) {
-	const label = values.length ? values.join(', ') : emptyLabel
+	const items: UiSelectOption[] = options
 	return (
-		<OptionMenu
-			value=""
-			options={options}
+		<UiMultiSelect
+			values={values}
+			options={items}
 			disabled={disabled}
 			title={title}
-			label={label}
-			multiple
-			selected={values}
-			onPick={(next) => {
-				const has = values.includes(next)
-				onChange(has ? values.filter((item) => item !== next) : [...values, next])
-			}}
+			placeholder={emptyLabel}
+			onChange={onChange}
 		/>
-	)
-}
-
-function OptionMenu({
-	value,
-	options,
-	disabled,
-	title,
-	className,
-	label,
-	multiple,
-	selected,
-	onPick,
-	onPointerDown,
-	onFocus,
-}: {
-	value: string
-	options: SelectOption[]
-	disabled?: boolean
-	title?: string
-	className?: string
-	label?: string
-	multiple?: boolean
-	selected?: string[]
-	onPick: (value: string) => void
-	onPointerDown?: (event: React.PointerEvent) => void
-	onFocus?: () => void
-}) {
-	const [open, setOpen] = useState(false)
-	const buttonRef = useRef<HTMLButtonElement>(null)
-	const menuRef = useRef<HTMLDivElement>(null)
-	const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null)
-	const listId = useId()
-	const current = options.find((option) => option.value === value)
-	const shown = label ?? current?.label ?? value ?? 'Choose'
-
-	useLayoutEffect(() => {
-		if (!open || !buttonRef.current) return
-		const rect = buttonRef.current.getBoundingClientRect()
-		const width = Math.max(rect.width, 160)
-		const left = Math.min(rect.left, window.innerWidth - width - 8)
-		const menuHeight = Math.min(280, options.length * 32 + 8)
-		const below = rect.bottom + 4
-		const top = below + menuHeight > window.innerHeight - 8 ? Math.max(8, rect.top - menuHeight - 4) : below
-		setBox({ top, left: Math.max(8, left), width })
-	}, [open, options.length])
-
-	useEffect(() => {
-		if (!open) return
-		const close = (event: PointerEvent) => {
-			const target = event.target as Node | null
-			if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return
-			setOpen(false)
-		}
-		const onKey = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') setOpen(false)
-		}
-		window.addEventListener('pointerdown', close, true)
-		window.addEventListener('keydown', onKey)
-		return () => {
-			window.removeEventListener('pointerdown', close, true)
-			window.removeEventListener('keydown', onKey)
-		}
-	}, [open])
-
-	return (
-		<>
-			<button
-				ref={buttonRef}
-				type="button"
-				className={'TlSelect' + (className ? ` ${className}` : '')}
-				title={title ?? shown}
-				disabled={disabled}
-				aria-haspopup="listbox"
-				aria-expanded={open}
-				aria-controls={listId}
-				onPointerDown={(event) => {
-					event.stopPropagation()
-					onPointerDown?.(event)
-				}}
-				onClick={() => {
-					if (disabled) return
-					onFocus?.()
-					setOpen((was) => !was)
-				}}
-				onKeyDown={(event) => event.stopPropagation()}
-			>
-				<span className="TlSelect-label">{shown}</span>
-				<span className="TlSelect-caret" aria-hidden />
-			</button>
-			{open &&
-				box &&
-				createPortal(
-					<div
-						ref={menuRef}
-						id={listId}
-						className={'TlSelect-menu tl-container ' + themeName(buttonRef.current)}
-						role="listbox"
-						aria-multiselectable={multiple || undefined}
-						style={{ top: box.top, left: box.left, width: box.width }}
-						onPointerDown={(event) => event.stopPropagation()}
-						onWheel={(event) => event.stopPropagation()}
-					>
-						{options.map((option, index) => {
-							const showGroup = option.group && option.group !== options[index - 1]?.group
-							const isOn = multiple ? selected?.includes(option.value) : option.value === value
-							return (
-								<div key={`${option.group ?? ''}:${option.value}:${index}`}>
-									{showGroup && <div className="TlSelect-group">{option.group}</div>}
-									<button
-										type="button"
-										role="option"
-										aria-selected={!!isOn}
-										className={'TlSelect-item' + (isOn ? ' is-on' : '')}
-										disabled={option.disabled}
-										onClick={() => {
-											if (option.disabled) return
-											onPick(option.value)
-											if (!multiple) setOpen(false)
-										}}
-									>
-										{multiple && <span className="TlSelect-mark">{isOn ? '✓' : ''}</span>}
-										{option.label}
-									</button>
-								</div>
-							)
-						})}
-						{options.length === 0 && <div className="TlSelect-empty">No choices</div>}
-					</div>,
-					document.body
-				)}
-		</>
 	)
 }

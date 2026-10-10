@@ -1,0 +1,517 @@
+/* Shared controls. Only tldraw variables. Sizes in em so a node's font scale applies. */
+
+.UiButton.tlui-button {
+	font-family: var(--tl-font-sans);
+	gap: 0.35em;
+}
+
+.UiButton .tlui-button__label {
+	flex-grow: 0;
+	font-size: inherit;
+	text-align: center;
+}
+
+.UiButton_sm.tlui-button {
+	height: 2em;
+	min-width: 2em;
+	min-height: 0;
+	padding: 0 0.55em;
+	font-size: 0.8em;
+	border-radius: var(--tl-radius-2);
+}
+
+.UiButton_sm.tlui-button::after,
+.UiIconButton.tlui-button::after {
+	inset: 0.15em;
+}
+
+.UiButton_danger.tlui-button {
+	color: var(--tl-color-danger);
+}
+
+.UiButton-icon {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+}
+
+.UiIconButton.tlui-button {
+	width: 1.75em;
+	height: 1.75em;
+	min-width: 1.75em;
+	min-height: 0;
+	padding: 0;
+	color: var(--tl-color-text-3);
+}
+
+.UiIconButton.is-active {
+	color: var(--tl-color-selected);
+}
+
+.UiIconButton.is-done {
+	color: var(--tl-color-success);
+}
+
+.UiInput,
+.UiTextArea {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	margin: 0;
+	font-family: var(--tl-font-sans);
+	font-size: 0.8em;
+	line-height: 1.3;
+	color: var(--tl-color-text-1);
+	background: var(--tl-color-muted-0);
+	border: 1px solid var(--tl-color-low-border);
+	border-radius: var(--tl-radius-2);
+	padding: 0.25em 0.5em;
+	pointer-events: all;
+}
+
+.UiTextArea {
+	display: block;
+	resize: none;
+	overflow: auto;
+	min-height: 3em;
+}
+
+.UiTextArea_grow {
+	flex: 1;
+	min-height: 0;
+	height: 100%;
+}
+
+.UiInput_mono,
+.UiTextArea_mono {
+	font-family: var(--tl-font-mono);
+}
+
+.UiInput:focus,
+.UiTextArea:focus,
+.UiSelect-trigger.tlui-button:focus-visible {
+	outline: none;
+	border-color: var(--tl-color-selected);
+	box-shadow: 0 0 0 1px var(--tl-color-focus);
+}
+
+.UiInput:disabled,
+.UiTextArea:disabled,
+.UiSelect-trigger.tlui-button:disabled {
+	opacity: 0.55;
+}
+
+.NodeRow > .UiInput,
+.NodeRow > .UiSelect,
+.NodeRow > .UiTextArea,
+.NodeRow > .UiField,
+.NodeRow input.UiInput,
+.NodeRow textarea.UiTextArea {
+	flex: 1 1 auto;
+	min-width: 0;
+	align-self: stretch;
+}
+
+.NodeRow > .UiInput,
+.NodeRow > .UiTextArea,
+.NodeRow input.UiInput,
+.NodeRow textarea.UiTextArea {
+	height: auto;
+	background: var(--tl-color-muted-0);
+	border: 1px solid var(--tl-color-low-border);
+	border-radius: var(--tl-radius-2);
+	font-family: var(--tl-font-sans);
+}
+
+.UiSelect {
+	display: flex;
+	min-width: 0;
+	width: 100%;
+	pointer-events: all;
+}
+
+.UiSelect-trigger.tlui-button {
+	flex: 1 1 auto;
+	width: 100%;
+	height: auto;
+	min-height: 1.6em;
+	min-width: 0;
+	justify-content: space-between;
+	gap: 0.4em;
+	padding: 0.15em 0.45em;
+	font-size: 0.8em;
+	font-family: var(--tl-font-sans);
+	color: var(--tl-color-text-1);
+	background: var(--tl-color-muted-0);
+	border: 1px solid var(--tl-color-low-border);
+	border-radius: var(--tl-radius-2);
+}
+
+.UiSelect-trigger.tlui-button::after {
+	display: none;
+}
+
+.UiSelect-trigger.tlui-button:hover:not(:disabled) {
+	border-color: var(--tl-color-text-3);
+}
+
+.UiSelect-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: left;
+}
+
+.UiSelect-hint {
+	margin-left: 0.4em;
+	color: var(--tl-color-text-3);
+	font-size: 0.85em;
+}
+
+.UiSelect-group {
+	padding: 0.35em 0.6em 0.1em;
+	font-size: 0.7em;
+	color: var(--tl-color-text-3);
+}
+
+.UiSelect-empty {
+	padding: 0.5em 0.7em;
+	color: var(--tl-color-text-3);
+	font-size: 0.8em;
+}
+
+.UiMenu {
+	position: fixed;
+	z-index: 2000;
+	max-height: 18em;
+	overflow: auto;
+	padding: 0.25em;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	box-shadow: var(--tl-shadow-2);
+	pointer-events: all;
+	font-family: var(--tl-font-sans);
+}
+
+.UiMenu-item {
+	display: flex;
+	align-items: center;
+	gap: 0.35em;
+	width: 100%;
+	min-height: 2em;
+	padding: 0.2em 0.45em;
+	border: none;
+	border-radius: var(--tl-radius-2);
+	background: transparent;
+	color: var(--tl-color-text-1);
+	font: inherit;
+	font-size: 0.8em;
+	text-align: left;
+	cursor: pointer;
+}
+
+.UiMenu-item:hover:not(:disabled),
+.UiMenu-item.is-on {
+	background: var(--tl-color-muted-1);
+}
+
+.UiMenu-item:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.UiMenu-mark {
+	width: 1em;
+	flex: 0 0 auto;
+	color: var(--tl-color-selected);
+	display: flex;
+}
+
+.UiCheckbox {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4em;
+	font-size: 0.8em;
+	color: var(--tl-color-text-1);
+	cursor: pointer;
+	pointer-events: all;
+}
+
+.UiCheckbox input {
+	position: absolute;
+	opacity: 0;
+	width: 1em;
+	height: 1em;
+	margin: 0;
+}
+
+.UiCheckbox-box {
+	width: 1em;
+	height: 1em;
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--tl-color-text-3);
+	border-radius: var(--tl-radius-1);
+	background: var(--tl-color-muted-0);
+	color: var(--tl-color-selected-contrast);
+}
+
+.UiCheckbox input:checked + .UiCheckbox-box {
+	background: var(--tl-color-selected);
+	border-color: var(--tl-color-selected);
+}
+
+.UiCheckbox input:focus-visible + .UiCheckbox-box {
+	box-shadow: 0 0 0 1px var(--tl-color-focus);
+}
+
+.UiCheckbox input:disabled + .UiCheckbox-box,
+.UiCheckbox input:disabled ~ .UiCheckbox-label {
+	opacity: 0.5;
+}
+
+.UiSlider {
+	flex: 1 1 auto;
+	min-width: 0;
+	pointer-events: all;
+}
+
+.UiSlider .tlui-slider__container {
+	padding: 0;
+}
+
+.UiSlider .tlui-slider__track {
+	height: 1.4em;
+}
+
+.UiSegmented {
+	display: flex;
+	gap: 0.15em;
+	padding: 0.15em;
+	border-radius: var(--tl-radius-2);
+	background: var(--tl-color-muted-1);
+	pointer-events: all;
+}
+
+.UiSegmented-item.tlui-button {
+	height: 1.8em;
+	min-width: 0;
+	min-height: 0;
+	flex: 1;
+	padding: 0 0.45em;
+	font-size: 0.75em;
+}
+
+.UiSegmented-item .tlui-button__label {
+	flex-grow: 0;
+	font-size: inherit;
+	text-align: center;
+}
+
+.UiSegmented-item.is-on {
+	background: var(--tl-color-panel);
+	border-radius: var(--tl-radius-2);
+	box-shadow: var(--tl-shadow-1);
+}
+
+.UiField {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2em;
+	min-width: 0;
+	font-size: 0.8em;
+	pointer-events: all;
+}
+
+.UiField_inline {
+	flex-direction: row;
+	align-items: center;
+	gap: 0.45em;
+}
+
+.UiField_inline .UiField-control {
+	flex: 1;
+	min-width: 0;
+}
+
+.UiField-label {
+	color: var(--tl-color-text-1);
+}
+
+.UiField-hint {
+	color: var(--tl-color-text-3);
+	font-size: 0.85em;
+}
+
+.UiSection {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35em;
+}
+
+.UiSection-title {
+	display: flex;
+	align-items: center;
+	gap: 0.3em;
+	padding: 0;
+	border: none;
+	background: none;
+	color: var(--tl-color-text-3);
+	font: inherit;
+	font-size: 0.75em;
+	cursor: pointer;
+	pointer-events: all;
+}
+
+div.UiSection-title {
+	cursor: default;
+}
+
+.UiChip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25em;
+	padding: 0.1em 0.55em;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 999px;
+	background: var(--tl-color-muted-0);
+	color: var(--tl-color-text-1);
+	font: inherit;
+	font-size: 0.75em;
+	pointer-events: all;
+}
+
+button.UiChip {
+	cursor: pointer;
+}
+
+.UiChip.is-on {
+	background: var(--tl-color-selected);
+	border-color: var(--tl-color-selected);
+	color: var(--tl-color-selected-contrast);
+}
+
+.UiEmpty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.35em;
+	padding: 0.8em;
+	color: var(--tl-color-text-3);
+	font-size: 0.8em;
+	text-align: center;
+}
+
+.UiEmpty-icon {
+	display: flex;
+	color: var(--tl-color-text-3);
+}
+
+.UiTable {
+	max-height: 12em;
+	overflow: auto;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	background: var(--tl-color-panel);
+	font-size: 0.75em;
+	pointer-events: all;
+}
+
+.UiTable table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.UiTable th,
+.UiTable td {
+	padding: 0.25em 0.45em;
+	max-width: 12em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: left;
+	border-bottom: 1px solid var(--tl-color-divider);
+}
+
+.UiTable th {
+	position: sticky;
+	top: 0;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-3);
+	font-weight: 500;
+}
+
+.UiTable tbody tr:nth-child(even) td {
+	background: var(--tl-color-low);
+}
+
+.UiTable td.is-num {
+	text-align: right;
+	font-family: var(--tl-font-mono);
+}
+
+.UiTable-more {
+	padding: 0.3em 0.45em;
+	color: var(--tl-color-text-3);
+}
+
+.UiErrorBanner {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.4em;
+	padding: 0.4em 0.5em;
+	background: var(--tl-color-panel);
+	border: 1px solid var(--tl-color-danger);
+	border-left-width: 3px;
+	border-radius: var(--tl-radius-3);
+	box-shadow: var(--tl-shadow-2);
+	color: var(--tl-color-text-1);
+	font-size: 0.8em;
+	pointer-events: all;
+	user-select: text;
+}
+
+.UiErrorBanner > svg {
+	flex: 0 0 auto;
+	margin-top: 0.15em;
+	color: var(--tl-color-danger);
+}
+
+.UiErrorBanner-body {
+	flex: 1;
+	min-width: 0;
+}
+
+.UiErrorBanner-title {
+	font-weight: 500;
+}
+
+.UiErrorBanner-message {
+	white-space: pre-wrap;
+	max-height: 8em;
+	overflow: auto;
+	user-select: text;
+}
+
+.UiErrorBanner-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.2em;
+	flex: 0 0 auto;
+}
+
+.NodeAiButton.tlui-button {
+	color: var(--tl-color-text-3);
+}
+
+.NodeAiButton.tlui-button:hover:not(:disabled) {
+	color: var(--tl-color-selected);
+}

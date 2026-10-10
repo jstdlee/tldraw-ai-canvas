@@ -1,5 +1,6 @@
 import { NodeSelect } from './NodeSelect'
 import { Editor, T } from 'tldraw'
+import { IconChevronDown, IconChevronRight, UiButton, UiNumberInput, UiSlider, UiTextArea } from '../../../ui'
 import { NodeShape } from '../NodeShapeUtil'
 import { NodeType } from '../nodeTypes'
 import { updateNode } from './shared'
@@ -70,43 +71,40 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 	return (
 		<div className="LlmSettings">
 			<button
+				type="button"
 				className="LlmSettings-toggle"
 				onPointerDown={stop}
 				onClick={() => set({ showSettings: !node.showSettings })}
 			>
-				{node.showSettings ? '▾' : '▸'} Model settings
+				{node.showSettings ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+				Model settings
 				{!node.showSettings && !node.lastUsage && (node.system || node.temperature != null || node.maxTokens != null || node.thinking) && (
 					<span className="LlmSettings-badge">custom</span>
 				)}
 			</button>
 			{node.showSettings && (
 				<div className="LlmSettings-body" style={{ height: LLM_SETTINGS_OPEN_HEIGHT_PX }}>
-					<textarea
+					<UiTextArea
 						className="LlmSettings-system"
 						placeholder="System prompt (optional): role, tone, rules…"
 						value={node.system ?? ''}
-						onPointerDown={stop}
-						onKeyDown={stop}
-						onChange={(e) => set({ system: e.target.value })}
+						onChange={(system) => set({ system })}
 					/>
 					<label className="LlmSettings-row">
 						<span>Temperature</span>
-						<input
-							type="range"
+						<UiSlider
+							label="Temperature"
 							min={0}
 							max={2}
 							step={0.1}
 							value={node.temperature ?? 0.7}
-							onPointerDown={stop}
-							onChange={(e) => set({ temperature: Number(e.target.value) })}
+							onChange={(temperature) => set({ temperature })}
 						/>
 						<span className="LlmSettings-value">
 							{node.temperature == null ? 'auto' : node.temperature.toFixed(1)}
 						</span>
 						{node.temperature != null && (
-							<button className="LlmSettings-reset" onPointerDown={stop} onClick={() => set({ temperature: null })}>
-								reset
-							</button>
+							<UiButton size="sm" variant="low" label="reset" onClick={() => set({ temperature: null })} />
 						)}
 					</label>
 					<label className="LlmSettings-row">
@@ -126,15 +124,12 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 					</label>
 					<label className="LlmSettings-row">
 						<span>Max tokens</span>
-						<input
-							type="number"
+						<UiNumberInput
 							min={1}
 							placeholder="auto"
-							value={node.maxTokens ?? ''}
-							onPointerDown={stop}
-							onKeyDown={stop}
-							onChange={(e) => set({ maxTokens: e.target.value ? Math.max(1, Number(e.target.value)) : null })}
-					/>
+							value={node.maxTokens ?? null}
+							onChange={(maxTokens) => set({ maxTokens: maxTokens == null ? null : Math.max(1, maxTokens) })}
+						/>
 				</label>
 			</div>
 			)}

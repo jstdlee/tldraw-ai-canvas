@@ -19,6 +19,7 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } fro
 import { Port } from '../../ports/Port'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { IconSparkle, UiButton, UiNumberInput, UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -256,14 +257,12 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 						<div className="CodeNode-portEdit">
 							<Port shapeId={shape.id} portId={inputId(i)} />
 							<span className="CodeNode-outLabel CodeNode-portName">{inNames[i]}</span>
-							<input
-								className="NodeField-input CodeNode-name"
+							<UiTextInput
+								className="CodeNode-name"
 								title="Variable name for this input"
 								value={node.inputNames?.[i] ?? ''}
 								placeholder={inNames[i]}
-								onPointerDown={stopEvent}
-								onKeyDown={stopEvent}
-								onChange={(e) => setInputName(i, e.target.value)}
+								onChange={(next) => setInputName(i, next)}
 							/>
 						</div>
 					) : (
@@ -271,14 +270,12 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 					)}
 					{i + 1 < outCount && (
 						<div className="CodeNode-portEdit CodeNode-portEdit-out">
-							<input
-								className="NodeField-input CodeNode-name"
+							<UiTextInput
+								className="CodeNode-name"
 								title="Key for this output"
 								value={node.outputNames?.[i + 1] ?? ''}
 								placeholder={outNames[i + 1]}
-								onPointerDown={stopEvent}
-								onKeyDown={stopEvent}
-								onChange={(e) => setOutputName(i + 1, e.target.value)}
+								onChange={(next) => setOutputName(i + 1, next)}
 							/>
 							<span className="CodeNode-outLabel CodeNode-portName">{outNames[i + 1]} →</span>
 							<Port shapeId={shape.id} portId={outputId(i + 1)} />
@@ -305,33 +302,34 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 				</NodeSelect>
 				<label className="NodeField-inline" title="Number of inputs (1–20)">
 					<span>in</span>
-					<input
-						className="NodeField-input CodeNode-count"
-						type="number"
+					<UiNumberInput
+						className="CodeNode-count"
 						min={1}
 						max={MAX_CODE_PORTS}
 						value={inCount}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ inputCount: Math.max(1, Math.min(MAX_CODE_PORTS, Number(e.target.value) || 1)) })}
+						onChange={(next) => set({ inputCount: Math.max(1, Math.min(MAX_CODE_PORTS, next ?? 1)) })}
 					/>
 				</label>
 				<label className="NodeField-inline" title="Number of outputs (1–20)">
 					<span>out</span>
-					<input
-						className="NodeField-input CodeNode-count"
-						type="number"
+					<UiNumberInput
+						className="CodeNode-count"
 						min={1}
 						max={MAX_CODE_PORTS}
 						value={outCount}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ outputCount: Math.max(1, Math.min(MAX_CODE_PORTS, Number(e.target.value) || 1)) })}
+						onChange={(next) => set({ outputCount: Math.max(1, Math.min(MAX_CODE_PORTS, next ?? 1)) })}
 					/>
 				</label>
-				<button className={'CodeNode-aiToggle' + (node.showAI ? ' is-on' : '')} onPointerDown={stopEvent} onClick={() => set({ showAI: !node.showAI }, false)} title="AI assistant">
-					✦ AI
-				</button>
+				<UiButton
+					size="sm"
+					variant={node.showAI ? 'primary' : 'low'}
+					className="CodeNode-aiToggle"
+					icon={<IconSparkle />}
+					label="AI"
+					title="AI assistant"
+					active={node.showAI}
+					onClick={() => set({ showAI: !node.showAI }, false)}
+				/>
 			</NodeRow>
 			{node.showAI && (
 				<div className="NodeField-block" style={{ height: AI_HEIGHT_PX }}>

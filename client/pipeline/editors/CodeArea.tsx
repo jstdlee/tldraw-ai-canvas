@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { formatCode, highlightCode } from '../../../shared/codeFormat'
-import { stopEvent } from '../nodes/types/fields'
+import { UiButton, UiTextArea } from '../../ui'
 import { editorLang, FieldMax, Gutter, LargeEditor } from './LargeEditor'
 
 export { FieldMax, ImageZoom, LargeEditor } from './LargeEditor'
@@ -26,13 +26,13 @@ export function TextAreaField({
 	const [open, setOpen] = useState(false)
 	return (
 		<div className="TextAreaField" style={height ? { height } : undefined}>
-			<textarea
+			<UiTextArea
 				className={'NodeField-textarea NodeScroll' + (mono ? ' is-mono' : '')}
+				mono={mono}
+				grow
 				placeholder={placeholder}
 				value={value}
-				onPointerDown={stopEvent}
-				onKeyDown={stopEvent}
-				onChange={(event) => onChange(event.target.value)}
+				onChange={onChange}
 			/>
 			<FieldMax title="Open in a large editor" onClick={() => setOpen(true)} />
 			{open && (
@@ -92,7 +92,7 @@ export function CodeArea({
 					spellCheck={false}
 					value={value}
 					onScroll={syncScroll}
-					onPointerDown={stopEvent}
+					onPointerDown={(event) => event.stopPropagation()}
 					onKeyDown={(event) => {
 						event.stopPropagation()
 						if (event.key === 'Tab') {
@@ -109,9 +109,7 @@ export function CodeArea({
 				/>
 			</div>
 			<div className="CodeArea-tools">
-				<button type="button" title="Format code" onPointerDown={stopEvent} onClick={() => onChange(formatCode(value, highlightLang))}>
-					Fmt
-				</button>
+				<UiButton size="sm" variant="low" title="Format code" label="Format" onClick={() => onChange(formatCode(value, highlightLang))} />
 				<FieldMax title="Open the code in a large editor" onClick={() => setOpen(true)} />
 			</div>
 			{open && (

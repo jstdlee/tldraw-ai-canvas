@@ -10,6 +10,7 @@ import { executeNode } from '../nodes/nodeTypes'
 import { ExecutionResult, PipelineValue, STOP_EXECUTION } from '../nodes/types/shared'
 import { missingRunInput } from '../../../shared/runIssue'
 import { spillUnconnectedOutput } from '../autoSpill'
+import { runErrorMessage } from '../../../shared/runError'
 import { setNodeRun } from './nodeRunState'
 import { getArrowInputs, writeArrowOutputs } from './arrows'
 
@@ -203,7 +204,7 @@ export class ExecutionGraph {
 			outputs = { output: STOP_EXECUTION }
 			setNodeRun(this.editor, nodeId, {
 				status: 'error',
-				message: (error as Error).message,
+				message: runErrorMessage(error),
 				ms: Math.round(performance.now() - started),
 			})
 		}
@@ -220,10 +221,11 @@ export class ExecutionGraph {
 		})
 
 		const fresh = this.editor.getShape(nodeId)
-		const nodeError =
+		const storedError =
 			fresh && this.editor.isShapeOfType(fresh, 'node')
-				? (fresh.props.node as { error?: string | null }).error
-				: null
+				? (fresh.props.node as { error?: unknown }).error
+				: undefined
+		const nodeError = typeof storedError === 'string' && storedError.trim() ? storedError : ''
 		const failed =
 			!!nodeError ||
 			(Object.keys(outputs).length > 0 && Object.values(outputs).every((value) => value === STOP_EXECUTION))

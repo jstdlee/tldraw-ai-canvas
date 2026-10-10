@@ -15,6 +15,7 @@ import {
 } from '../../constants'
 import { Port as PortDot, ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiCheckbox, UiTextInput } from '../../../ui'
 import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -219,14 +220,7 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 			) : (
 				<NodeRow>
 					<PortDot shapeId={shape.id} portId="url" />
-					<input
-						className="NodeField-input"
-						placeholder="https://…"
-						value={node.url}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ url: e.target.value })}
-					/>
+					<UiTextInput placeholder="https://…" value={node.url} onChange={(url) => set({ url })} />
 				</NodeRow>
 			)}
 			<TextAreaField
@@ -249,14 +243,11 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 					<option value="bearer">Bearer</option>
 					<option value="basic">Basic</option>
 				</NodeSelect>
-				<input
-					className="NodeField-input"
+				<UiTextInput
 					placeholder={node.auth === 'basic' ? 'user:password' : 'token'}
 					value={node.authValue ?? ''}
 					disabled={!node.auth}
-					onPointerDown={stopEvent}
-					onKeyDown={stopEvent}
-					onChange={(e) => set({ authValue: e.target.value })}
+					onChange={(authValue) => set({ authValue })}
 				/>
 			</NodeRow>
 			<TextAreaField
@@ -288,14 +279,7 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 				}}
 			/>
 			<NodeRow>
-				<label className="NodeField-check" onPointerDown={stopEvent}>
-					<input
-						type="checkbox"
-						checked={node.extractText}
-						onChange={(e) => set({ extractText: e.target.checked })}
-					/>
-					Web page → readable text
-				</label>
+				<UiCheckbox checked={node.extractText} label="Web page → readable text" onChange={(extractText) => set({ extractText })} />
 			</NodeRow>
 			<NodeRow>
 				<span className={'NodeStatus' + (node.error ? ' is-error' : '')} title={node.lastHeaders ?? node.lastStatus ?? ''}>
@@ -402,26 +386,12 @@ function DownloadNodeComponent({ shape, node }: NodeComponentProps<DownloadNode>
 			) : (
 				<NodeRow>
 					<PortDot shapeId={shape.id} portId="url" />
-					<input
-						className="NodeField-input"
-						placeholder="https://… file, image or page"
-						value={node.url}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ url: e.target.value })}
-					/>
+					<UiTextInput placeholder="https://… file, image or page" value={node.url} onChange={(url) => set({ url })} />
 				</NodeRow>
 			)}
 			<NodeRow>
 				<span className="NodeInputRow-label">Save as</span>
-				<input
-					className="NodeField-input"
-					placeholder="file name (optional)"
-					value={node.fileName}
-					onPointerDown={stopEvent}
-					onKeyDown={stopEvent}
-					onChange={(e) => set({ fileName: e.target.value })}
-				/>
+				<UiTextInput placeholder="file name (optional)" value={node.fileName} onChange={(fileName) => set({ fileName })} />
 			</NodeRow>
 			<NodeRow>
 				<span
@@ -510,13 +480,10 @@ function SaveNodeComponent({ shape, node }: NodeComponentProps<SaveNode>) {
 			<PortRow shapeId={shape.id} portId="input" label="Content" dataType="any" hint="text or image" />
 			<NodeRow>
 				<span className="NodeInputRow-label">File</span>
-				<input
-					className="NodeField-input"
+				<UiTextInput
 					placeholder="name ({{date}} = timestamp)"
 					value={node.fileName}
-					onPointerDown={stopEvent}
-					onKeyDown={stopEvent}
-					onChange={(e) => updateNode<SaveNode>(editor, shape, (n) => ({ ...n, fileName: e.target.value }))}
+					onChange={(fileName) => updateNode<SaveNode>(editor, shape, (n) => ({ ...n, fileName }))}
 				/>
 			</NodeRow>
 			<NodeRow>

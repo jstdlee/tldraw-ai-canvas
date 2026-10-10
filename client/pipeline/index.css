@@ -18,7 +18,7 @@ body {
 	--port-color-model: #2196f3;
 	--port-color-number: #9e9e9e;
 	--port-color-latent: #ff9800;
-	--port-color-any: #b0b0b0;
+	--port-color-any: #c08520;
 }
 
 .tl-container .tl-theme__light {
@@ -139,8 +139,17 @@ body {
 		}
 	}
 
-	.NodeFooterMenu {
+	.NodeShape-footer-tools {
 		margin-left: auto;
+		display: flex;
+		align-items: center;
+		gap: 0.1em;
+		pointer-events: all;
+	}
+
+	.NodeFooterMenu {
+		display: flex;
+		align-items: center;
 	}
 
 	.NodeFooterMenu-trigger {
@@ -378,17 +387,6 @@ body {
 
 .LoadImageNode-browse {
 	flex: 1 1 auto;
-	border: 1px solid var(--tl-color-hint);
-	border-radius: var(--tl-radius-3);
-	padding: var(--tl-space-2) var(--tl-space-3);
-	font: inherit;
-	font-size: 0.74em;
-	background: var(--tl-color-panel);
-	cursor: pointer;
-
-	&:hover {
-		background: var(--tl-color-muted-0);
-	}
 }
 
 .LoadImageNode-clear {
@@ -949,7 +947,7 @@ body {
 }
 
 .ChatNode-error {
-	color: var(--tl-color-danger, #e03131);
+	color: var(--tl-color-danger);
 }
 
 .ImagePipelineSidebar-hint {
@@ -1080,155 +1078,6 @@ body {
 	flex: 1;
 	min-width: 0;
 	pointer-events: all;
-	appearance: none;
-	-webkit-appearance: none;
-	font: inherit;
-	font-size: 0.8em;
-	color: var(--tl-color-text-1);
-	background: var(--tl-color-panel);
-	border: 1px solid var(--tl-color-divider);
-	border-radius: var(--tl-radius-2);
-	padding: 4px 22px 4px 8px;
-	background-image: linear-gradient(45deg, transparent 50%, var(--tl-color-text-3) 50%),
-		linear-gradient(135deg, var(--tl-color-text-3) 50%, transparent 50%);
-	background-position:
-		calc(100% - 12px) 55%,
-		calc(100% - 8px) 55%;
-	background-size:
-		4px 4px,
-		4px 4px;
-	background-repeat: no-repeat;
-	cursor: pointer;
-}
-
-.NodeField-select:hover {
-	border-color: var(--tl-color-text-3);
-}
-
-.NodeField-select:focus {
-	outline: none;
-	border-color: var(--tl-color-selected);
-	box-shadow: 0 0 0 1px var(--tl-color-selected);
-}
-
-/* Custom menu. Matches tldraw panels: same radius, divider, and text color. */
-.TlSelect {
-	all: unset;
-	box-sizing: border-box;
-	flex: 1;
-	min-width: 0;
-	max-width: 100%;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	height: 28px;
-	padding: 0 8px;
-	border: 1px solid var(--tl-color-divider);
-	border-radius: var(--tl-radius-2);
-	background: var(--tl-color-panel);
-	color: var(--tl-color-text-1);
-	font: inherit;
-	font-size: 1em;
-	line-height: 1.2;
-	cursor: pointer;
-	pointer-events: all;
-}
-
-.TlSelect:hover:not(:disabled) {
-	background: var(--tl-color-muted-0);
-}
-
-.TlSelect:focus-visible {
-	outline: none;
-	border-color: var(--tl-color-selected);
-	box-shadow: 0 0 0 1px var(--tl-color-selected);
-}
-
-.TlSelect:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-.TlSelect-label {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	text-align: left;
-}
-
-.TlSelect-caret {
-	flex: 0 0 auto;
-	width: 0;
-	height: 0;
-	border-left: 4px solid transparent;
-	border-right: 4px solid transparent;
-	border-top: 5px solid var(--tl-color-text-3);
-}
-
-.TlSelect-menu {
-	position: fixed;
-	z-index: 2000;
-	max-height: 280px;
-	overflow: auto;
-	padding: 4px;
-	border: 1px solid var(--tl-color-divider);
-	border-radius: var(--tl-radius-2);
-	background: var(--tl-color-panel);
-	color: var(--tl-color-text-1);
-	box-shadow: var(--tl-shadow-2);
-	pointer-events: all;
-}
-
-.TlSelect-group {
-	padding: 6px 8px 2px;
-	font-size: 11px;
-	color: var(--tl-color-text-3);
-}
-
-.TlSelect-item {
-	all: unset;
-	box-sizing: border-box;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	width: 100%;
-	min-height: 28px;
-	padding: 4px 8px;
-	border-radius: var(--tl-radius-2);
-	font: inherit;
-	font-size: 13px;
-	text-align: left;
-	cursor: pointer;
-	color: var(--tl-color-text-1);
-}
-
-.TlSelect-item:hover:not(:disabled),
-.TlSelect-item.is-on {
-	background: var(--tl-color-muted-1);
-}
-
-.TlSelect-item:disabled {
-	opacity: 0.45;
-	cursor: default;
-}
-
-.TlSelect-mark {
-	width: 14px;
-	flex: 0 0 auto;
-	color: var(--tl-color-selected);
-}
-
-.TlSelect-empty {
-	padding: 8px;
-	color: var(--tl-color-text-3);
-	font-size: 12px;
-}
-
-.NodeField-select option {
-	background: var(--tl-color-panel);
-	color: var(--tl-color-text-1);
 }
 
 .NodeField-block {
@@ -1262,51 +1111,8 @@ body {
 }
 
 .NodeStatus.is-error {
-	color: var(--tl-color-danger, #e03131);
+	color: var(--tl-color-danger);
 	white-space: normal;
-}
-
-/* Footer tools: copy output, collapse */
-
-.NodeFooterTools {
-	margin-left: auto;
-	display: flex;
-	gap: 2px;
-	pointer-events: all;
-}
-
-.NodeFooterTools + .NodeFooterMenu {
-	margin-left: 0;
-}
-
-.NodeFooterTools-button {
-	all: unset;
-	cursor: pointer;
-	width: 22px;
-	height: 22px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	border-radius: 6px;
-	color: var(--tl-color-text-3);
-}
-
-.NodeFooterTools-button:hover:not(:disabled) {
-	background: var(--tl-color-muted-2);
-	color: var(--tl-color-text-1);
-}
-
-.NodeFooterTools-button:disabled {
-	opacity: 0.35;
-	cursor: default;
-}
-
-.NodeFooterTools-button.is-done {
-	color: #22c55e;
-}
-
-.NodeFooterTools-button.is-on {
-	color: var(--tl-color-selected, #3b82f6);
 }
 
 /* Node body fills its (resizable) height; result areas take the free space. */
@@ -1331,13 +1137,23 @@ body {
 	right: 0;
 	top: calc(100% + 6px);
 	padding: 2px 8px;
-	font-size: 12px;
+	font-size: 0.75em;
 	line-height: 1.3;
 	color: var(--tl-color-text-3);
+	background: none;
 	pointer-events: none;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+.NodeErrorBanner {
+	position: absolute;
+	left: 0;
+	top: calc(100% + 6px);
+	width: 100%;
+	z-index: 4;
+	pointer-events: all;
 }
 
 .NodeShape.NodeShape_collapsed .NodeShape-heading {
@@ -1493,29 +1309,20 @@ body {
 }
 
 .NodeShape_running {
-	outline: 2px solid #3b82f6;
+	outline: 2px solid var(--tl-color-selected);
 	outline-offset: 2px;
 	animation: node-run-pulse 1s ease-in-out infinite;
 }
 
 .NodeShape_ok {
-	outline: 2px solid #22c55e;
+	outline: 2px solid var(--tl-color-success);
 	outline-offset: 2px;
 }
 
 .NodeShape_error,
 .NodeShape_missing {
-	outline: 2px solid #e03131;
+	outline: 2px solid var(--tl-color-danger);
 	outline-offset: 2px;
-}
-
-.NodeShape-issue {
-	font-size: 10px;
-	color: #e03131;
-	max-width: 90px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 /* Large editors, code area, max button */
@@ -1542,7 +1349,8 @@ body {
 	min-height: 0;
 }
 
-.TextAreaField .NodeField-textarea {
+.TextAreaField .NodeField-textarea,
+.TextAreaField .UiTextArea {
 	width: 100%;
 	height: 100%;
 	overflow: auto;
@@ -1686,7 +1494,7 @@ body {
 	max-width: 100%;
 	max-height: calc(86vh - 44px);
 	object-fit: contain;
-	background: #111;
+	background: var(--tl-color-low);
 }
 
 .LargeEditor-bar {
@@ -1748,8 +1556,8 @@ body {
 	padding: 0 14px;
 	border: none;
 	border-radius: 999px;
-	background: #2563eb;
-	color: white;
+	background: var(--tl-color-selected);
+	color: var(--tl-color-selected-contrast);
 	font-size: 0.87em;
 	cursor: pointer;
 	box-shadow: var(--tl-shadow-2);
@@ -1796,7 +1604,7 @@ body {
 
 .AssistDialog-error {
 	margin: 0;
-	color: #e03131;
+	color: var(--tl-color-danger);
 	font-size: 0.8em;
 }
 
@@ -1967,21 +1775,7 @@ body {
 }
 
 .CodeNode-aiToggle {
-	all: unset;
-	cursor: pointer;
 	margin-left: auto;
-	padding: 2px 8px;
-	border-radius: 999px;
-	font-size: 0.74em;
-	border: 1px solid var(--tl-color-divider);
-	color: var(--tl-color-text-3);
-	pointer-events: all;
-}
-
-.CodeNode-aiToggle.is-on {
-	background: var(--tl-color-selected);
-	border-color: var(--tl-color-selected);
-	color: var(--tl-color-selected-contrast);
 }
 
 .CodeNode-aiButtons {
@@ -2032,7 +1826,7 @@ body {
 	justify-content: center;
 	cursor: pointer;
 	background: var(--tl-color-primary);
-	color: white;
+	color: var(--tl-color-selected-contrast);
 	pointer-events: all;
 }
 

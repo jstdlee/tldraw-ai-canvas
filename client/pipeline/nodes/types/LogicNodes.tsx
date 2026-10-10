@@ -9,6 +9,7 @@ import { loopBodyNodes, runLoopBody } from '../../execution/loop'
 import { clearNodeRun } from '../../execution/nodeRunState'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -127,14 +128,7 @@ function IfNodeComponent({ shape, node }: NodeComponentProps<IfNode>) {
 			</NodeRow>
 			<NodeRow>
 				{cond.operand ? (
-					<input
-						className="NodeField-input"
-						placeholder="compare with…"
-						value={node.operand}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ operand: e.target.value })}
-					/>
+					<UiTextInput placeholder="compare with…" value={node.operand} onChange={(operand) => set({ operand })} />
 				) : (
 					<span className="NodeRow-disconnected">no value needed</span>
 				)}
@@ -357,13 +351,10 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 			</NodeRow>
 			<NodeRow>
 				{node.split === 'separator' || node.split === 'regex' ? (
-					<input
-						className="NodeField-input"
+					<UiTextInput
 						placeholder={node.split === 'regex' ? 'pattern, e.g. \\d+' : 'separator, e.g. ,'}
 						value={node.separator}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ separator: e.target.value })}
+						onChange={(separator) => set({ separator })}
 					/>
 				) : (
 					<span className="NodeRow-disconnected">empty items are skipped</span>
@@ -375,13 +366,7 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 			<PortRow shapeId={shape.id} portId="result" label="← Result" dataType="any" hint="end of the loop body" />
 			<NodeRow>
 				<span className="NodeInputRow-label">Join with</span>
-				<input
-					className="NodeField-input"
-					value={node.joiner}
-					onPointerDown={stopEvent}
-					onKeyDown={stopEvent}
-					onChange={(e) => set({ joiner: e.target.value })}
-				/>
+				<UiTextInput value={node.joiner} onChange={(joiner) => set({ joiner })} />
 			</NodeRow>
 			<div className="ProgressBar" title={node.progress ?? 'Wire item, then Result, then Play'}>
 				<span style={{ width: `${forEachPercent(node.progress)}%` }} />

@@ -11,6 +11,7 @@ import { runSql } from '../../pg'
 import { sleep } from '../../utils/sleep'
 import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiButton, UiCheckbox, UiTextArea, UiTextInput } from '../../../ui'
 import { NodeMultiSelect, PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -117,7 +118,7 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 	return (
 		<NodeRow>
 			<span className="NodeInputRow-label">{label}</span>
-			<input className="NodeField-input" value={value} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => onChange(e.target.value)} />
+			<UiTextInput value={value} onChange={onChange} />
 		</NodeRow>
 	)
 }
@@ -291,10 +292,12 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 				/>
 			</NodeRow>
 			<NodeRow>
-				<label className="NodeField-check" onPointerDown={stopEvent} title="First y column on the left axis, the rest on the right">
-					<input type="checkbox" checked={!!node.dualScale} onChange={(e) => set({ dualScale: e.target.checked })} />
-					Dual y-axes
-				</label>
+				<UiCheckbox
+					checked={!!node.dualScale}
+					title="First y column on the left axis, the rest on the right"
+					label="Dual y-axes"
+					onChange={(dualScale) => set({ dualScale })}
+				/>
 			</NodeRow>
 			<div ref={ref} className="ChartNode-view" />
 			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
@@ -388,9 +391,13 @@ function SqliteComponent({ shape, node }: NodeComponentProps<SqliteNode>) {
 						if (file) void importFile(file)
 					}}
 				/>
-				<button type="button" className="NodeField-button" disabled={busy} onPointerDown={stopEvent} onClick={() => fileRef.current?.click()}>
-					{busy ? 'Importing…' : node.imported ? `Re-import ${node.path || 'file'}` : 'Import .sqlite / .db file'}
-				</button>
+				<UiButton
+					size="sm"
+					variant="low"
+					disabled={busy}
+					label={busy ? 'Importing…' : node.imported ? `Re-import ${node.path || 'file'}` : 'Import .sqlite / .db file'}
+					onClick={() => fileRef.current?.click()}
+				/>
 			</NodeRow>
 			{node.importInfo && (
 				<NodeRow>
@@ -399,11 +406,9 @@ function SqliteComponent({ shape, node }: NodeComponentProps<SqliteNode>) {
 			)}
 			<Field label="Ask" value={node.ask} onChange={(ask) => set({ ask })} />
 			<NodeRow>
-				<button type="button" className="NodeField-button" onPointerDown={stopEvent} onClick={() => void ask()}>
-					Ask AI for SQL
-				</button>
+				<UiButton size="sm" variant="low" label="Ask AI for SQL" onClick={() => void ask()} />
 			</NodeRow>
-			<textarea className="NodeField-textarea" value={node.sql} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ sql: e.target.value })} />
+			<UiTextArea className="NodeField-textarea" mono value={node.sql} onChange={(sql) => set({ sql })} />
 			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
 		</>
 	)

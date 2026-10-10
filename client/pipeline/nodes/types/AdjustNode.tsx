@@ -11,6 +11,7 @@ import {
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues } from '../nodePorts'
+import { UiSlider } from '../../../ui'
 import { NodeShape } from '../NodeShapeUtil'
 import {
 	areAnyInputsOutOfDate,
@@ -139,23 +140,14 @@ function AdjustNodeComponent({ shape, node }: NodeComponentProps<AdjustNode>) {
 	) => (
 		<NodeRow className="NodeInputRow">
 			<span className="NodeInputRow-label">{label}</span>
-			<input
-				type="range"
+			<UiSlider
+				label={label}
 				min={min}
 				max={max}
 				value={node[field]}
-				onChange={(e) =>
-					updateNode<AdjustNode>(
-						editor,
-						shape,
-						(n) => ({
-							...n,
-							[field]: Number(e.target.value),
-						}),
-						false
-					)
+				onChange={(next) =>
+					updateNode<AdjustNode>(editor, shape, (n) => ({ ...n, [field]: next }), false)
 				}
-				onPointerDown={(e) => e.stopPropagation()}
 			/>
 			<span className="NodeRow-value">{node[field]}</span>
 		</NodeRow>

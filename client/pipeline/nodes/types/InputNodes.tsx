@@ -5,6 +5,7 @@ import { asWebUrl } from '../../../../shared/webUrl'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiButton, UiCheckbox, UiTextInput } from '../../../ui'
 import { stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -135,7 +136,7 @@ function FileInComponent({ shape, node }: NodeComponentProps<FileInNode>) {
 			</NodeRow>
 			<NodeRow>
 				{node.mode === 'path' ? (
-					<input className="NodeField-input" placeholder="/home/you/file.txt" value={node.path} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ path: e.target.value })} />
+					<UiTextInput placeholder="/home/you/file.txt" value={node.path} onChange={(path) => set({ path })} />
 				) : (
 					<>
 						<input
@@ -148,9 +149,7 @@ function FileInComponent({ shape, node }: NodeComponentProps<FileInNode>) {
 								e.target.value = ''
 							}}
 						/>
-						<button type="button" className="NodeField-button" onPointerDown={stopEvent} onClick={() => picker.current?.click()}>
-							{node.fileName || 'Choose a file…'}
-						</button>
+						<UiButton size="sm" variant="low" label={node.fileName || 'Choose a file…'} onClick={() => picker.current?.click()} />
 					</>
 				)}
 			</NodeRow>
@@ -223,12 +222,10 @@ function UrlInComponent({ shape, node }: NodeComponentProps<UrlInNode>) {
 	return (
 		<>
 			<NodeRow>
-				<input className="NodeField-input" placeholder="www.wikipedia.org" value={node.url} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ url: e.target.value })} />
+				<UiTextInput placeholder="www.wikipedia.org" value={node.url} onChange={(url) => set({ url })} />
 			</NodeRow>
 			<NodeRow>
-				<label className="NodeField-check" onPointerDown={stopEvent}>
-					<input type="checkbox" checked={node.fetchBody} onChange={(e) => set({ fetchBody: e.target.checked })} /> Fetch page text
-				</label>
+				<UiCheckbox checked={node.fetchBody} label="Fetch page text" onChange={(fetchBody) => set({ fetchBody })} />
 			</NodeRow>
 			{node.error && (
 				<NodeRow>

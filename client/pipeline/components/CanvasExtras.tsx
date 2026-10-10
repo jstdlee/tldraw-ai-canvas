@@ -67,7 +67,8 @@ function SearchBlink() {
  */
 function FillChatCard({ shapeId, onClose }: { shapeId: import('tldraw').TLShapeId; onClose: () => void }) {
 	const editor = useEditor()
-	const [text, setText] = useState(() => assistDraft(shapeId))
+	const text = useValue('assist draft text', () => assistDraft(shapeId), [shapeId])
+	const setText = (value: string) => setAssistDraft(shapeId, value)
 	const [error, setError] = useState<string | null>(null)
 	const [note, setNote] = useState<string | null>(null)
 	const [busy, setBusy] = useState(false)
@@ -83,7 +84,6 @@ function FillChatCard({ shapeId, onClose }: { shapeId: import('tldraw').TLShapeI
 		[editor, shapeId]
 	)
 	const close = () => {
-		setAssistDraft(shapeId, text)
 		onClose()
 	}
 	return (

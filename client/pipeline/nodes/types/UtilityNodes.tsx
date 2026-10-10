@@ -11,6 +11,7 @@ import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiTextArea, UiTextInput } from '../../../ui'
 import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
@@ -138,15 +139,12 @@ function RandomNodeComponent({ shape, node }: NodeComponentProps<RandomNode>) {
 					f.map((label, i) => {
 						const wired = i === 0 ? aWired : bWired
 						return (
-							<input
+							<UiTextInput
 								key={label}
-								className="NodeField-input"
 								placeholder={label}
 								disabled={wired}
 								value={wired ? `(${label} wired)` : i === 0 ? node.a : node.b}
-								onPointerDown={stopEvent}
-								onKeyDown={stopEvent}
-								onChange={(e) => set(i === 0 ? { a: e.target.value } : { b: e.target.value })}
+								onChange={(next) => set(i === 0 ? { a: next } : { b: next })}
 							/>
 						)
 					})
@@ -156,14 +154,12 @@ function RandomNodeComponent({ shape, node }: NodeComponentProps<RandomNode>) {
 			</NodeRow>
 			{needsList && (
 				<div className="NodeField-block" style={{ height: 80 }}>
-					<textarea
+					<UiTextArea
 						className="NodeField-textarea"
 						disabled={listWired}
 						placeholder="One item per line"
 						value={listWired ? '(from the List input)' : node.list}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ list: e.target.value })}
+						onChange={(list) => set({ list })}
 					/>
 				</div>
 			)}
@@ -263,28 +259,14 @@ function NetToolNodeComponent({ shape, node }: NodeComponentProps<NetToolNode>) 
 			</NodeRow>
 			<NodeRow>
 				{'target' in tool && !targetWired ? (
-					<input
-						className="NodeField-input"
-						placeholder={tool.target}
-						value={node.target}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ target: e.target.value })}
-					/>
+					<UiTextInput placeholder={tool.target} value={node.target} onChange={(target) => set({ target })} />
 				) : (
 					<span className="NodeRow-disconnected">{targetWired ? 'target from input' : 'no target needed'}</span>
 				)}
 			</NodeRow>
 			<NodeRow>
 				{'option' in tool ? (
-					<input
-						className="NodeField-input"
-						placeholder={tool.option}
-						value={node.option}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ option: e.target.value })}
-					/>
+					<UiTextInput placeholder={tool.option} value={node.option} onChange={(option) => set({ option })} />
 				) : (
 					<span className="NodeStatus">{node.lastMs != null ? `took ${node.lastMs} ms` : 'Runs on this machine'}</span>
 				)}
@@ -448,8 +430,8 @@ function SummarizeNodeComponent({ shape, node }: NodeComponentProps<SummarizeNod
 				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
-				<input className="NodeField-input" placeholder="Focus (optional)" value={node.focus} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ focus: e.target.value })} />
-				<input className="NodeField-input" placeholder="Language" value={node.language} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ language: e.target.value })} />
+				<UiTextInput placeholder="Focus (optional)" value={node.focus} onChange={(focus) => set({ focus })} />
+				<UiTextInput placeholder="Language" value={node.language} onChange={(language) => set({ language })} />
 			</NodeRow>
 			<NodeRow>
 				<span className="NodeInputRow-label">Model</span>

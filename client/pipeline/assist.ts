@@ -40,7 +40,9 @@ export function setAssistDraft(shapeId: TLShapeId, text: string) {
 	})
 }
 
-export function openFillAssist(shapeId: TLShapeId) {
+export function openFillAssist(shapeId: TLShapeId, options?: { error?: string }) {
+	const error = options?.error?.trim()
+	if (error) setAssistDraft(shapeId, `Fix this error: ${error}`)
 	$assist.set({ mode: 'fill', shapeId })
 }
 

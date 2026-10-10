@@ -1,0 +1,282 @@
+import type { ReactNode } from 'react'
+
+export interface IconProps {
+	size?: number
+}
+
+function Svg({
+	size = 16,
+	children,
+	fill = 'none',
+}: {
+	size?: number
+	children: ReactNode
+	fill?: string
+}) {
+	return (
+		<svg
+			width={size}
+			height={size}
+			viewBox="0 0 16 16"
+			fill={fill}
+			stroke={fill === 'none' ? 'currentColor' : 'none'}
+			strokeWidth={1.5}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden
+		>
+			{children}
+		</svg>
+	)
+}
+
+/** Four-point star with a smaller star. The AI mark. */
+export function IconSparkle({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M8 1.4 9.15 6.1 13.6 8 9.15 9.9 8 14.6 6.85 9.9 2.4 8 6.85 6.1Z" />
+			<path d="M12.4 1.7 12.9 3.1 14.3 3.55 12.9 4 12.4 5.4 11.9 4 10.5 3.55 11.9 3.1Z" />
+		</Svg>
+	)
+}
+
+export function IconPlay({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M5 3.2v9.6l7.2-4.8L5 3.2Z" />
+		</Svg>
+	)
+}
+
+export function IconStop({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="4" y="4" width="8" height="8" rx="1.2" />
+		</Svg>
+	)
+}
+
+export function IconCopy({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="5.5" y="5.5" width="7" height="8" rx="1.2" />
+			<path d="M3.5 10.5v-7A1.5 1.5 0 0 1 5 2h6" />
+		</Svg>
+	)
+}
+
+export function IconCheck({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M3.2 8.2 6.4 11.4 12.8 4.6" />
+		</Svg>
+	)
+}
+
+export function IconChevronUp({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="m3.5 10 4.5-4.5L12.5 10" />
+		</Svg>
+	)
+}
+
+export function IconChevronDown({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="m3.5 6 4.5 4.5L12.5 6" />
+		</Svg>
+	)
+}
+
+export function IconChevronRight({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="m6 3.5 4.5 4.5L6 12.5" />
+		</Svg>
+	)
+}
+
+/** Three horizontal dots. */
+export function IconMore({ size = 16 }: IconProps) {
+	return (
+		<svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+			<circle cx="3.2" cy="8" r="1.15" />
+			<circle cx="8" cy="8" r="1.15" />
+			<circle cx="12.8" cy="8" r="1.15" />
+		</svg>
+	)
+}
+
+export function IconPin({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M8 14.2s-4.2-4-4.2-7.1a4.2 4.2 0 0 1 8.4 0c0 3.1-4.2 7.1-4.2 7.1Z" />
+			<circle cx="8" cy="7" r="1.3" />
+		</Svg>
+	)
+}
+
+export function IconLock({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="3.5" y="7" width="9" height="6.2" rx="1.2" />
+			<path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" />
+		</Svg>
+	)
+}
+
+export function IconUnlock({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="3.5" y="7" width="9" height="6.2" rx="1.2" />
+			<path d="M5.5 7V5.2a2.5 2.5 0 0 1 4.6-1.3" />
+		</Svg>
+	)
+}
+
+export function IconPaste({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M5.5 3.2h5A1.5 1.5 0 0 1 12 4.7v8.6H4V4.7A1.5 1.5 0 0 1 5.5 3.2Z" />
+			<path d="M6.2 3.2V2.4h3.6v.8" />
+		</Svg>
+	)
+}
+
+/** Eraser. */
+export function IconClear({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M3 10.2 7.6 5.6l3.2 3.2-4.6 4.6H3.4L3 10.2Z" />
+			<path d="M6.2 13.4h6.6" />
+		</Svg>
+	)
+}
+
+export function IconTextSmaller({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M2.4 12.2 5.2 4h1.3l2.8 8.2" />
+			<path d="M3.4 9.4h4.4" />
+			<path d="M11.2 12.2h3.2" />
+		</Svg>
+	)
+}
+
+export function IconTextLarger({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M1.8 12.6 5 3.2h1.4L9.6 12.6" />
+			<path d="M3 9.4h4.6" />
+			<path d="M12.2 8.2v4.4M10 10.4h4.4" />
+		</Svg>
+	)
+}
+
+export function IconAlert({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M8 2.2 14.2 13.2H1.8L8 2.2Z" />
+			<path d="M8 6.4v3.3" />
+			<path d="M8 11.4h.01" />
+		</Svg>
+	)
+}
+
+export function IconClose({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="m4 4 8 8M12 4l-8 8" />
+		</Svg>
+	)
+}
+
+export function IconUpload({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M8 3.2v7" />
+			<path d="m4.8 6.2 3.2-3.2 3.2 3.2" />
+			<path d="M3.2 12.8h9.6" />
+		</Svg>
+	)
+}
+
+export function IconTable({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="2.2" y="2.6" width="11.6" height="10.8" rx="1.2" />
+			<path d="M2.2 6.2h11.6M6.2 6.2v7.2" />
+		</Svg>
+	)
+}
+
+export function IconDatabase({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<ellipse cx="8" cy="3.8" rx="4.8" ry="1.7" />
+			<path d="M3.2 3.8v8.2c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8V3.8" />
+			<path d="M3.2 8c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8" />
+		</Svg>
+	)
+}
+
+/** Two stacked boxes. */
+export function IconGroup({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="2.4" y="6.2" width="8.2" height="6.4" rx="1" />
+			<path d="M5.4 6.2V4.4A1 1 0 0 1 6.4 3.4h6.2a1 1 0 0 1 1 1V9" />
+		</Svg>
+	)
+}
+
+export function IconExpand({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M9.2 3.2H12.8V6.8" />
+			<path d="M12.6 3.4 9 7" />
+			<path d="M6.8 12.8H3.2V9.2" />
+			<path d="M3.4 12.6 7 9" />
+		</Svg>
+	)
+}
+
+export function IconCollapse({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M6.8 6.8H3.2V3.2" />
+			<path d="M3.4 3.4 7 7" />
+			<path d="M9.2 9.2h3.6v3.6" />
+			<path d="M12.6 12.6 9 9" />
+		</Svg>
+	)
+}
+
+export function IconPlus({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M8 3.2v9.6M3.2 8h9.6" />
+		</Svg>
+	)
+}
+
+export function IconTrash({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M3.2 4.4h9.6" />
+			<path d="M6.2 4.4V3.2h3.6v1.2" />
+			<path d="M4.4 4.4 5 13h6l.6-8.6" />
+		</Svg>
+	)
+}
+
+export function IconWand({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M3.2 12.8 11.2 4.8l1.2 1.2-8 8-1.6.4.4-1.6Z" />
+			<path d="M11.6 2.4v2.2M10.5 3.5h2.2" />
+			<path d="M3.4 3.2v1.6M2.6 4h1.6" />
+		</Svg>
+	)
+}

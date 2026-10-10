@@ -1,5 +1,5 @@
 import classNames from 'classnames'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
 	Circle2d,
 	Group2d,
@@ -10,6 +10,7 @@ import {
 	ShapeUtil,
 	T,
 	TldrawUiButton,
+	TldrawUiButtonCheck,
 	TldrawUiButtonLabel,
 	TldrawUiDropdownMenuContent,
 	TldrawUiDropdownMenuGroup,
@@ -21,8 +22,19 @@ import {
 	useEditor,
 	useValue,
 } from 'tldraw'
-import { PlayIcon } from '../components/icons/PlayIcon'
-import { StopIcon } from '../components/icons/StopIcon'
+import {
+	IconChevronDown,
+	IconChevronUp,
+	IconCopy,
+	IconMore,
+	IconPlay,
+	IconSparkle,
+	IconStop,
+	UiButton,
+	UiErrorBanner,
+	UiIconButton,
+	UiTextInput,
+} from '../../ui'
 import {
 	NODE_FOOTER_HEIGHT_PX,
 	NODE_HEADER_HEIGHT_PX,
@@ -253,6 +265,16 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 	const nodeDefinition = getNodeDefinition(editor, shape.props.node)
 	const [naming, setNaming] = useState(false)
 	const title = shape.props.label || nodeDefinition.heading || nodeDefinition.title
+	const [nameDraft, setNameDraft] = useState(title)
+	const cancelRename = useRef(false)
+	const storedError = (shape.props.node as { error?: unknown }).error
+	const nodeError = typeof storedError === 'string' && storedError.trim() ? storedError : ''
+	const runMessage =
+		(run?.status === 'error' || run?.status === 'missing') && run.message?.trim() ? run.message : ''
+	const bannerMessage = runMessage || nodeError
+	const bannerTitle = run?.status === 'missing' && runMessage ? 'Input missing' : 'Run failed'
+	const [hiddenBanner, setHiddenBanner] = useState<string | null>(null)
+	const showBanner = !!bannerMessage && hiddenBanner !== bannerMessage
 	const fontSize = shape.props.fontSize
 	const runClass =
 		isExecuting || run?.status === 'running'
@@ -298,57 +320,92 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 			<div className="NodeShape-heading">
 				<div className="NodeShape-icon">{nodeDefinition.icon}</div>
 				{naming ? (
-					<input
+					<UiTextInput
 						className="NodeShape-label NodeShape-label-input"
 						autoFocus
-						defaultValue={title}
-						onPointerDown={(event) => event.stopPropagation()}
-						onKeyDown={(event) => {
-							event.stopPropagation()
-							if (event.key === 'Enter') event.currentTarget.blur()
-							if (event.key === 'Escape') setNaming(false)
-						}}
-						onBlur={(event) => {
-							const next = event.target.value.trim()
+						value={nameDraft}
+						onChange={setNameDraft}
+						onCommit={(next) => {
+							if (cancelRename.current) {
+								cancelRename.current = false
+								setNaming(false)
+								return
+							}
+							const trimmed = next.trim()
 							// An empty name goes back to the node type's own name.
-							editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { label: next || undefined } })
+							editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { label: trimmed || undefined } })
+							setNaming(false)
+						}}
+						onKeyDown={(event) => {
+							if (event.key !== 'Escape') return
+							cancelRename.current = true
+							setNameDraft(title)
 							setNaming(false)
 						}}
 					/>
 				) : (
-					<div className="NodeShape-label NodeShape-label-name" title="Double-click to rename" onDoubleClick={() => setNaming(true)}>
+					<div
+						className="NodeShape-label NodeShape-label-name"
+						title="Double-click to rename"
+						onDoubleClick={() => {
+							setNameDraft(title)
+							setNaming(true)
+						}}
+					>
 						{title}
-					</div>
-				)}
-				{(run?.status === 'missing' || run?.status === 'error') && run.message && (
-					<div className="NodeShape-issue" title={run.message}>
-						{run.message}
 					</div>
 				)}
 				{output !== undefined && shape.props.node.type !== 'subgraph' && <Port shapeId={shape.id} portId="output" />}
 			</div>
 			<NodeBody shape={shape} />
 			<div className="NodeShape-footer">
-				<button
-					className={classNames('NodeShape-footer-action', {
-						'NodeShape-footer-action_executing': isExecuting,
-					})}
-					onPointerDown={(e) => e.stopPropagation()}
+				<UiButton
+					size="sm"
+					variant="low"
+					className={isExecuting ? 'NodeRunButton_busy' : undefined}
+					icon={isExecuting ? <IconStop /> : <IconPlay />}
+					label={isExecuting ? 'Stop' : run?.ms != null ? formatRunMs(run.ms) : 'Run'}
 					onClick={() => {
-						if (isGraphRunning) {
-							stopExecution(editor)
-						} else {
-							startExecution(editor, new Set([shape.id]))
-						}
+						if (isGraphRunning) stopExecution(editor)
+						else startExecution(editor, new Set([shape.id]))
 					}}
-				>
-					{isExecuting ? <StopIcon /> : <PlayIcon />}
-					<span>{isExecuting ? 'Stop' : run?.ms != null ? formatRunMs(run.ms) : 'Run'}</span>
-				</button>
-				<NodeFooterTools shape={shape} />
-				<NodeFooterMenu shape={shape} />
+				/>
+				<div className="NodeShape-footer-tools">
+					<UiIconButton
+						className="NodeAiButton"
+						icon={<IconSparkle />}
+						title="Ask AI about this node"
+						onClick={() => openFillAssist(shape.id)}
+					/>
+					<CopyOutputButton shape={shape} />
+					<UiIconButton
+						icon={shape.props.collapsed ? <IconChevronDown /> : <IconChevronUp />}
+						title={shape.props.collapsed ? 'Expand node' : 'Collapse node'}
+						onClick={() =>
+							editor.updateShape<NodeShape>({
+								id: shape.id,
+								type: 'node',
+								props: { collapsed: !shape.props.collapsed },
+							})
+						}
+					/>
+					<NodeFooterMenu shape={shape} />
+				</div>
 			</div>
-			<NodeRunStatus shape={shape} running={isExecuting || run?.status === 'running'} />
+			{showBanner ? (
+				<NodeErrorBanner
+					shape={shape}
+					title={bannerTitle}
+					message={bannerMessage}
+					onDismiss={() => {
+						clearNodeRun(editor, shape.id)
+						// node.error stays on the shape. Hide this text until it changes.
+						setHiddenBanner(bannerMessage)
+					}}
+				/>
+			) : (
+				<NodeRunStatus shape={shape} running={isExecuting || run?.status === 'running'} />
+			)}
 		</HTMLContainer>
 	)
 }
@@ -383,146 +440,55 @@ async function toPng(blob: Blob): Promise<Blob> {
 	return canvas.convertToBlob({ type: 'image/png' })
 }
 
-/** Bottom-right icons on every node: copy the output, collapse / expand. */
-function NodeFooterTools({ shape }: { shape: NodeShape }) {
+function primaryOutput(editor: ReturnType<typeof useEditor>, shape: NodeShape): string | null {
+	const info = getNodeOutputPortInfo(editor, shape.id)
+	for (const out of Object.values(info)) {
+		const v = out.multi ? out.value[0] : out.value
+		if (v != null && v !== STOP_EXECUTION && v !== '') return String(v)
+	}
+	return null
+}
+
+function CopyOutputButton({ shape }: { shape: NodeShape }) {
 	const editor = useEditor()
-	const value = useValue(
-		'primary output',
-		() => {
-			const info = getNodeOutputPortInfo(editor, shape.id)
-			for (const out of Object.values(info)) {
-				const v = out.multi ? out.value[0] : out.value
-				if (v != null && v !== STOP_EXECUTION && v !== '') return String(v)
-			}
-			return null
-		},
-		[editor, shape.id]
-	)
-	const collapsed = !!shape.props.collapsed
-	const pinned = !!shape.props.pinned
-	const deleteLocked = !!shape.props.deleteLocked
-	const stepFont = (delta: number) => {
-		const current = shape.props.fontSize ?? DEFAULT_NODE_FONT_PX
-		const next = Math.max(MIN_NODE_FONT_PX, Math.min(MAX_NODE_FONT_PX, current + delta))
-		editor.updateShape<NodeShape>({
-			id: shape.id,
-			type: 'node',
-			props: { fontSize: next === DEFAULT_NODE_FONT_PX ? undefined : next },
-		})
-	}
-	const clearOutput = () => {
-		const definition = getNodeDefinition(editor, shape.props.node)
-		const defaults = definition.getDefault() as unknown as Record<string, unknown>
-		const node = { ...(shape.props.node as unknown as Record<string, unknown>) }
-		for (const key of definition.resultKeys ?? []) node[key] = defaults[key]
-		const spillIds = (shape.props.spillIds as string[] | undefined) ?? (shape.props.spillId ? [shape.props.spillId as string] : [])
-		const spills = spillIds.map((id) => editor.getShape(id as typeof shape.id)).filter(Boolean)
-		if (spills.length) editor.deleteShapes(spills.map((s) => s!.id))
-		editor.updateShape<NodeShape>({
-			id: shape.id,
-			type: 'node',
-			props: { node: node as NodeShape['props']['node'], spillId: undefined, spillIds: undefined, isOutOfDate: true },
-		})
-		clearNodeRun(editor, shape.id)
-	}
-	const paste = async () => {
-		const data = await readClipboard()
-		const patch = pastePatch(shape.props.node as unknown as { type: string }, data)
-		if (!patch) return
-		let next = { ...(shape.props.node as unknown as Record<string, unknown>), ...patch }
-		if (next.type === 'load_image' && typeof next.source === 'string' && next.source && !data.imageUrl) {
-			try {
-				next = { ...next, imageUrl: await apiImportImage(next.source) }
-			} catch {
-				// Keep the path or URL. Run reports it if the file cannot be read.
-			}
-		}
-		editor.updateShape<NodeShape>({
-			id: shape.id,
-			type: 'node',
-			props: { node: next as NodeShape['props']['node'], isOutOfDate: true },
-		})
-	}
+	const value = useValue('primary output', () => primaryOutput(editor, shape), [editor, shape.id])
+	const [done, setDone] = useState(false)
 	return (
-		<div className="NodeFooterTools" onPointerDown={(e) => e.stopPropagation()}>
-			<button className="NodeFooterTools-button" title="Fill this node with AI" onClick={() => openFillAssist(shape.id)}>
-				✦
-			</button>
-			<button className="NodeFooterTools-button" title="Paste text or an image" onClick={() => void paste()}>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-					<path d="M8 4h8a2 2 0 0 1 2 2v14H6V6a2 2 0 0 1 2-2z" />
-					<path d="M9 4V3h6v1" />
-				</svg>
-			</button>
-			<button
-				className={'NodeFooterTools-button' + (pinned ? ' is-on' : '')}
-				title={pinned ? 'Unpin' : 'Pin. Freezes position and size, and keeps every wire on this node.'}
-				onClick={() => editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { pinned: !pinned } })}
-			>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill={pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-					<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z" />
-					<circle cx="12" cy="10" r="2.3" fill={pinned ? 'var(--tl-color-panel)' : 'none'} />
-				</svg>
-			</button>
-			<button
-				className={'NodeFooterTools-button' + (deleteLocked ? ' is-on' : '')}
-				title={deleteLocked ? 'Allow delete' : 'Lock delete'}
-				onClick={() =>
-					editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { deleteLocked: !deleteLocked } })
-				}
-			>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-					<rect x="5" y="11" width="14" height="9" rx="2" fill={deleteLocked ? 'currentColor' : 'none'} />
-					<path d={deleteLocked ? 'M8 11V8a4 4 0 0 1 8 0v3' : 'M8 11V8a4 4 0 0 1 7.5-2'} />
-				</svg>
-			</button>
-			<button
-				className="NodeFooterTools-button"
-				title="Smaller text"
-				disabled={(shape.props.fontSize ?? DEFAULT_NODE_FONT_PX) <= MIN_NODE_FONT_PX}
-				onClick={() => stepFont(-1)}
-			>
-				<span className="NodeFooterTools-font">A−</span>
-			</button>
-			<button
-				className="NodeFooterTools-button"
-				title="Larger text"
-				disabled={(shape.props.fontSize ?? DEFAULT_NODE_FONT_PX) >= MAX_NODE_FONT_PX}
-				onClick={() => stepFont(1)}
-			>
-				<span className="NodeFooterTools-font">A+</span>
-			</button>
-			<button className="NodeFooterTools-button" title="Clear output" onClick={clearOutput}>
-				×
-			</button>
-			<button
-				className="NodeFooterTools-button"
-				title={value ? 'Copy output' : 'No output yet'}
-				disabled={!value}
-				onClick={async (e) => {
-					if (!value) return
-					await copyValue(value)
-					const button = e.currentTarget
-					button.classList.add('is-done')
-					setTimeout(() => button.classList.remove('is-done'), 900)
-				}}
-			>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-					<rect x="9" y="9" width="12" height="12" rx="2" />
-					<path d="M5 15V5a2 2 0 0 1 2-2h10" />
-				</svg>
-			</button>
-			<button
-				className="NodeFooterTools-button"
-				title={collapsed ? 'Expand node' : 'Collapse node'}
-				onClick={() =>
-					editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { collapsed: !collapsed } })
-				}
-			>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-					{collapsed ? <path d="m6 9 6 6 6-6" /> : <path d="m18 15-6-6-6 6" />}
-				</svg>
-			</button>
+		<UiIconButton
+			icon={<IconCopy />}
+			title={value ? 'Copy output' : 'No output yet'}
+			disabled={!value}
+			done={done}
+			onClick={() => {
+				if (!value) return
+				setDone(false)
+				void copyValue(value).then(() => setDone(true))
+			}}
+		/>
+	)
+}
+
+/** Error under the card. Does not change the shape size. */
+function NodeErrorBanner({
+	shape,
+	title,
+	message,
+	onDismiss,
+}: {
+	shape: NodeShape
+	title: string
+	message: string
+	onDismiss: () => void
+}) {
+	return (
+		<div className="NodeErrorBanner" onPointerDown={(event) => event.stopPropagation()}>
+			<UiErrorBanner
+				title={title}
+				message={message}
+				onCopy={() => void navigator.clipboard.writeText(message)}
+				onFix={() => openFillAssist(shape.id, { error: message })}
+				onDismiss={onDismiss}
+			/>
 		</div>
 	)
 }
@@ -597,17 +563,59 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 		})
 	}, [editor, resultKeys, defaults, shape])
 
+	const pinned = !!shape.props.pinned
+	const deleteLocked = !!shape.props.deleteLocked
+	const fontSize = shape.props.fontSize ?? DEFAULT_NODE_FONT_PX
+
+	const stepFont = (delta: number) => {
+		const next = Math.max(MIN_NODE_FONT_PX, Math.min(MAX_NODE_FONT_PX, fontSize + delta))
+		editor.updateShape<NodeShape>({
+			id: shape.id,
+			type: 'node',
+			props: { fontSize: next === DEFAULT_NODE_FONT_PX ? undefined : next },
+		})
+	}
+
+	const clearOutput = () => {
+		const definition = getNodeDefinition(editor, shape.props.node)
+		const defaults = definition.getDefault() as unknown as Record<string, unknown>
+		const node = { ...(shape.props.node as unknown as Record<string, unknown>) }
+		for (const key of definition.resultKeys ?? []) node[key] = defaults[key]
+		const spillIds = (shape.props.spillIds as string[] | undefined) ?? (shape.props.spillId ? [shape.props.spillId as string] : [])
+		const spills = spillIds.map((id) => editor.getShape(id as typeof shape.id)).filter(Boolean)
+		if (spills.length) editor.deleteShapes(spills.map((s) => s!.id))
+		editor.updateShape<NodeShape>({
+			id: shape.id,
+			type: 'node',
+			props: { node: node as NodeShape['props']['node'], spillId: undefined, spillIds: undefined, isOutOfDate: true },
+		})
+		clearNodeRun(editor, shape.id)
+	}
+
+	const paste = async () => {
+		const data = await readClipboard()
+		const patch = pastePatch(shape.props.node as unknown as { type: string }, data)
+		if (!patch) return
+		let next = { ...(shape.props.node as unknown as Record<string, unknown>), ...patch }
+		if (next.type === 'load_image' && typeof next.source === 'string' && next.source && !data.imageUrl) {
+			try {
+				next = { ...next, imageUrl: await apiImportImage(next.source) }
+			} catch {
+				// Keep the path or URL. Run reports it if the file cannot be read.
+			}
+		}
+		editor.updateShape<NodeShape>({
+			id: shape.id,
+			type: 'node',
+			props: { node: next as NodeShape['props']['node'], isOutOfDate: true },
+		})
+	}
+
 	return (
 		<div className="NodeFooterMenu" onPointerDown={(e) => e.stopPropagation()}>
 			<TldrawUiDropdownMenuRoot id={`node-menu-${shape.id}`}>
 				<TldrawUiDropdownMenuTrigger>
-					<TldrawUiButton type="icon" title="More options" className="NodeFooterMenu-trigger">
-						<svg width="12" height="12" viewBox="0 0 12 12">
-							<circle cx="6" cy="2" r="1.2" fill="currentColor" />
-							<circle cx="6" cy="6" r="1.2" fill="currentColor" />
-							<circle cx="6" cy="10" r="1.2" fill="currentColor" />
-						</svg>
-					</TldrawUiButton>
+					<UiIconButton icon={<IconMore />} title="More options" className="NodeFooterMenu-trigger" />
 				</TldrawUiDropdownMenuTrigger>
 				<TldrawUiDropdownMenuContent side="top" align="end" sideOffset={4} alignOffset={0}>
 					<TldrawUiDropdownMenuGroup>
@@ -651,6 +659,50 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 								</TldrawUiButton>
 							</TldrawUiDropdownMenuItem>
 						)}
+					</TldrawUiDropdownMenuGroup>
+					<TldrawUiDropdownMenuGroup>
+						<TldrawUiDropdownMenuItem>
+							<TldrawUiButton type="menu" title="Paste text or an image" onClick={() => void paste()}>
+								<TldrawUiButtonLabel>Paste</TldrawUiButtonLabel>
+							</TldrawUiButton>
+						</TldrawUiDropdownMenuItem>
+						<TldrawUiDropdownMenuItem noClose>
+							<TldrawUiButton
+								type="menu"
+								title={pinned ? 'Unpin' : 'Pin. Freezes position and size, and keeps every wire on this node.'}
+								onClick={() => editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { pinned: !pinned } })}
+							>
+								<TldrawUiButtonCheck checked={pinned} />
+								<TldrawUiButtonLabel>{pinned ? 'Unpin' : 'Pin'}</TldrawUiButtonLabel>
+							</TldrawUiButton>
+						</TldrawUiDropdownMenuItem>
+						<TldrawUiDropdownMenuItem noClose>
+							<TldrawUiButton
+								type="menu"
+								title={deleteLocked ? 'Allow delete' : 'Lock delete'}
+								onClick={() =>
+									editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { deleteLocked: !deleteLocked } })
+								}
+							>
+								<TldrawUiButtonCheck checked={deleteLocked} />
+								<TldrawUiButtonLabel>{deleteLocked ? 'Allow delete' : 'Lock delete'}</TldrawUiButtonLabel>
+							</TldrawUiButton>
+						</TldrawUiDropdownMenuItem>
+						<TldrawUiDropdownMenuItem noClose>
+							<TldrawUiButton type="menu" title="Smaller text" disabled={fontSize <= MIN_NODE_FONT_PX} onClick={() => stepFont(-1)}>
+								<TldrawUiButtonLabel>Smaller text</TldrawUiButtonLabel>
+							</TldrawUiButton>
+						</TldrawUiDropdownMenuItem>
+						<TldrawUiDropdownMenuItem noClose>
+							<TldrawUiButton type="menu" title="Larger text" disabled={fontSize >= MAX_NODE_FONT_PX} onClick={() => stepFont(1)}>
+								<TldrawUiButtonLabel>Larger text</TldrawUiButtonLabel>
+							</TldrawUiButton>
+						</TldrawUiDropdownMenuItem>
+						<TldrawUiDropdownMenuItem>
+							<TldrawUiButton type="menu" title="Clear output" onClick={clearOutput}>
+								<TldrawUiButtonLabel>Clear output</TldrawUiButtonLabel>
+							</TldrawUiButton>
+						</TldrawUiDropdownMenuItem>
 					</TldrawUiDropdownMenuGroup>
 				</TldrawUiDropdownMenuContent>
 			</TldrawUiDropdownMenuRoot>

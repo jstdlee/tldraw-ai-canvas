@@ -6,6 +6,7 @@ import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiTextArea, UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -133,15 +134,13 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 	const editor = useEditor()
 	const set = (patch: Partial<RawModelNode>) => updateNode<RawModelNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
 	const text = (key: 'url' | 'model' | 'apiKey' | 'temperature' | 'maxTokens', placeholder: string, type = 'text') => (
-		<input
-			className="NodeField-input"
+		<UiTextInput
 			type={type}
+			inputMode={type === 'number' ? 'decimal' : 'text'}
 			placeholder={placeholder}
 			autoComplete="off"
 			value={node[key]}
-			onPointerDown={stopEvent}
-			onKeyDown={stopEvent}
-			onChange={(e) => set({ [key]: e.target.value })}
+			onChange={(next) => set({ [key]: next })}
 		/>
 	)
 	return (
@@ -151,14 +150,12 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 			<Field label="URL">{text('url', 'https://api.openai.com/v1')}</Field>
 			<Field label="Model">{text('model', 'model id, or wire one')}</Field>
 			<Field label="Key">{text('apiKey', 'optional', 'password')}</Field>
-			<textarea
+			<UiTextArea
 				className="NodeField-textarea"
 				placeholder="System prompt"
 				style={{ height: 72 }}
 				value={node.system}
-				onPointerDown={stopEvent}
-				onKeyDown={stopEvent}
-				onChange={(e) => set({ system: e.target.value })}
+				onChange={(system) => set({ system })}
 			/>
 			<Field label="Temp">{text('temperature', 'default', 'number')}</Field>
 			<Field label="Max tok">{text('maxTokens', 'default', 'number')}</Field>

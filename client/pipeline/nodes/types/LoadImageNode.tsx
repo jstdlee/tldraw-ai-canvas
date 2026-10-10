@@ -12,6 +12,7 @@ import {
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
+import { IconClose, UiButton, UiIconButton, UiTextInput } from '../../../ui'
 import { NodeShape } from '../NodeShapeUtil'
 import {
 	ExecutionResult,
@@ -181,37 +182,27 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 	return (
 		<>
 			<NodeRow>
-				<input
-					className="NodeField-input"
+				<UiTextInput
 					placeholder="Image URL or file path"
 					value={node.source ?? ''}
-					onPointerDown={(e) => e.stopPropagation()}
-					onKeyDown={(e) => e.stopPropagation()}
-					onChange={(e) => updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, source: e.target.value }))}
+					onChange={(source) => updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, source }))}
 				/>
-				<button className="LoadImageNode-browse" onPointerDown={(e) => e.stopPropagation()} onClick={() => void loadSource()}>
-					Load
-				</button>
+				<UiButton size="sm" variant="low" className="LoadImageNode-browse" label="Load" onClick={() => void loadSource()} />
 			</NodeRow>
 			<NodeRow>
-				<button
+				<UiButton
+					size="sm"
+					variant="low"
 					className="LoadImageNode-browse"
+					label={node.imageUrl ? 'Replace...' : 'Browse...'}
 					onClick={handleBrowse}
-					onPointerDown={(e) => e.stopPropagation()}
-				>
-					{node.imageUrl ? 'Replace...' : 'Browse...'}
-				</button>
+				/>
 				{node.imageUrl && (
-					<button
-						className="LoadImageNode-clear"
-						onClick={() =>
-							updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl: null, source: '' }))
-						}
-						onPointerDown={(e) => e.stopPropagation()}
+					<UiIconButton
+						icon={<IconClose />}
 						title="Clear image"
-					>
-						×
-					</button>
+						onClick={() => updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl: null, source: '' }))}
+					/>
 				)}
 			</NodeRow>
 			<div

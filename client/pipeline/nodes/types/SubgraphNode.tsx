@@ -9,6 +9,7 @@ import { shapeText } from '../../../clips/shapeText'
 import { concatMemberText } from '../../../../shared/groupText'
 import { Port } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiTextInput } from '../../../ui'
 import { PortRow, stopEvent } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -162,12 +163,9 @@ function SubgraphNodeComponent({ shape, node }: NodeComponentProps<SubgraphNode>
 				{node.thumbnail ? <img src={node.thumbnail} alt="packed nodes" draggable={false} /> : <span className="NodeRow-disconnected">{node.innerIds.length} shapes inside</span>}
 			</div>
 			<NodeRow>
-				<input
-					className="NodeField-input"
+				<UiTextInput
 					value={node.title}
-					onPointerDown={stopEvent}
-					onKeyDown={stopEvent}
-					onChange={(e) => updateNode<SubgraphNode>(editor, shape, (n) => ({ ...n, title: e.target.value }), false)}
+					onChange={(title) => updateNode<SubgraphNode>(editor, shape, (n) => ({ ...n, title }), false)}
 				/>
 				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => unpack(editor, shape.id)}>
 					Unpack

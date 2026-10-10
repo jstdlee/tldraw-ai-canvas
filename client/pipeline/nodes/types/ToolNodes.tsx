@@ -8,6 +8,7 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
+import { IconPlay, UiIconButton, UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -38,7 +39,7 @@ function Line({ label, value, onChange }: { label: string; value: string; onChan
 	return (
 		<NodeRow>
 			<span className="NodeInputRow-label">{label}</span>
-			<input className="NodeField-input" value={value} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => onChange(e.target.value)} />
+			<UiTextInput value={value} onChange={onChange} />
 		</NodeRow>
 	)
 }
@@ -94,10 +95,8 @@ function VideoComponent({ shape, node }: NodeComponentProps<VideoNode>) {
 		<>
 			<PortRow shapeId={shape.id} portId="url" label="Link" dataType="text" />
 			<NodeRow>
-				<input className="NodeField-input" placeholder="https://…/clip.mp4 or a YouTube link" value={node.url} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ url: e.target.value })} />
-				<button type="button" className={'NodeField-button' + (node.autoplay ? ' is-on' : '')} title="Autoplay (muted)" onPointerDown={stopEvent} onClick={() => set({ autoplay: !node.autoplay })}>
-					▶
-				</button>
+				<UiTextInput placeholder="https://…/clip.mp4 or a YouTube link" value={node.url} onChange={(url) => set({ url })} />
+				<UiIconButton icon={<IconPlay />} title="Autoplay (muted)" active={node.autoplay} onClick={() => set({ autoplay: !node.autoplay })} />
 			</NodeRow>
 			{embed ? (
 				<iframe

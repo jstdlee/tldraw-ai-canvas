@@ -14,6 +14,7 @@ import {
 import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues, getNodePortConnections, NodePortConnection } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiTextArea } from '../../../ui'
 
 import {
 	DEFAULT_LLM_SETTINGS,
@@ -282,16 +283,13 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 					)}
 				</div>
 				<div className="ChatNode-compose">
-					<textarea
+					<UiTextArea
 						className="ChatNode-input NodeScroll"
 						placeholder="Message… (Ctrl+Enter to send)"
 						value={node.userMessage}
 						onPointerDown={editor.markEventAsHandled}
-						onChange={(e) =>
-							updateNode<ChatNode>(editor, shape, (n) => ({ ...n, userMessage: e.target.value }), false)
-						}
+						onChange={(userMessage) => updateNode<ChatNode>(editor, shape, (n) => ({ ...n, userMessage }), false)}
 						onKeyDown={(e) => {
-							e.stopPropagation()
 							if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend()
 						}}
 					/>

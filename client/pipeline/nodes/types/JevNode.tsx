@@ -7,6 +7,7 @@ import { RouterIcon } from '../../components/icons/RouterIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiCheckbox, UiTextArea } from '../../../ui'
 import { PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -212,14 +213,12 @@ function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 			</div>
 			<NodeRow className="NodeRow-right">{node.kind === 'noul' ? <span className="CodeNode-outLabel-static">no →</span> : null}</NodeRow>
 			<div className="NodeField-block" style={{ height: QUESTION_PX }}>
-				<textarea
+				<UiTextArea
 					className="NodeField-textarea"
 					disabled={questionWired}
 					placeholder="Question for JEV"
 					value={questionWired ? '(from the Question input)' : node.question}
-					onPointerDown={stopEvent}
-					onKeyDown={stopEvent}
-					onChange={(e) => set({ question: e.target.value })}
+					onChange={(question) => set({ question })}
 				/>
 			</div>
 			<NodeRow>
@@ -232,32 +231,25 @@ function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 			</NodeRow>
 			{node.kind !== 'noul' && (
 				<div className="NodeField-block" style={{ height: OPTIONS_PX }}>
-					<textarea
+					<UiTextArea
 						className="NodeField-textarea"
 						placeholder={node.kind === 'choice' ? 'One option per line: label: description' : 'Levels, worst first, one per line'}
 						value={node.options}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ options: e.target.value })}
+						onChange={(options) => set({ options })}
 					/>
 				</div>
 			)}
 			<NodeRow>
-				<label className="NodeField-check" onPointerDown={stopEvent}>
-					<input type="checkbox" checked={node.filter} onChange={(e) => set({ filter: e.target.checked })} />
-					Then filter the input text with an LLM
-				</label>
+				<UiCheckbox checked={node.filter} label="Then filter the input text with an LLM" onChange={(filter) => set({ filter })} />
 			</NodeRow>
 			{node.filter && (
 				<>
 					<div className="NodeField-block" style={{ height: FILTER_PX }}>
-						<textarea
+						<UiTextArea
 							className="NodeField-textarea"
 							placeholder="What the LLM should do with the decision"
 							value={node.filterInstruction}
-							onPointerDown={stopEvent}
-							onKeyDown={stopEvent}
-							onChange={(e) => set({ filterInstruction: e.target.value })}
+							onChange={(filterInstruction) => set({ filterInstruction })}
 						/>
 					</div>
 					<NodeRow>

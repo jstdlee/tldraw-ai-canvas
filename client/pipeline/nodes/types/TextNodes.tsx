@@ -10,6 +10,7 @@ import {
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -123,14 +124,7 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 			{(['a', 'b'] as const).map((key) => (
 				<NodeRow key={key}>
 					{op[key] ? (
-						<input
-							className="NodeField-input"
-							placeholder={op[key]}
-							value={node[key]}
-							onPointerDown={stopEvent}
-							onKeyDown={stopEvent}
-							onChange={(e) => set({ [key]: e.target.value })}
-						/>
+						<UiTextInput placeholder={op[key]} value={node[key]} onChange={(next) => set({ [key]: next })} />
 					) : (
 						<span className="NodeRow-disconnected">{key === 'a' ? 'no options' : ''}</span>
 					)}

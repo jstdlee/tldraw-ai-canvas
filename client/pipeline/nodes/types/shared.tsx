@@ -17,6 +17,7 @@ import { Port, PortId, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { NodeType } from '../nodeTypes'
+import { UiTextInput } from '../../../ui'
 
 /**
  * Pipeline values can be strings (prompts, image URLs, model IDs), numbers (steps, cfg scale),
@@ -215,15 +216,14 @@ export function NodeInputRow({
 			{isOutOfDate || valueFromPort === STOP_EXECUTION ? (
 				<NodePlaceholder />
 			) : (
-				<input
+				<UiTextInput
 					ref={inputRef}
-					type="text"
 					inputMode="decimal"
 					disabled={valueFromPort != null}
-					value={displayValue}
-					onChange={(e) => {
-						setPendingValue(e.currentTarget.value)
-						const asNumber = Number(e.currentTarget.value.trim())
+					value={String(displayValue)}
+					onChange={(next) => {
+						setPendingValue(next)
+						const asNumber = Number(next.trim())
 						if (Number.isNaN(asNumber)) return
 						onChange(asNumber)
 					}}

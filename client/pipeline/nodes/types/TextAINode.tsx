@@ -12,6 +12,7 @@ import {
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiButton, UiTextArea, UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
@@ -194,33 +195,21 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 			</NodeRow>
 			<div className="NodeField-block" style={{ height: OPTION_HEIGHT_PX }}>
 				{op.id === 'custom' ? (
-					<textarea
+					<UiTextArea
 						className="NodeField-textarea"
 						placeholder="Instruction, e.g. Turn this into a tweet"
 						value={node.instruction}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ instruction: e.target.value }, false)}
+						onChange={(instruction) => set({ instruction }, false)}
 					/>
 				) : (
 					<>
 						{op.option && (
-							<input
-								className="NodeField-input"
-								placeholder={op.option}
-								value={node.option}
-								onPointerDown={stopEvent}
-								onKeyDown={stopEvent}
-								onChange={(e) => set({ option: e.target.value }, false)}
-							/>
+							<UiTextInput placeholder={op.option} value={node.option} onChange={(option) => set({ option }, false)} />
 						)}
-						<input
-							className="NodeField-input"
+						<UiTextInput
 							placeholder="Extra instruction (optional)"
 							value={node.instruction}
-							onPointerDown={stopEvent}
-							onKeyDown={stopEvent}
-							onChange={(e) => set({ instruction: e.target.value }, false)}
+							onChange={(instruction) => set({ instruction }, false)}
 						/>
 					</>
 				)}
@@ -240,23 +229,14 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 					<span className="NodeField-label">
 						Job prompt (advanced)
 						{node.promptOverride != null && (
-							<button
-								type="button"
-								className="LlmSettings-reset"
-								onPointerDown={stopEvent}
-								onClick={() => set({ promptOverride: undefined }, false)}
-							>
-								reset
-							</button>
+							<UiButton size="sm" variant="low" label="reset" onClick={() => set({ promptOverride: undefined }, false)} />
 						)}
 					</span>
-					<textarea
+					<UiTextArea
 						className="NodeField-textarea"
 						style={{ height: 72 }}
 						value={node.promptOverride ?? buildTextAIPrompt(node)}
-						onPointerDown={stopEvent}
-						onKeyDown={stopEvent}
-						onChange={(e) => set({ promptOverride: e.target.value }, false)}
+						onChange={(promptOverride) => set({ promptOverride }, false)}
 					/>
 				</div>
 			)}

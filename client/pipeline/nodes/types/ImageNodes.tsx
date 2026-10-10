@@ -1,6 +1,7 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { useEffect, useRef, useState } from 'react'
 import { T, TldrawUiButton, useEditor } from 'tldraw'
+import { IconExpand, UiNumberInput, UiSlider, UiTextInput } from '../../../ui'
 import { AdjustIcon } from '../../components/icons/AdjustIcon'
 import { CaptureIcon } from '../../components/icons/CaptureIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
@@ -69,7 +70,7 @@ function Preview({ url, error, loading }: { url: string | null; error?: string |
 				<>
 					<NodeImage src={url} alt="result" />
 					<button className="FieldMax" type="button" title="Open the image" onPointerDown={stopEvent} onClick={() => setOpen(true)}>
-						⛶
+						<IconExpand size={12} />
 					</button>
 				</>
 			) : (
@@ -287,14 +288,7 @@ function NumberField({
 	return (
 		<label className="NodeField-inline">
 			<span>{label}</span>
-			<input
-				type="number"
-				className="NodeField-input"
-				value={value}
-				onPointerDown={stopEvent}
-				onKeyDown={stopEvent}
-				onChange={(e) => onChange(Number(e.target.value))}
-			/>
+			<UiNumberInput value={value} onChange={(next) => onChange(next ?? 0)} />
 			{suffix && <span className="NodeField-suffix">{suffix}</span>}
 		</label>
 	)
@@ -504,12 +498,12 @@ function ImageFilterNodeComponent({ shape, node }: NodeComponentProps<ImageFilte
 				{SLIDERS.map((s) => (
 					<label key={s.key} className="NodeSlider" onPointerDown={stopEvent}>
 						<span>{s.label}</span>
-						<input
-							type="range"
+						<UiSlider
+							label={s.label}
 							min={s.min}
 							max={s.max}
 							value={node[s.key] as number}
-							onChange={(e) => set({ [s.key]: Number(e.target.value) })}
+							onChange={(next) => set({ [s.key]: next })}
 						/>
 						<span className="NodeSlider-value">{node[s.key] as number}</span>
 					</label>
@@ -636,10 +630,10 @@ function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNod
 				) : (
 					<>
 						{'a' in tool && (
-							<input className="NodeField-input" placeholder={tool.a} value={node.a} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ a: e.target.value })} />
+							<UiTextInput placeholder={tool.a} value={node.a} onChange={(a) => set({ a })} />
 						)}
 						{'b' in tool && (
-							<input className="NodeField-input" placeholder={tool.b} value={node.b} onPointerDown={stopEvent} onKeyDown={stopEvent} onChange={(e) => set({ b: e.target.value })} />
+							<UiTextInput placeholder={tool.b} value={node.b} onChange={(b) => set({ b })} />
 						)}
 						{!('a' in tool) && !('b' in tool) && <span className="NodeRow-disconnected">no options</span>}
 					</>
