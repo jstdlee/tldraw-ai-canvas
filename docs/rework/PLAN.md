@@ -21,19 +21,39 @@ and commits before the next WP starts. Read `RULES.md` before any WP.
 | 13 | "Shape with AI" UI is poor; it must use the selection (or nothing) to build the user's goal from all available widgets | WP7 |
 | 14 | Use the JEV/LLM models the owner set up, incl. the Cloudflare **Clef** decision model | WP6 |
 
+### Second round of feedback (2026-10-10)
+
+| Owner feedback (short) | WP |
+|---|---|
+| Output also spilled as a canvas label when the card already shows it | WP8 |
+| Resize/selection shows an extra rectangle | WP8 |
+| Text areas do not fill the card | WP8 |
+| Expand ("max") icon and its modal look bad | WP8 |
+| Ctrl+E delete; Ctrl+B → C → colour (G, K/default, B, R, Y) | WP8 |
+| Search when dropping a wire; rank by name, description, JEV, recent use | WP8 |
+| File in + URL in → one "Read from" (upload, URL); no server file read | WP9 |
+| Images take a URL input; pasted image link previews and resizes | WP9 |
+| Image generation card (Google, OpenAI, OpenRouter, custom URL), N images grid, enlarge | WP9 |
+| Model provider card: custom OpenAI-compatible `/v1/models`, pick one, output it | WP10 |
+| Raw model, AI text, Generate text, Chat accept input parameters | WP10 |
+| Enter does not run Chat, Generate text, AI text | WP10 |
+
 ## Order
 
 ```
-WP1 UI kit + card chrome + errors + AI icon   (foundation, everything else uses it)
-WP2 Sidebar (node library) + panel collapse
-WP3 Default sizes + placement of new nodes
-WP4 Groups: box + open/close in place, all ports
-WP5 Data: DataPipe (CSV/TSV/XLS/XLSX, per-op params), Database widget, remove SQLite import
-WP6 Providers: Cloudflare Workers AI + Clef (JEV)
-WP7 AI: node-specific assistant + "Build with AI" for selection / empty canvas
+WP1  UI kit + card chrome + errors + AI icon          ✔ committed 1f89c1b
+WP2  Sidebar (node library) + panel collapse
+WP8  Card polish, shortcuts, smart node search        (fixes visible daily annoyances early)
+WP3  Default sizes + placement of new nodes
+WP4  Groups: box + open/close in place, all ports
+WP5  Data: DataPipe, Database widget, remove SQLite import, file store
+WP6  Providers: Cloudflare Workers AI + Clef (JEV)
+WP9  Read from, image URLs + paste, image generation   (needs WP5 file store)
+WP10 Model provider card, input parameters, Enter to run
+WP7  AI: node specialist + "Build with AI"             (last: it must know every node above)
 ```
 
-WP6 only touches server + provider settings + JEV node; it may run in parallel with WP2–WP5.
+WP6 only touches server + provider settings + JEV node; it may run in parallel with others.
 
 ## Design decisions (apply everywhere)
 

@@ -280,3 +280,25 @@ export function IconWand({ size }: IconProps) {
 		</Svg>
 	)
 }
+
+/** Side panel with an arrow pointing left. Collapse the library. */
+export function IconSidebarCollapse({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="2.2" y="2.4" width="11.6" height="11.2" rx="1.2" />
+			<path d="M6.2 2.4v11.2" />
+			<path d="M10.6 6.4 8.2 8l2.4 1.6" />
+		</Svg>
+	)
+}
+
+/** Side panel with an arrow pointing right. Expand the library. */
+export function IconSidebarExpand({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="2.2" y="2.4" width="11.6" height="11.2" rx="1.2" />
+			<path d="M6.2 2.4v11.2" />
+			<path d="M8 6.4 10.4 8 8 9.6" />
+		</Svg>
+	)
+}

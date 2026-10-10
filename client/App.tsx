@@ -62,8 +62,8 @@ import { clipShapeUtils, clipTools } from './clips/ClipShapes'
 import { FindBar } from './clips/FindBar'
 import { installKeepGroup } from './pipeline/groups/KeepGroupShapeUtil'
 import { ShellChrome } from './shell/ShellChrome'
-import { $featuresOpen, $libraryRail, $mapOpen } from './shell/shellState'
-import { saveBackup } from './shell/shellState'
+import { $featuresOpen, $libraryRail, $mapOpen, saveBackup, writeLibraryRail } from './shell/shellState'
+import { IconSparkle } from './ui'
 import { ImageEditorModal } from './clips/ImageEditor'
 import { RatioImageShapeUtil } from './clips/shapeOptions'
 
@@ -272,6 +272,10 @@ function App() {
 	)
 
 	const rail = useValue('library rail', () => $libraryRail.get(), [])
+	const isDark = useValue('dark mode', () => editor?.user.getIsDarkMode() ?? false, [editor])
+	useEffect(() => {
+		writeLibraryRail(rail)
+	}, [rail])
 	return (
 		<TldrawUiToastsProvider>
 			<div
@@ -281,17 +285,8 @@ function App() {
 					(rail ? ' is-library-rail' : '')
 				}
 			>
-				<div className="image-pipeline-sidebar">
+				<div className={`image-pipeline-sidebar ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}>
 					{editor ? <ImagePipelineSidebar editor={editor} /> : <div />}
-					<button
-						type="button"
-						className="SidebarEdgeHandle"
-						title={rail ? 'Expand node library' : 'Collapse node library'}
-						aria-label={rail ? 'Expand node library' : 'Collapse node library'}
-						onClick={() => $libraryRail.set(!$libraryRail.get())}
-					>
-						{rail ? '›' : '‹'}
-					</button>
 				</div>
 				<div className="app-canvas">
 					<Tldraw
@@ -337,8 +332,13 @@ function App() {
 					</div>
 				)}
 				{!panels.chat && (
-					<button className="chat-float-button" type="button" title="Agent chat" onClick={() => togglePanel('chat')}>
-						✦
+					<button
+						className={`chat-float-button ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}
+						type="button"
+						title="Agent chat"
+						onClick={() => togglePanel('chat')}
+					>
+						<IconSparkle size={22} />
 					</button>
 				)}
 			</div>

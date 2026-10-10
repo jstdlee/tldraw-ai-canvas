@@ -181,19 +181,8 @@
 }
 
 .app-layout.is-library-rail .image-pipeline-sidebar {
-	width: 44px;
-	overflow: hidden;
-}
-
-.app-layout.is-library-rail .ImagePipelineSidebar-list,
-.app-layout.is-library-rail .ImagePipelineSidebar-examples,
-.app-layout.is-library-rail .ImagePipelineSidebar-header > span {
-	display: none;
-}
-
-.app-layout.is-library-rail .ImagePipelineSidebar-header {
-	justify-content: center;
-	padding: 0;
+	width: 52px;
+	max-width: 52px;
 }
 
 .Palette-backdrop {

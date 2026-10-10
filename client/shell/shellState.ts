@@ -4,7 +4,30 @@ export const $paletteOpen = atom('command palette', false)
 export const $mapOpen = atom('map view', false)
 export const $historyOpen = atom('history open', false)
 export const $featuresOpen = atom('feature list', false)
-export const $libraryRail = atom('library rail', false)
+export const LIBRARY_RAIL_KEY = 'oh-my-tldraw:library-rail'
+
+/** Stored choice, or rail mode on a narrow window when nothing is stored. */
+export function readLibraryRail(): boolean {
+	try {
+		const stored = localStorage.getItem(LIBRARY_RAIL_KEY)
+		if (stored === 'true') return true
+		if (stored === 'false') return false
+	} catch {
+		// Private mode, or no localStorage.
+	}
+	if (typeof window !== 'undefined' && window.innerWidth < 900) return true
+	return false
+}
+
+export function writeLibraryRail(rail: boolean) {
+	try {
+		localStorage.setItem(LIBRARY_RAIL_KEY, rail ? 'true' : 'false')
+	} catch {
+		// Private mode: the choice just isn't remembered.
+	}
+}
+
+export const $libraryRail = atom('library rail', readLibraryRail())
 export const $searchHits = atom<TLShapeId[]>('search hits', [])
 /** The shape the search just jumped to, blinking until this timestamp (ms). */
 export const $searchBlink = atom<{ id: TLShapeId; until: number } | null>('search blink', null)
