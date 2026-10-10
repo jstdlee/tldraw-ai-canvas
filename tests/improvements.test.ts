@@ -24,10 +24,11 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	download: { inn: ['url'], out: ['output'] },
 	net_tool: { inn: ['target'], out: ['output'] },
 	postgres: { inn: ['input'], out: ['output'] },
-	generate_text: { inn: ['input', 'prompt'], out: ['output'] },
-	chat: { inn: ['parent', 'attach'], out: ['output'] },
-	text_ai: { inn: ['input'], out: ['output'] },
+	generate_text: { inn: ['input', 'prompt', 'model', 'system', 'params'], out: ['output'] },
+	chat: { inn: ['parent', 'attach', 'model', 'system', 'params'], out: ['output'] },
+	text_ai: { inn: ['input', 'model', 'system', 'params'], out: ['output'] },
 	summarize: { inn: ['input'], out: ['output'] },
+	model_source: { inn: [], out: ['model'] },
 	jev: { inn: ['context', 'question', 'input'], out: ['output', 'probs', 'final', 'yes', 'no'] },
 	load_image: { inn: [], out: ['output'] },
 	camera: { inn: [], out: ['output'] },
@@ -56,7 +57,7 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	file_in: { inn: ['url'], out: ['output'] },
 	url_in: { inn: [], out: ['output'] },
 	sleep: { inn: ['input'], out: ['output'] },
-	image_gen: { inn: ['prompt', 'image', 'model'], out: ['output', 'images'] },
+	image_gen: { inn: ['prompt', 'image', 'model', 'system', 'params'], out: ['output', 'images'] },
 }
 
 describe('llm usage', () => {
@@ -185,6 +186,8 @@ describe('examples', () => {
 				const from = byId.get(wire.from)
 				const to = byId.get(wire.to)
 				expect(from && PORTS[from.type].out).toContain(wire.fromPort)
+				// `var:<name>` ports (WP10 template variables) are dynamic, not in this fixed map.
+				if (wire.toPort.startsWith('var:')) continue
 				expect(to && PORTS[to.type].inn).toContain(wire.toPort)
 			}
 		}

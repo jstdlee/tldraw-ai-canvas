@@ -3,6 +3,7 @@ import { TLShapeId, useEditor, useValue } from 'tldraw'
 export { NodeMultiSelect, NodeSelect } from './NodeSelect'
 import { FieldMax, LargeEditor } from '../../editors/LargeEditor'
 import { PortDataType } from '../../constants'
+import { parseModelValue } from '../../../../shared/modelRef'
 import { Port } from '../../ports/Port'
 import { getNodeInputPortValues, getNodePortConnections } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
@@ -21,6 +22,9 @@ export function isImageValue(value: unknown): value is string {
 function preview(value: unknown) {
 	if (value == null || value === STOP_EXECUTION) return ''
 	if (isImageValue(value)) return 'image'
+	// A Model provider output: show the model name, not its JSON.
+	const adhoc = typeof value === 'string' ? parseModelValue(value).adhoc : undefined
+	if (adhoc) return adhoc.model
 	const s = String(value).replace(/\s+/g, ' ')
 	return s.length > 28 ? s.slice(0, 28) + '…' : s
 }

@@ -1,8 +1,8 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
-import { useCallback } from 'react'
 import { Editor, T, useEditor, useValue } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiChatStream, ChatMessage } from '../../api/pipelineApi'
+import { startExecution } from '../../execution/executionState'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
@@ -14,13 +14,21 @@ import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues, getNodePortConnections, NodePortConnection } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextArea } from '../../../ui'
+import { useInputConnected, PortRow } from './fields'
 
 import {
 	DEFAULT_LLM_SETTINGS,
+	fillLlmTemplate,
+	llmEffectiveSettings,
+	llmModelPort,
 	LlmSettingsFields,
 	LlmSettingsPanel,
-	llmRequestSettings,
 	llmSettingsHeight,
+	llmSettingsPorts,
+	llmTemplateVars,
+	llmVarPorts,
+	llmVarsHeight,
+	LlmVarRows,
 } from './llmSettings'
 import {
 	ExecutionResult,
@@ -53,7 +61,7 @@ export const ChatNode = T.object({
 	...LlmSettingsFields,
 })
 
-const MESSAGE_HEIGHT_PX = 220
+const MESSAGE_HEIGHT_PX = 236
 const EMPTY_TURN: ChatNode = {
 	type: 'chat',
 	userMessage: '',
@@ -84,11 +92,17 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 			...DEFAULT_LLM_SETTINGS,
 		}
 	}
+	private vars(node: ChatNode) {
+		return llmTemplateVars([node.userMessage, node.system])
+	}
 	getBodyHeightPx(_shape: NodeShape, node: ChatNode) {
-		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node) + MESSAGE_HEIGHT_PX
+		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node) + llmVarsHeight(this.vars(node)) + MESSAGE_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape, node: ChatNode): Record<string, ShapePort> {
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
+		const modelY = baseY + NODE_ROW_HEIGHT_PX * 2.5
+		const settingsStartY = baseY + NODE_ROW_HEIGHT_PX * 3
+		const vars = this.vars(node)
 		return {
 			parent: {
 				id: 'parent',
@@ -104,6 +118,9 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 				terminal: 'end',
 				dataType: 'any',
 			},
+			model: llmModelPort(modelY),
+			...llmSettingsPorts(settingsStartY),
+			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
 			output: {
 				id: 'output',
 				x: this.getWidthPx(shape, node),
@@ -114,7 +131,7 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 		}
 	}
 	async execute(shape: NodeShape, node: ChatNode, inputs: InputValues): Promise<ExecutionResult> {
-		const text = await sendChat(this.editor, shape, node, inputs.attach as PipelineValue)
+		const text = await sendChat(this.editor, shape, node, inputs.attach as PipelineValue, inputs)
 		return { output: text ?? STOP_EXECUTION }
 	}
 	getOutputInfo(shape: NodeShape, node: ChatNode): InfoValues {
@@ -170,11 +187,14 @@ export async function sendChat(
 	editor: Editor,
 	shape: NodeShape,
 	node: ChatNode,
-	attach: PipelineValue | undefined
+	attach: PipelineValue | undefined,
+	inputs: InputValues = {}
 ): Promise<string | null> {
 	const messages = buildChatHistory(editor, shape)
 	const attachment = attach == null ? '' : String(attach)
-	const userText = node.userMessage.trim() || (attachment && isImageValue(attachment) ? 'Describe this image.' : '')
+	const vars = llmTemplateVars([node.userMessage, node.system])
+	const { text: filledMessage, warning } = fillLlmTemplate(node.userMessage, vars, inputs)
+	const userText = filledMessage.trim() || (attachment && isImageValue(attachment) ? 'Describe this image.' : '')
 	if (!userText && !attachment) {
 		updateNode<ChatNode>(editor, shape, (n) => ({ ...n, error: 'Type a message first.' }), false)
 		return null
@@ -192,20 +212,31 @@ export async function sendChat(
 		messages.push({ role: 'user', content: text })
 	}
 
+	const settings = llmEffectiveSettings(node, inputs)
 	updateNode<ChatNode>(editor, shape, (n) => ({ ...n, assistantMessage: '', error: null }))
 	try {
-		const reply = await apiChatStream({ model: node.model || undefined, messages, ...llmRequestSettings(node) }, (text) => {
-			const latest = editor.getShape<NodeShape>(shape.id)
-			if (!latest) return
-			updateNode<ChatNode>(editor, latest, (n) => ({ ...n, assistantMessage: text }))
-		})
+		const reply = await apiChatStream(
+			{
+				model: settings.model || node.model || undefined,
+				messages,
+				system: settings.system,
+				temperature: settings.temperature,
+				maxTokens: settings.maxTokens,
+				thinking: settings.thinking,
+			},
+			(text) => {
+				const latest = editor.getShape<NodeShape>(shape.id)
+				if (!latest) return
+				updateNode<ChatNode>(editor, latest, (n) => ({ ...n, assistantMessage: text }))
+			}
+		)
 		const usage = reply.usage ? formatLlmUsage(reply.usage) : ''
 		const latest = editor.getShape<NodeShape>(shape.id)
 		if (latest) {
 			updateNode<ChatNode>(editor, latest, (n) => ({
 				...n,
 				assistantMessage: reply.text,
-				lastUsage: usage || undefined,
+				lastUsage: [usage, warning].filter(Boolean).join(' · ') || undefined,
 			}), false)
 		}
 		return reply.text
@@ -226,12 +257,13 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 	])
 	const parent = inputs.parent
 	const attach = inputs.attach
+	const modelWired = useInputConnected(shape.id, 'model')
+	const vars = llmTemplateVars([node.userMessage, node.system])
 	const busy = shape.props.isOutOfDate && !node.error && node.assistantMessage === ''
 
-	const handleSend = useCallback(() => {
-		const value = attach && !Array.isArray(attach.value) ? attach.value : null
-		sendChat(editor, shape, node, value === STOP_EXECUTION ? null : (value as PipelineValue))
-	}, [editor, shape, node, attach])
+	// Run the whole node through the execution graph (not just sendChat directly),
+	// so a node wired downstream of this one's reply also runs.
+	const run = () => void startExecution(editor, new Set([shape.id]))
 
 	return (
 		<>
@@ -263,16 +295,22 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 					<span className="NodeRow-disconnected">image or text (optional)</span>
 				)}
 			</NodeRow>
-			<NodeRow>
-				<span className="NodeInputRow-label">Model</span>
-				<ModelSelect
-					className="node-model-select"
-					capability={attach ? 'vision' : 'chat'}
-					value={node.model}
-					onChange={(model) => updateNode<ChatNode>(editor, shape, (n) => ({ ...n, model }), false)}
-				/>
-			</NodeRow>
-			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
+			{modelWired ? (
+				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="model" />
+			) : (
+				<NodeRow>
+					<Port shapeId={shape.id} portId="model" />
+					<span className="NodeInputRow-label">Model</span>
+					<ModelSelect
+						className="node-model-select"
+						capability={attach ? 'vision' : 'chat'}
+						value={node.model}
+						onChange={(model) => updateNode<ChatNode>(editor, shape, (n) => ({ ...n, model }), false)}
+					/>
+				</NodeRow>
+			)}
+			<LlmSettingsPanel editor={editor} shape={shape} node={node} modelWired={modelWired} />
+			<LlmVarRows shapeId={shape.id} vars={vars} />
 			<div className="ChatNode-thread" style={{ minHeight: MESSAGE_HEIGHT_PX }}>
 				<div className="ChatNode-reply" onPointerDown={editor.markEventAsHandled}>
 					{node.error ? (
@@ -286,20 +324,19 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 				<div className="ChatNode-compose">
 					<UiTextArea
 						className="ChatNode-input NodeScroll"
-						placeholder="Message… (Ctrl+Enter to send)"
+						placeholder="Message… (Enter to send, Shift+Enter for a new line)"
 						value={node.userMessage}
 						onPointerDown={editor.markEventAsHandled}
 						onChange={(userMessage) => updateNode<ChatNode>(editor, shape, (n) => ({ ...n, userMessage }), false)}
-						onKeyDown={(e) => {
-							if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend()
-						}}
+						onSubmit={run}
+						submitOn="enter"
 					/>
 					<button
 						className="ChatNode-send"
-						title="Send (Ctrl+Enter)"
+						title="Send (Enter)"
 						disabled={busy}
 						onPointerDown={editor.markEventAsHandled}
-						onClick={handleSend}
+						onClick={run}
 					>
 						{busy ? (
 							<span>…</span>
@@ -310,6 +347,7 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 						)}
 					</button>
 				</div>
+				<div className="LlmSubmitHint">Enter to run · Shift+Enter new line</div>
 			</div>
 		</>
 	)

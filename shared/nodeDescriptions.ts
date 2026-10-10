@@ -192,6 +192,11 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'A model call with every setting on the card: endpoint, model id, key, system prompt.',
 		keywords: ['ai', 'model', 'api', 'endpoint', 'raw', 'advanced'],
 	},
+	model_source: {
+		title: 'Model provider',
+		description: 'Fetches the models a custom OpenAI-compatible URL serves and outputs the one you pick.',
+		keywords: ['ai', 'model', 'provider', 'openai-compatible', 'ollama', 'openrouter', 'fetch models'],
+	},
 	video: {
 		title: 'Video link',
 		description: 'Plays a video or YouTube link on the card and passes the link on.',

@@ -2,6 +2,7 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor, useValue } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiGenerateText } from '../../api/pipelineApi'
+import { startExecution } from '../../execution/executionState'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
@@ -12,12 +13,21 @@ import {
 import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
+import { UiTextArea } from '../../../ui'
+import { PortRow, useInputConnected, NodeTextResult } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
+	fillLlmTemplate,
+	llmEffectiveSettings,
+	llmModelPort,
 	LlmSettingsFields,
 	LlmSettingsPanel,
-	llmRequestSettings,
 	llmSettingsHeight,
+	llmSettingsPorts,
+	llmTemplateVars,
+	llmVarPorts,
+	llmVarsHeight,
+	LlmVarRows,
 } from './llmSettings'
 
 import {
@@ -41,10 +51,14 @@ export const GenerateTextNode = T.object({
 	type: T.literal('generate_text'),
 	model: T.string,
 	lastResultText: T.string.nullable(),
+	/** Used as the prompt when the "prompt" port is not wired. */
+	promptText: T.string.optional(),
 	...LlmSettingsFields,
 })
 
 const DEFAULT_PROMPT = 'Describe this image in detail.'
+const PROMPT_TEXT_PX = 88
+const RESULT_PX = 120
 
 export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode> {
 	static type = 'generate_text'
@@ -54,21 +68,36 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 	icon = <GenerateTextIcon />
 	category = categoryOf('generate_text')
 	override defaultWidthPx = 380
+	override showsOutput = true
 	resultKeys = ['lastResultText'] as const
 	getDefault(): GenerateTextNode {
 		return {
 			type: 'generate_text',
 			model: '',
 			lastResultText: null,
+			promptText: '',
 			...DEFAULT_LLM_SETTINGS,
 		}
 	}
+	private vars(node: GenerateTextNode) {
+		return llmTemplateVars([node.promptText, node.system])
+	}
 	getBodyHeightPx(_shape: NodeShape, node: GenerateTextNode) {
-		// input row + prompt row + model row (44 each) + settings + result area (88 + 8 margin)
-		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node)
+		const vars = this.vars(node)
+		// input + prompt-port + model rows, the prompt text box, settings, variables, result.
+		return (
+			NODE_ROW_HEIGHT_PX * 3 +
+			PROMPT_TEXT_PX +
+			llmSettingsHeight(node) +
+			llmVarsHeight(vars) +
+			RESULT_PX
+		)
 	}
 	getPorts(shape: NodeShape, node: GenerateTextNode): Record<string, ShapePort> {
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
+		const modelY = baseY + NODE_ROW_HEIGHT_PX * 2 + PROMPT_TEXT_PX + NODE_ROW_HEIGHT_PX * 0.5
+		const settingsStartY = baseY + NODE_ROW_HEIGHT_PX * 3 + PROMPT_TEXT_PX
+		const vars = this.vars(node)
 		return {
 			input: {
 				id: 'input',
@@ -84,6 +113,9 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 				terminal: 'end',
 				dataType: 'text',
 			},
+			...llmModelPortMap(modelY),
+			...llmSettingsPorts(settingsStartY),
+			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
 			output: {
 				id: 'output',
 				x: this.getWidthPx(shape, node),
@@ -99,20 +131,26 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 		inputs: InputValues
 	): Promise<ExecutionResult> {
 		const input = coerceToText(getInput(inputs, 'input')) || undefined
-		const prompt = getInputText(inputs, 'prompt', DEFAULT_PROMPT)
+		const promptSource = getInputText(inputs, 'prompt') || node.promptText?.trim() || DEFAULT_PROMPT
+		const vars = this.vars(node)
+		const { text: prompt, warning } = fillLlmTemplate(promptSource, vars, inputs)
+		const settings = llmEffectiveSettings(node, inputs)
 
 		const result = await apiGenerateText({
 			input,
 			prompt,
-			model: node.model || undefined,
-			...llmRequestSettings(node),
+			model: settings.model || node.model || undefined,
+			system: settings.system,
+			temperature: settings.temperature,
+			maxTokens: settings.maxTokens,
+			thinking: settings.thinking,
 		})
 
 		const usage = result.usage ? formatLlmUsage(result.usage) : ''
 		updateNode<GenerateTextNode>(this.editor, shape, (n) => ({
 			...n,
 			lastResultText: result.text,
-			lastUsage: usage || undefined,
+			lastUsage: [usage, warning].filter(Boolean).join(' · ') || undefined,
 		}))
 
 		return { output: result.text }
@@ -129,6 +167,11 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 	Component = GenerateTextNodeComponent
 }
 
+/** The `model` settings port lives on its own row, right after the prompt text box. */
+function llmModelPortMap(y: number) {
+	return { model: llmModelPort(y) }
+}
+
 function GenerateTextNodeComponent({ shape, node }: NodeComponentProps<GenerateTextNode>) {
 	const editor = useEditor()
 
@@ -141,6 +184,9 @@ function GenerateTextNodeComponent({ shape, node }: NodeComponentProps<GenerateT
 		() => getNodeInputPortValues(editor, shape.id).prompt,
 		[editor, shape.id]
 	)
+	const modelWired = useInputConnected(shape.id, 'model')
+	const vars = llmTemplateVars([node.promptText, node.system])
+	const run = () => void startExecution(editor, new Set([shape.id]))
 
 	return (
 		<>
@@ -162,34 +208,37 @@ function GenerateTextNodeComponent({ shape, node }: NodeComponentProps<GenerateT
 					<span className="NodeRow-disconnected">not connected</span>
 				)}
 			</NodeRow>
-			<NodeRow>
-				<Port shapeId={shape.id} portId="prompt" />
-				<NodePortLabel dataType="text">Prompt</NodePortLabel>
-				{promptPort ? (
-					<span className="NodeRow-connected-value">
-						{promptPort.isOutOfDate ? (
-							<NodePlaceholder />
-						) : (
-							<span title={String(promptPort.value)}>
-								{String(promptPort.value ?? '').slice(0, 20)}
-								{String(promptPort.value ?? '').length > 20 ? '...' : ''}
-							</span>
-						)}
-					</span>
-				) : (
-					<span className="NodeRow-disconnected">optional</span>
-				)}
-			</NodeRow>
-			<NodeRow>
-				<span className="NodeInputRow-label">Model</span>
-				<ModelSelect
-					className="node-model-select"
-					capability={inputPort ? 'vision' : 'chat'}
-					value={node.model}
-					onChange={(model) => updateNode<GenerateTextNode>(editor, shape, (n) => ({ ...n, model }))}
+			<PortRow shapeId={shape.id} portId="prompt" label="Prompt" dataType="text" hint="or type below" />
+			<div className="NodeField-block" style={{ height: PROMPT_TEXT_PX }}>
+				<UiTextArea
+					className="NodeField-textarea"
+					grow
+					disabled={!!promptPort}
+					placeholder={promptPort ? '(from the Prompt input)' : DEFAULT_PROMPT}
+					value={promptPort ? '' : (node.promptText ?? '')}
+					onChange={(promptText) => updateNode<GenerateTextNode>(editor, shape, (n) => ({ ...n, promptText }), false)}
+					onSubmit={run}
+					submitOn="enter"
 				/>
-			</NodeRow>
-			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
+				{!promptPort && <div className="LlmSubmitHint">Enter to run · Shift+Enter new line</div>}
+			</div>
+			{modelWired ? (
+				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="model" />
+			) : (
+				<NodeRow>
+					<Port shapeId={shape.id} portId="model" />
+					<span className="NodeInputRow-label">Model</span>
+					<ModelSelect
+						className="node-model-select"
+						capability={inputPort ? 'vision' : 'chat'}
+						value={node.model}
+						onChange={(model) => updateNode<GenerateTextNode>(editor, shape, (n) => ({ ...n, model }))}
+					/>
+				</NodeRow>
+			)}
+			<LlmSettingsPanel editor={editor} shape={shape} node={node} modelWired={modelWired} />
+			<LlmVarRows shapeId={shape.id} vars={vars} />
+			<NodeTextResult text={node.lastResultText} empty="Output appears here" height={RESULT_PX} />
 		</>
 	)
 }

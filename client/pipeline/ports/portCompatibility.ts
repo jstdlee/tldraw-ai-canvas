@@ -2,9 +2,11 @@ import { ShapePort } from './Port'
 
 /**
  * Can a value from an output of type `outputType` flow into an input of type
- * `inputType`? Mostly symmetric (same type, or either side 'any'), with one
- * one-way exception: a piece of text can be an image URL, so text → image is
- * allowed; image → text is not (an image isn't a piece of text).
+ * `inputType`? Mostly symmetric (same type, or either side 'any'), with two
+ * one-way exceptions: a piece of text can be an image URL, so text → image is
+ * allowed (image → text is not: an image isn't a piece of text); and a plain
+ * model id is text, so text → model is allowed (model → text is not: a model
+ * reference may be an ad-hoc provider, not just an id).
  */
 export function arePortDataTypesCompatible(
 	outputType: ShapePort['dataType'],
@@ -12,7 +14,8 @@ export function arePortDataTypesCompatible(
 ) {
 	if (outputType === 'any' || inputType === 'any') return true
 	if (outputType === inputType) return true
-	return outputType === 'text' && inputType === 'image'
+	if (outputType !== 'text') return false
+	return inputType === 'image' || inputType === 'model'
 }
 
 export function findFirstCompatiblePort(

@@ -14,9 +14,10 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	download: { in: ['url'], out: ['output'], fields: ['url', 'fileName'] },
 	net_tool: { in: ['target'], out: ['output'], fields: ['tool', 'target', 'option'] },
 	postgres: { in: ['input'], out: ['output'], fields: ['mode', 'sql', 'csv', 'sourceUrl'] },
-	text_ai: { in: ['input'], out: ['output'], fields: ['operation', 'option', 'instruction', 'model', 'system', 'promptOverride'] },
-	generate_text: { in: ['input', 'prompt'], out: ['output'], fields: ['model', 'system'] },
-	chat: { in: ['parent', 'attach'], out: ['output'], fields: ['userMessage', 'model', 'system'] },
+	text_ai: { in: ['input', 'model', 'system', 'params'], out: ['output'], fields: ['operation', 'option', 'instruction', 'model', 'system', 'promptOverride'] },
+	generate_text: { in: ['input', 'prompt', 'model', 'system', 'params'], out: ['output'], fields: ['model', 'system', 'promptText'] },
+	chat: { in: ['parent', 'attach', 'model', 'system', 'params'], out: ['output'], fields: ['userMessage', 'model', 'system'] },
+	model_source: { in: [], out: ['model'], fields: ['baseURL', 'keyRef', 'model', 'filter', 'kind'] },
 	summarize: { in: ['input'], out: ['output'], fields: ['focus', 'model', 'system'] },
 	jev: { in: ['context', 'question', 'input'], out: ['output', 'probs', 'final'], fields: ['kind', 'question', 'options', 'filter'] },
 	load_image: { in: [], out: ['output'], fields: ['imageUrl', 'source'] },
@@ -41,12 +42,12 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	chart: { in: ['data'], out: ['output'], fields: ['kind', 'xCol', 'yCol', 'text', 'dualScale'] },
 	database: { in: ['sql'], out: ['output', 'schema'], fields: ['sql'] },
 	openrouter: { in: [], out: ['output'], fields: ['model'] },
-	raw_model: { in: ['prompt', 'model'], out: ['output'], fields: ['url', 'model', 'system', 'temperature', 'thinking', 'maxTokens'] },
+	raw_model: { in: ['prompt', 'model'], out: ['output'], fields: ['url', 'model', 'keyRef', 'system', 'temperature', 'thinking', 'maxTokens'] },
 	video: { in: ['url'], out: ['output'], fields: ['url', 'autoplay'] },
 	file_in: { in: ['url'], out: ['output'], fields: ['source', 'url', 'asText', 'action'] },
 	url_in: { in: [], out: ['output'], fields: ['url', 'fetchBody'] },
 	sleep: { in: ['input'], out: ['output'], fields: ['ms'] },
-	image_gen: { in: ['prompt', 'image', 'model'], out: ['output', 'images'], fields: ['model', 'prompt', 'n', 'size', 'negative', 'seed'] },
+	image_gen: { in: ['prompt', 'image', 'model', 'system', 'params'], out: ['output', 'images'], fields: ['model', 'prompt', 'n', 'size', 'negative', 'seed'] },
 }
 
 export function catalogPrompt(): string {

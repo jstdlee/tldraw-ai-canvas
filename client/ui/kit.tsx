@@ -560,6 +560,8 @@ export function UiTextArea({
 	style,
 	onKeyDown,
 	onPointerDown,
+	onSubmit,
+	submitOn,
 }: {
 	value: string
 	onChange: (value: string) => void
@@ -574,6 +576,10 @@ export function UiTextArea({
 	style?: CSSProperties
 	onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void
 	onPointerDown?: (event: PointerEvent<HTMLTextAreaElement>) => void
+	/** Called when the field should run (Enter, or Ctrl/Cmd+Enter when `submitOn` is 'mod-enter'). */
+	onSubmit?: () => void
+	/** 'enter': Enter runs, Shift+Enter is a newline. 'mod-enter': only Ctrl/Cmd+Enter runs. */
+	submitOn?: 'enter' | 'mod-enter'
 }) {
 	return (
 		<textarea
@@ -592,9 +598,113 @@ export function UiTextArea({
 			onKeyDown={(event) => {
 				stopKey(event)
 				onKeyDown?.(event)
+				if (event.defaultPrevented || !onSubmit) return
+				// An IME composing a CJK/Japanese/Korean character also fires "Enter" to confirm it.
+				if (event.nativeEvent.isComposing) return
+				if (event.key !== 'Enter') return
+				if (submitOn === 'mod-enter') {
+					if (event.ctrlKey || event.metaKey) {
+						event.preventDefault()
+						onSubmit()
+					}
+					return
+				}
+				if (event.shiftKey) return
+				event.preventDefault()
+				onSubmit()
 			}}
 			onChange={(event) => onChange(event.target.value)}
 		/>
+	)
+}
+
+export interface UiSecretInputProps {
+	/** The saved ref (`secret:<id>`), or undefined/empty if no key is saved. */
+	value: string | undefined
+	onChange: (ref: string | undefined) => void
+	placeholder?: string
+	className?: string
+}
+
+async function postSecret(value: string): Promise<string | undefined> {
+	try {
+		const res = await fetch('/api/secrets', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ value }),
+		})
+		if (!res.ok) return undefined
+		const data = (await res.json()) as { ref?: string }
+		return data.ref
+	} catch {
+		return undefined
+	}
+}
+
+function deleteSecretRef(ref: string | undefined) {
+	const id = ref && /^secret:([A-Za-z0-9_-]+)$/.exec(ref)?.[1]
+	if (!id) return
+	fetch(`/api/secrets/${id}`, { method: 'DELETE' }).catch(() => {})
+}
+
+/**
+ * A key field whose value never stays on the canvas: typing a key and leaving
+ * the field posts it to the server's secret store and keeps only a `secret:<id>`
+ * reference. Once saved, shows "Key saved ••••" with Replace / Remove.
+ */
+export function UiSecretInput({ value, onChange, placeholder = 'API key (optional)', className }: UiSecretInputProps) {
+	const [editing, setEditing] = useState(false)
+	const [draft, setDraft] = useState('')
+	const hasRef = !!value && !editing
+	const save = async () => {
+		const text = draft.trim()
+		const previous = value
+		setDraft('')
+		setEditing(false)
+		if (!text) return
+		const ref = await postSecret(text)
+		if (ref) {
+			onChange(ref)
+			if (previous && previous !== ref) deleteSecretRef(previous)
+		}
+	}
+	if (hasRef) {
+		return (
+			<div className={classNames('UiSecretInput', className)}>
+				<span className="UiSecretInput-saved">Key saved ••••</span>
+				<UiButton size="sm" variant="low" label="Replace" onClick={() => setEditing(true)} />
+				<UiButton
+					size="sm"
+					variant="low"
+					label="Remove"
+					onClick={() => {
+						deleteSecretRef(value)
+						onChange(undefined)
+					}}
+				/>
+			</div>
+		)
+	}
+	return (
+		<div className={classNames('UiSecretInput', className)}>
+			<input
+				className="UiInput"
+				type="password"
+				autoComplete="off"
+				placeholder={placeholder}
+				value={draft}
+				onPointerDown={stopPointer}
+				onChange={(event) => setDraft(event.target.value)}
+				onKeyDown={(event) => {
+					stopKey(event)
+					if (event.key === 'Enter') event.currentTarget.blur()
+				}}
+				onBlur={() => void save()}
+			/>
+			{editing && (
+				<UiButton size="sm" variant="low" label="Cancel" onClick={() => setEditing(false)} />
+			)}
+		</div>
 	)
 }
 

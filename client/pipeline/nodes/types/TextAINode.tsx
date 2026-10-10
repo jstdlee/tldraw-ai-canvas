@@ -2,6 +2,7 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiGenerateText } from '../../api/pipelineApi'
+import { startExecution } from '../../execution/executionState'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
@@ -9,16 +10,23 @@ import {
 	NODE_ROW_HEADER_GAP_PX,
 	NODE_ROW_HEIGHT_PX,
 } from '../../constants'
-import { ShapePort } from '../../ports/Port'
+import { Port, ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiTextArea, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect } from './fields'
+import { PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
+	fillLlmTemplate,
+	llmEffectiveSettings,
+	llmModelPort,
 	LlmSettingsFields,
 	LlmSettingsPanel,
-	llmRequestSettings,
 	llmSettingsHeight,
+	llmSettingsPorts,
+	llmTemplateVars,
+	llmVarPorts,
+	llmVarsHeight,
+	LlmVarRows,
 } from './llmSettings'
 import {
 	areAnyInputsOutOfDate,
@@ -81,7 +89,7 @@ export const TextAINode = T.object({
 	...LlmSettingsFields,
 })
 
-const OPTION_HEIGHT_PX = 64
+const OPTION_HEIGHT_PX = 80
 const RESULT_HEIGHT_PX = 120
 
 export function buildTextAIPrompt(node: Pick<TextAINode, 'operation' | 'option' | 'instruction'>) {
@@ -113,19 +121,30 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 			...DEFAULT_LLM_SETTINGS,
 		}
 	}
+	private vars(node: TextAINode) {
+		return llmTemplateVars([node.promptOverride ?? buildTextAIPrompt(node), node.instruction, node.system])
+	}
 	getBodyHeightPx(_shape: NodeShape, node: TextAINode) {
 		// The advanced job-prompt editor adds a block when settings are open.
-		return NODE_ROW_HEIGHT_PX * 3 + OPTION_HEIGHT_PX + llmSettingsHeight(node) + (node.showSettings ? 140 : 0)
+		return (
+			NODE_ROW_HEIGHT_PX * 3 +
+			OPTION_HEIGHT_PX +
+			llmSettingsHeight(node) +
+			llmVarsHeight(this.vars(node)) +
+			(node.showSettings ? 140 : 0)
+		)
 	}
 	getPorts(shape: NodeShape, node: TextAINode): Record<string, ShapePort> {
+		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
+		// Rows above the model row: input, job dropdown, then the option/instruction block.
+		const modelY = baseY + NODE_ROW_HEIGHT_PX * 2.5 + OPTION_HEIGHT_PX
+		const settingsStartY = baseY + NODE_ROW_HEIGHT_PX * 3 + OPTION_HEIGHT_PX
+		const vars = this.vars(node)
 		return {
-			input: {
-				id: 'input',
-				x: 0,
-				y: NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + NODE_ROW_HEIGHT_PX * 0.5,
-				terminal: 'end',
-				dataType: 'any',
-			},
+			input: { id: 'input', x: 0, y: baseY + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'any' },
+			model: llmModelPort(modelY),
+			...llmSettingsPorts(settingsStartY),
+			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
 			output: {
 				id: 'output',
 				x: this.getWidthPx(shape, node),
@@ -137,19 +156,25 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 	}
 	async execute(shape: NodeShape, node: TextAINode, inputs: InputValues): Promise<ExecutionResult> {
 		const input = coerceToText(getInput(inputs, 'input'))
-		const jobPrompt = node.promptOverride?.trim() || buildTextAIPrompt(node)
+		const jobPromptSource = node.promptOverride?.trim() || buildTextAIPrompt(node)
+		const vars = this.vars(node)
+		const { text: jobPrompt, warning } = fillLlmTemplate(jobPromptSource, vars, inputs)
+		const settings = llmEffectiveSettings(node, inputs)
 		try {
 			const result = await apiGenerateText({
 				input: input || undefined,
 				prompt: input ? jobPrompt : `${jobPrompt}\n\n(No input was given.)`,
-				model: node.model || undefined,
-				...llmRequestSettings(node),
+				model: settings.model || node.model || undefined,
+				system: settings.system,
+				temperature: settings.temperature,
+				maxTokens: settings.maxTokens,
+				thinking: settings.thinking,
 			})
 			const usage = result.usage ? formatLlmUsage(result.usage) : ''
 			updateNode<TextAINode>(this.editor, shape, (n) => ({
 				...n,
 				lastResultText: result.text,
-				lastUsage: usage || undefined,
+				lastUsage: [usage, warning].filter(Boolean).join(' · ') || undefined,
 				error: null,
 			}))
 			return { output: result.text }
@@ -173,8 +198,11 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 	const editor = useEditor()
 	const op = TEXT_AI_OPERATIONS.find((o) => o.id === node.operation) ?? TEXT_AI_OPERATIONS[0]
+	const modelWired = useInputConnected(shape.id, 'model')
+	const vars = llmTemplateVars([node.promptOverride ?? buildTextAIPrompt(node), node.instruction, node.system])
 	const set = (patch: Partial<TextAINode>, outOfDate = true) =>
 		updateNode<TextAINode>(editor, shape, (n) => ({ ...n, ...patch }), outOfDate)
+	const run = () => void startExecution(editor, new Set([shape.id]))
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="Input" dataType="any" hint="text or image" />
@@ -198,36 +226,50 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 				style={op.id === 'custom' ? { minHeight: OPTION_HEIGHT_PX } : { height: OPTION_HEIGHT_PX }}
 			>
 				{op.id === 'custom' ? (
-					<UiTextArea
-						className="NodeField-textarea"
-						grow
-						placeholder="Instruction, e.g. Turn this into a tweet"
-						value={node.instruction}
-						onChange={(instruction) => set({ instruction }, false)}
-					/>
+					<>
+						<UiTextArea
+							className="NodeField-textarea"
+							grow
+							placeholder="Instruction, e.g. Turn this into a tweet"
+							value={node.instruction}
+							onChange={(instruction) => set({ instruction }, false)}
+							onSubmit={run}
+							submitOn="enter"
+						/>
+						<div className="LlmSubmitHint">Enter to run · Shift+Enter new line</div>
+					</>
 				) : (
 					<>
 						{op.option && (
 							<UiTextInput placeholder={op.option} value={node.option} onChange={(option) => set({ option }, false)} />
 						)}
 						<UiTextInput
-							placeholder="Extra instruction (optional)"
+							placeholder="Extra instruction (optional, Enter to run)"
 							value={node.instruction}
 							onChange={(instruction) => set({ instruction }, false)}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter' && !e.nativeEvent.isComposing) run()
+							}}
 						/>
 					</>
 				)}
 			</div>
-			<NodeRow>
-				<span className="NodeInputRow-label">Model</span>
-				<ModelSelect
-					className="node-model-select"
-					capability="chat"
-					value={node.model}
-					onChange={(model) => set({ model }, false)}
-				/>
-			</NodeRow>
-			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
+			{modelWired ? (
+				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="model" />
+			) : (
+				<NodeRow>
+					<Port shapeId={shape.id} portId="model" />
+					<span className="NodeInputRow-label">Model</span>
+					<ModelSelect
+						className="node-model-select"
+						capability="chat"
+						value={node.model}
+						onChange={(model) => set({ model }, false)}
+					/>
+				</NodeRow>
+			)}
+			<LlmSettingsPanel editor={editor} shape={shape} node={node} modelWired={modelWired} />
+			<LlmVarRows shapeId={shape.id} vars={vars} />
 			{node.showSettings && (
 				<div className="NodeField-block">
 					<span className="NodeField-label">

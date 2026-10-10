@@ -18,6 +18,11 @@ describe('arePortDataTypesCompatible', () => {
 		expect(arePortDataTypesCompatible('image', 'text')).toBe(false)
 	})
 
+	it('allows a text output into a model input, one way only', () => {
+		expect(arePortDataTypesCompatible('text', 'model')).toBe(true)
+		expect(arePortDataTypesCompatible('model', 'text')).toBe(false)
+	})
+
 	it('rejects other mismatches', () => {
 		expect(arePortDataTypesCompatible('number', 'text')).toBe(false)
 		expect(arePortDataTypesCompatible('text', 'number')).toBe(false)

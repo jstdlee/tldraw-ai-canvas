@@ -171,6 +171,13 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 	Component = JevNodeComponent
 }
 
+/** `cloudflare/@cf/cloudflare/clef-flash` → "Clef Flash" (and the same for the plain "clef" model). */
+function formatJevSource(source: string): string {
+	if (source.endsWith('@cf/cloudflare/clef-flash')) return 'Clef Flash'
+	if (source.endsWith('@cf/cloudflare/clef')) return 'Clef'
+	return source
+}
+
 function Bars({ result }: { result: JevResult }) {
 	const entries = Object.entries(result.probabilities).sort((a, b) => b[1] - a[1])
 	return (
@@ -186,7 +193,7 @@ function Bars({ result }: { result: JevResult }) {
 					<span className="JevBar-value">{(p * 100).toFixed(p < 0.1 ? 1 : 0)}%</span>
 				</div>
 			))}
-			<div className="JevBars-source">by {result.source}</div>
+			<div className="JevBars-source">by {formatJevSource(result.source)}</div>
 		</div>
 	)
 }

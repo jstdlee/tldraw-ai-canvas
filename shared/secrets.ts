@@ -22,12 +22,28 @@ export function stripSecrets<T>(value: T, depth = 0): T {
 	return out as T
 }
 
-/** `env:NAME` reads NAME from the environment. Anything else is used as typed. */
-export function resolveSecret(value: string | undefined, env: Record<string, string | undefined>): string {
+/**
+ * `env:NAME` reads NAME from the environment. `secret:<id>` reads a value saved
+ * through `POST /api/secrets` (resolved with `getSecret`, the server's secret
+ * store lookup). Anything else is used as typed.
+ */
+export function resolveSecret(
+	value: string | undefined,
+	env: Record<string, string | undefined>,
+	getSecret?: (id: string) => string | undefined
+): string {
 	const text = (value ?? '').trim()
-	const match = /^env:([A-Za-z_][A-Za-z0-9_]*)$/.exec(text)
-	if (!match) return text
-	const found = env[match[1]]
-	if (!found) throw new Error(`Environment variable ${match[1]} is not set on the server`)
-	return found
+	const envMatch = /^env:([A-Za-z_][A-Za-z0-9_]*)$/.exec(text)
+	if (envMatch) {
+		const found = env[envMatch[1]]
+		if (!found) throw new Error(`Environment variable ${envMatch[1]} is not set on the server`)
+		return found
+	}
+	const secretMatch = /^secret:([A-Za-z0-9_-]+)$/.exec(text)
+	if (secretMatch) {
+		const found = getSecret?.(secretMatch[1])
+		if (!found) throw new Error('Saved key was not found. Re-enter it.')
+		return found
+	}
+	return text
 }

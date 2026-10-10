@@ -1123,6 +1123,42 @@ body {
 	color: var(--tl-color-danger);
 }
 
+/* Model provider card */
+
+.ModelSourceNode-presets {
+	max-width: 7.5em;
+	flex: 0 0 auto;
+}
+
+.ModelSourceNode-meta {
+	margin-left: auto;
+	color: var(--tl-color-text-3);
+	font-size: 0.85em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ModelSourceNode-current {
+	display: block;
+	line-height: 2;
+	padding: 0 var(--tl-space-4);
+	font-size: 0.95em;
+	font-weight: 500;
+	color: var(--tl-color-text-1);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/** Shown under a textarea that runs the node on Enter (Chat, Generate text, AI text). */
+.LlmSubmitHint {
+	padding: 0 var(--tl-space-4);
+	color: var(--tl-color-text-3);
+	font-size: 0.75em;
+	pointer-events: none;
+}
+
 .ImagePipelineSidebar-hint {
 	font-weight: 400;
 	font-size: 0.74em;

@@ -13,6 +13,19 @@ import { NodeShape } from '../NodeShapeUtil'
 import { IconChevronDown, IconChevronRight, IconSparkle, UiButton, UiEmpty, UiNumberInput, UiSegmented, UiTextArea, UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect, useInputConnected } from './fields'
 import {
+	DEFAULT_LLM_SETTINGS,
+	fillLlmTemplate,
+	llmSettingsHeight,
+	llmSettingsPorts,
+	LlmSettingsFields,
+	LlmSettingsPanel,
+	llmTemplateVars,
+	llmVarPorts,
+	llmVarsHeight,
+	LlmVarRows,
+	parseLlmParams,
+} from './llmSettings'
+import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
 	getInputText,
@@ -24,6 +37,12 @@ import {
 	NodeRow,
 	updateNode,
 } from './shared'
+
+// Image generation never reports token usage, and this node already has its own
+// (nullable, no-default) `lastUsage` field from before WP10: keep that field and
+// take only the other llmSettings fields/defaults, so old canvases keep loading.
+const { lastUsage: _llmLastUsageField, ...llmFieldsForImageGen } = LlmSettingsFields
+const { lastUsage: _llmLastUsageDefault, ...defaultLlmSettingsForImageGen } = DEFAULT_LLM_SETTINGS
 
 const ROW = NODE_ROW_HEIGHT_PX
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
@@ -69,6 +88,7 @@ export const ImageGenNode = T.object({
 	images: T.string,
 	lastUsage: T.string.nullable(),
 	error: T.string.nullable(),
+	...llmFieldsForImageGen,
 })
 
 function parseImages(node: ImageGenNode): string[] {
@@ -105,42 +125,54 @@ export class ImageGenNodeDefinition extends NodeDefinition<ImageGenNode> {
 			images: '',
 			lastUsage: null,
 			error: null,
+			...defaultLlmSettingsForImageGen,
 		}
 	}
+	private vars(node: ImageGenNode) {
+		return llmTemplateVars([node.prompt])
+	}
 	getBodyHeightPx(_shape: NodeShape, node: ImageGenNode) {
-		// Model, prompt box, count/size, Ref., More settings, then the results area.
+		// Model, prompt box, count/size, Ref., More settings, settings panel, variables, then results.
 		// The error is not shown here: the card's own error banner already covers it.
 		const results = parseImages(node).length ? GRID_AREA_PX : EMPTY_RESULTS_PX
 		const moreSettings = node.moreOpen ? MORE_SETTINGS_OPEN_PX : MORE_SETTINGS_CLOSED_PX
-		return ROW * 3 + PROMPT_AREA_PX + moreSettings + results
+		return ROW * 3 + PROMPT_AREA_PX + moreSettings + llmSettingsHeight(node) + llmVarsHeight(this.vars(node)) + results
 	}
 	getPorts(shape: NodeShape, node: ImageGenNode): Record<string, ShapePort> {
 		const width = this.getWidthPx(shape, node)
+		const moreSettings = node.moreOpen ? MORE_SETTINGS_OPEN_PX : MORE_SETTINGS_CLOSED_PX
+		const settingsStartY = REF_TOP + ROW + moreSettings
+		const vars = this.vars(node)
 		return {
-			model: { id: 'model', x: 0, y: MODEL_ROW_Y, terminal: 'end', dataType: 'text' },
+			model: { id: 'model', x: 0, y: MODEL_ROW_Y, terminal: 'end', dataType: 'model' },
 			prompt: { id: 'prompt', x: 0, y: PROMPT_PORT_Y, terminal: 'end', dataType: 'text' },
 			image: { id: 'image', x: 0, y: IMAGE_PORT_Y, terminal: 'end', dataType: 'image' },
+			...llmSettingsPorts(settingsStartY),
+			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
 			output: { id: 'output', x: width, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'image' },
 			images: { id: 'images', x: width, y: NODE_HEADER_HEIGHT_PX / 2 + 20, terminal: 'start', dataType: 'text' },
 		}
 	}
 	async execute(shape: NodeShape, node: ImageGenNode, inputs: InputValues): Promise<ExecutionResult> {
 		try {
-			const prompt = getInputText(inputs, 'prompt') || node.prompt
+			const vars = this.vars(node)
+			const promptSource = getInputText(inputs, 'prompt') || node.prompt
+			const { text: prompt } = fillLlmTemplate(promptSource, vars, inputs)
 			if (!prompt.trim()) throw new Error('Write a prompt first')
 			const modelOverride = getInputText(inputs, 'model').trim()
 			const model = modelOverride || node.model || undefined
 			const imageFromPort = getInputText(inputs, 'image').trim()
 			const referenceSource = imageFromPort || node.referenceImage.trim()
 			const referenceImage = referenceSource ? await toImageUrl(referenceSource) : undefined
+			const params = parseLlmParams(getInputText(inputs, 'params'))
 			const result = await apiGenerateImage({
 				model,
 				prompt,
-				n: Math.max(1, Math.min(8, node.n || 1)),
-				size: node.size,
+				n: Math.max(1, Math.min(8, params.n ?? node.n ?? 1)),
+				size: params.size ?? node.size,
 				images: referenceImage ? [referenceImage] : undefined,
 				negative: node.negative.trim() || undefined,
-				seed: node.seed ?? undefined,
+				seed: params.seed ?? node.seed ?? undefined,
 			})
 			if (!result.images.length) throw new Error('The model did not return an image')
 			updateNode<ImageGenNode>(this.editor, shape, (n) => ({ ...n, images: JSON.stringify(result.images), error: null }))
@@ -185,7 +217,7 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 	return (
 		<>
 			{modelWired ? (
-				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="text" />
+				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="model" />
 			) : (
 				<NodeRow>
 					<span className="NodeInputRow-label">Model</span>
@@ -245,6 +277,8 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 					</div>
 				)}
 			</div>
+			<LlmSettingsPanel editor={editor} shape={shape} node={node} modelWired={modelWired} />
+			<LlmVarRows shapeId={shape.id} vars={llmTemplateVars([node.prompt])} />
 			<div className="ImageGenNode-grid NodeScroll" style={{ height: resultsHeight }} onPointerDown={stopEvent}>
 				{images.length ? (
 					<div className={`ImageGenNode-tiles${images.length > 1 ? ' is-grid' : ''}`}>

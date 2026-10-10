@@ -384,6 +384,29 @@ div.UiSection-title {
 	cursor: default;
 }
 
+.UiSecretInput {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	min-width: 0;
+	flex: 1;
+}
+
+.UiSecretInput-saved {
+	flex: 1;
+	min-width: 0;
+	color: var(--tl-color-text-3);
+	font-variant-numeric: tabular-nums;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.UiSecretInput input.UiInput {
+	flex: 1;
+	min-width: 0;
+}
+
 .UiChip {
 	display: inline-flex;
 	align-items: center;

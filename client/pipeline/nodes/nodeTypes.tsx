@@ -38,6 +38,7 @@ import { ChartNodeDefinition, TableNodeDefinition } from './types/DataNodes'
 import { DatabaseNodeDefinition } from './types/DatabaseNode'
 import { FileInNodeDefinition, UrlInNodeDefinition } from './types/InputNodes'
 import { ImageGenNodeDefinition } from './types/ImageGenNode'
+import { ModelSourceNodeDefinition } from './types/ModelSourceNode'
 import { RawModelNodeDefinition } from './types/RawModelNode'
 import { OpenRouterNodeDefinition, SleepNodeDefinition, VideoNodeDefinition } from './types/ToolNodes'
 import {
@@ -62,6 +63,7 @@ export const NodeDefinitions = {
 	text_tool: TextToolNodeDefinition,
 	generate_text: GenerateTextNodeDefinition,
 	chat: ChatNodeDefinition,
+	model_source: ModelSourceNodeDefinition,
 	prompt_concat: PromptConcatNodeDefinition,
 	// Image (runs in the browser)
 	crop: CropNodeDefinition,

@@ -282,6 +282,14 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Say hello in one line.' } },
 		{ id: 'b', type: 'raw_model', x: 460, y: 0, props: { url: 'http://127.0.0.1:11434/v1', model: 'llama3.2' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'prompt' }]),
+	step('model-provider', 'Wire a custom model in', 'Model provider fetches models from any OpenAI-compatible URL. Its output wires into another card’s Model input.', [
+		{ id: 'a', type: 'model_source', x: 0, y: 0, props: { baseURL: 'http://127.0.0.1:11434/v1', model: 'llama3.2' } },
+		{ id: 'b', type: 'prompt', x: 0, y: 220, props: { text: 'Say hello in one line.' } },
+		{ id: 'c', type: 'generate_text', x: 460, y: 0 },
+	], [
+		{ from: 'a', fromPort: 'model', to: 'c', toPort: 'model' },
+		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'prompt' },
+	]),
 	step('openrouter-free', 'OpenRouter free model', 'Play loads the free model list and writes the first id.', [
 		{ id: 'a', type: 'openrouter', x: 0, y: 0 },
 		{ id: 'b', type: 'text_tool', x: 460, y: 0, props: { op: 'trim' } },

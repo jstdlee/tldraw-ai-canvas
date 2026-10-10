@@ -2,12 +2,15 @@ import { T, useEditor } from 'tldraw'
 import type { LlmUsage } from '../../../../shared/llmUsage'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { categoryOf } from '../../../../shared/nodeGroups'
+import { parseModelValue } from '../../../../shared/modelRef'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiTextArea, UiTextInput } from '../../../ui'
+import { UiSecretInput, UiTextArea, UiTextInput } from '../../../ui'
+import { apiSaveSecret } from '../../api/pipelineApi'
 import { PortRow, stopEvent, NodeSelect } from './fields'
+import { fillLlmTemplate, llmTemplateVars, llmVarPorts, llmVarsHeight, LlmVarRows } from './llmSettings'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -34,7 +37,10 @@ export const RawModelNode = T.object({
 	type: T.literal('raw_model'),
 	url: T.string,
 	model: T.string,
+	/** Legacy: a key typed straight into the node. Moved to the server's secret store on first run. */
 	apiKey: T.string,
+	/** `secret:<id>` from the server's secret store, or `env:NAME`. */
+	keyRef: T.string.optional(),
 	system: T.string,
 	/** Empty means the model's default. */
 	temperature: T.string,
@@ -72,32 +78,53 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 	override getWidthPx() {
 		return WIDTH
 	}
+	private vars(node: RawModelNode) {
+		return llmTemplateVars([node.system])
+	}
 	getBodyHeightPx(_shape: NodeShape, node: RawModelNode) {
 		// Rows: prompt, model, URL, model id, key, temp, max tokens, think = 8, plus the
-		// system-prompt text box (72) and an error row when set.
-		return NODE_ROW_HEIGHT_PX * 8 + 72 + (node.error ? NODE_ROW_HEIGHT_PX : 0)
+		// system-prompt text box (72), the {{var}} rows, and an error row when set.
+		return NODE_ROW_HEIGHT_PX * 8 + 72 + llmVarsHeight(this.vars(node)) + (node.error ? NODE_ROW_HEIGHT_PX : 0)
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(_shape: NodeShape, node: RawModelNode): Record<string, ShapePort> {
+		const vars = this.vars(node)
 		return {
 			prompt: { id: 'prompt', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'text' },
-			model: { id: 'model', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 1.5, terminal: 'end', dataType: 'text' },
+			model: { id: 'model', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 1.5, terminal: 'end', dataType: 'model' },
+			...llmVarPorts(vars, BASE_Y + NODE_ROW_HEIGHT_PX * 8 + 72),
 			output: { id: 'output', x: WIDTH, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}
 	async execute(shape: NodeShape, node: RawModelNode, inputs: InputValues): Promise<ExecutionResult> {
 		try {
 			const prompt = getInputText(inputs, 'prompt')
-			const model = getInputText(inputs, 'model').trim() || node.model.trim()
 			if (!prompt.trim()) throw new Error('Connect a prompt')
+			const vars = this.vars(node)
+			const { text: system, warning } = fillLlmTemplate(node.system, vars, inputs)
+
+			// An old canvas may still carry a key typed straight into the node: move it
+			// to the server's secret store the first time this node runs.
+			let keyRef = node.keyRef
+			if (!keyRef && node.apiKey) {
+				keyRef = await apiSaveSecret(node.apiKey)
+				updateNode<RawModelNode>(this.editor, shape, (n) => ({ ...n, keyRef, apiKey: '' }), false)
+			}
+
+			const wiredModel = getInputText(inputs, 'model').trim()
+			const parsed = parseModelValue(wiredModel || node.model)
+			const url = parsed.adhoc?.baseURL || node.url
+			const model = parsed.adhoc?.model || parsed.key || ''
 			if (!model) throw new Error('Set a model id, or wire one in')
+			if (parsed.adhoc?.keyRef) keyRef = parsed.adhoc.keyRef
+
 			const response = await fetch('/api/raw-model', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					url: node.url,
+					url,
 					model,
-					apiKey: node.apiKey || undefined,
-					system: node.system || undefined,
+					keyRef: keyRef || undefined,
+					system: system || undefined,
 					temperature: node.temperature === '' ? undefined : Number(node.temperature),
 					thinking: node.thinking || undefined,
 					maxTokens: node.maxTokens === '' ? undefined : Number(node.maxTokens),
@@ -108,7 +135,7 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 			if (!response.ok) throw new Error(payload.error || response.statusText)
 			const text = payload.text ?? ''
 			const usage = payload.usage ? formatLlmUsage(payload.usage) : null
-			updateNode<RawModelNode>(this.editor, shape, (n) => ({ ...n, lastText: text, lastUsage: usage, error: null }), false)
+			updateNode<RawModelNode>(this.editor, shape, (n) => ({ ...n, lastText: text, lastUsage: [usage, warning].filter(Boolean).join(' · ') || null, error: null }), false)
 			return { output: text }
 		} catch (error) {
 			updateNode<RawModelNode>(this.editor, shape, (n) => ({ ...n, error: (error as Error).message }), false)
@@ -134,8 +161,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 	const editor = useEditor()
+	const vars = llmTemplateVars([node.system])
 	const set = (patch: Partial<RawModelNode>) => updateNode<RawModelNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
-	const text = (key: 'url' | 'model' | 'apiKey' | 'temperature' | 'maxTokens', placeholder: string, type = 'text') => (
+	const text = (key: 'url' | 'model' | 'temperature' | 'maxTokens', placeholder: string, type = 'text') => (
 		<UiTextInput
 			type={type}
 			inputMode={type === 'number' ? 'decimal' : 'text'}
@@ -148,10 +176,12 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="prompt" label="Prompt" dataType="text" />
-			<PortRow shapeId={shape.id} portId="model" label="Model id" dataType="text" hint="or type below" />
+			<PortRow shapeId={shape.id} portId="model" label="Model id" dataType="model" hint="or type below" />
 			<Field label="URL">{text('url', 'https://api.openai.com/v1')}</Field>
 			<Field label="Model">{text('model', 'model id, or wire one')}</Field>
-			<Field label="Key">{text('apiKey', 'optional', 'password')}</Field>
+			<Field label="Key">
+				<UiSecretInput value={node.keyRef} onChange={(keyRef) => set({ keyRef })} placeholder="optional" />
+			</Field>
 			<div className="NodeGrow" style={{ minHeight: 72 }}>
 				<UiTextArea
 					className="NodeField-textarea"
@@ -172,6 +202,7 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 					<option value="high">high</option>
 				</NodeSelect>
 			</Field>
+			<LlmVarRows shapeId={shape.id} vars={vars} />
 			{node.error && (
 				<NodeRow>
 					<span className="NodeStatus is-error">{node.error}</span>

@@ -219,3 +219,16 @@ export function apiJev(params: {
 export function apiNetTool(params: { tool: string; target: string; option?: string }) {
 	return postJson<{ output: string; ms: number }>('/api/nettool', params)
 }
+
+/** Save a key to the server's secret store; the node only ever keeps the returned ref. */
+export async function apiSaveSecret(value: string): Promise<string> {
+	return (await postJson<{ ref: string }>('/api/secrets', { value })).ref
+}
+
+/** List the models a provider (saved or ad-hoc) serves, e.g. for the Model provider card. */
+export function apiProviderModels(provider: { kind: string; baseURL?: string; keyRef?: string; accountId?: string }) {
+	return postJson<{ models: { id: string; label?: string; vision?: boolean; image?: boolean }[] }>(
+		'/api/providers/models',
+		{ provider: { id: 'adhoc', name: 'adhoc', enabled: true, ...provider } }
+	)
+}

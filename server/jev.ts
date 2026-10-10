@@ -1,6 +1,6 @@
 import { generateText } from 'ai'
 import { cloudflareBase } from '../shared/aiConfig'
-import { ConfigError, resolveModel } from './config'
+import { ConfigError, resolveModelRef } from './config'
 import { getLanguageModel } from './llm'
 
 /**
@@ -55,7 +55,7 @@ export async function decide(req: JevRequest): Promise<JevResult> {
 	const levels = (req.levels ?? []).map((l) => l.trim()).filter(Boolean)
 	if (req.type === 'score' && levels.length < 2) throw new ConfigError('A score needs at least 2 levels (worst first)')
 
-	const { model, provider } = resolveModel(req.model, 'jev')
+	const { model, provider } = resolveModelRef(req.model, 'jev')
 	if (provider.kind === 'systemone') return systemOne(provider.baseURL, provider.apiKey, model.model, req, options, levels)
 	if (provider.kind === 'cloudflare' && model.model.startsWith('@cf/cloudflare/clef')) {
 		if (!provider.accountId) throw new ConfigError(`Provider "${provider.name}" needs a Cloudflare account id.`)

@@ -42,6 +42,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	raw_model: 'llm',
 	jev: 'llm',
 	openrouter: 'llm',
+	model_source: 'llm',
 	// Image
 	crop: 'image',
 	image_resize: 'image',

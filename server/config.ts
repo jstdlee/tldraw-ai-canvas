@@ -12,6 +12,9 @@ import {
 	PublicAIConfig,
 	PublicProviderConfig,
 } from '../shared/aiConfig'
+import { parseModelValue } from '../shared/modelRef'
+import { resolveSecret } from '../shared/secrets'
+import { getSecretValue } from './secretsStore'
 
 /** All runtime data (config, generated images) lives here. Never committed. */
 export const DATA_DIR = resolve(process.env.DATA_DIR ?? join(process.cwd(), 'data'))
@@ -147,4 +150,34 @@ export function resolveModel(
 		)
 	}
 	return { model, provider: getProvider(model.providerId) }
+}
+
+/**
+ * Resolve a model field that may be a configured model key, or an ad-hoc
+ * OpenAI-compatible provider from a "Model provider" card (`{"kind":"adhoc",…}`).
+ * The ad-hoc provider never holds a key, only a `keyRef` resolved here.
+ */
+export function resolveModelRef(
+	ref: string | undefined | null,
+	capability: ModelCapability
+): { model: ModelConfig; provider: ProviderConfig } {
+	const parsed = parseModelValue(ref)
+	if (parsed.adhoc) {
+		const { baseURL, model, keyRef } = parsed.adhoc
+		if (!/^https?:\/\//.test(baseURL)) {
+			throw new ConfigError('Model provider: the base URL must start with http:// or https://')
+		}
+		if (!model) throw new ConfigError('Model provider: no model was chosen')
+		const apiKey = keyRef ? resolveSecret(keyRef, process.env, getSecretValue) : undefined
+		const provider: ProviderConfig = { id: 'adhoc', name: 'Model provider', kind: 'openai-compatible', baseURL, apiKey, enabled: true }
+		const modelConfig: ModelConfig = {
+			key: `adhoc/${model}`,
+			providerId: 'adhoc',
+			model,
+			label: model,
+			capabilities: [capability],
+		}
+		return { model: modelConfig, provider }
+	}
+	return resolveModel(parsed.key, capability)
 }

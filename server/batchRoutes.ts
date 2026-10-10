@@ -8,6 +8,7 @@ import { buildToolCommand } from '../shared/localTool'
 import { normalizeLlmUsage } from '../shared/llmUsage'
 import { resolveSecret, stripSecrets } from '../shared/secrets'
 import { freeModels, modelsFromPayload } from '../shared/modelPick'
+import { getSecretValue } from './secretsStore'
 
 const MAX_STDIN = 1024 * 1024 // 1 MiB typed into a node
 const MAX_OUT = 1024 * 1024 // 1 MiB back to the canvas
@@ -120,19 +121,23 @@ export function registerBatchRoutes(app: Hono) {
 		const body = (await c.req.json()) as {
 			url?: string
 			model?: string
+			/** `secret:<id>` from the saved-key store, or `env:NAME`. */
+			keyRef?: string
+			/** Older name for `keyRef`, kept so saved canvases still work. */
 			keyName?: string
 			system?: string
 			prompt?: string
 			temperature?: number
 			thinking?: string
 			maxTokens?: number
+			/** Legacy: a key typed straight into the node. New canvases never send this. */
 			apiKey?: string
 		}
 		const base = (body.url ?? '').trim().replace(/\/$/, '')
 		if (!/^https?:\/\//.test(base)) throw new Error('URL must start with http:// or https://')
 		const model = (body.model ?? '').trim()
 		if (!model) throw new Error('Set a model id')
-		const key = (body.apiKey ?? '').trim() || resolveSecret(body.keyName, process.env)
+		const key = (body.apiKey ?? '').trim() || resolveSecret(body.keyRef ?? body.keyName, process.env, getSecretValue)
 		const endpoint = /\/(chat\/completions|completions|messages)$/.test(base) ? base : `${base}/chat/completions`
 		const thinking = body.thinking && body.thinking !== 'off' ? body.thinking : undefined
 		const payload: Record<string, unknown> = {

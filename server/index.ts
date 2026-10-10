@@ -15,9 +15,12 @@ import {
 	loadConfig,
 	mergeClientConfig,
 	resolveModel,
+	resolveModelRef,
 	saveConfig,
 	toPublicConfig,
 } from './config'
+import { createSecret, deleteSecret, getSecretValue } from './secretsStore'
+import { resolveSecret } from '../shared/secrets'
 import { importRemoteImage, probeImageUrl, readImage, resolveImage, saveImage, toDataUrl } from './images'
 import { generateImage, ImageGenParams } from './imageGen'
 import { isValidFileId, MAX_FILE_BYTES, readFile, saveFile } from './files'
@@ -89,13 +92,27 @@ app.put('/api/config', async (c) => {
 /** List the models a (possibly unsaved) provider serves. */
 app.post('/api/providers/models', async (c) => {
 	const body = (await c.req.json()) as {
-		provider: PublicAIConfig['providers'][number] & { apiKey?: string }
+		provider: PublicAIConfig['providers'][number] & { apiKey?: string; keyRef?: string }
 	}
 	const stored = loadConfig().providers.find((p) => p.id === body.provider.id)
-	const { hasApiKey: _h, ...provider } = body.provider
-	const apiKey = provider.apiKey || stored?.apiKey
+	const { hasApiKey: _h, keyRef, ...provider } = body.provider
+	const apiKey = provider.apiKey || (keyRef ? resolveSecret(keyRef, process.env, getSecretValue) : undefined) || stored?.apiKey
 	const models = await listProviderModels({ ...provider, apiKey })
 	return c.json({ models })
+})
+
+// --- Secrets: keys saved from a node never stay on the canvas ---------------
+
+app.post('/api/secrets', async (c) => {
+	const body = (await c.req.json()) as { value?: string }
+	const value = (body.value ?? '').trim()
+	if (!value) throw new ConfigError('value is required')
+	return c.json({ ref: `secret:${createSecret(value)}` })
+})
+
+app.delete('/api/secrets/:id', (c) => {
+	deleteSecret(c.req.param('id'))
+	return c.json({ ok: true })
 })
 
 /** Live model lists from every enabled provider (cached 60 s), for the model dropdowns. */
@@ -222,7 +239,7 @@ app.post('/api/chat', async (c) => {
 		thinking?: string
 	}
 	const messages = await inlineImages(body.messages)
-	const { model, provider } = resolveModel(body.model, hasImages(messages) ? 'vision' : 'chat')
+	const { model, provider } = resolveModelRef(body.model, hasImages(messages) ? 'vision' : 'chat')
 	const started = Date.now()
 	const result = streamText({
 		model: getLanguageModel(provider, model),
@@ -291,7 +308,7 @@ app.post('/api/generate-text', async (c) => {
 	for (const extra of (body.images ?? []).slice(0, 12)) images.push(await resolveImage(extra))
 	const content: UserContent = images.map((img) => ({ type: 'image' as const, image: img.bytes, mediaType: img.mime }))
 	content.push({ type: 'text', text: text ? `Input:\n${text}\n\n${body.prompt}` : body.prompt })
-	const { model, provider } = resolveModel(body.model, images.length ? 'vision' : 'chat')
+	const { model, provider } = resolveModelRef(body.model, images.length ? 'vision' : 'chat')
 	const started = Date.now()
 	const generated = await generateText({
 		model: getLanguageModel(provider, model),
@@ -356,7 +373,7 @@ app.post('/api/generate-image', async (c) => {
 		negative?: string
 		seed?: number
 	}
-	const { model, provider } = resolveModel(body.model, 'image')
+	const { model, provider } = resolveModelRef(body.model, 'image')
 	const images = await generateImage(provider, model, {
 		prompt: body.prompt ?? '',
 		n: body.n ?? 1,
