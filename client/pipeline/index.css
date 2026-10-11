@@ -622,11 +622,14 @@ body {
 	top: 0;
 	left: 0;
 	z-index: var(--tl-layer-overlays);
+	/* It sits in tldraw's front layer, which ignores the mouse: take clicks back. */
+	pointer-events: all;
 	--top: 66px;
 	transform-origin: 0 0;
 
 	.OnCanvasNodePicker-content {
 		position: absolute;
+		pointer-events: all;
 		margin-top: calc(-1 * var(--top));
 		width: 340px;
 		border-radius: var(--tl-radius-3);
@@ -2840,4 +2843,10 @@ body {
 	font-size: var(--fs-label);
 	font-weight: 500;
 	color: var(--tl-color-text-2);
+}
+
+/* The expand dialogs can be dragged by their title bar. */
+.LargeEditor-bar {
+	cursor: move;
+	user-select: none;
 }

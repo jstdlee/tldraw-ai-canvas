@@ -6,6 +6,42 @@ import { placeImageOnCanvas } from '../placeOnCanvas'
 import { NodeShape } from '../nodes/NodeShapeUtil'
 import type { Editor } from 'tldraw'
 
+/**
+ * Where the dialogs mount: inside tldraw's container, so its colour variables (and the
+ * light / dark theme) apply. Mounted on document.body they were undefined: a see-through panel.
+ */
+function modalRoot(): HTMLElement {
+	return (document.querySelector('.tl-container') as HTMLElement | null) ?? document.body
+}
+
+/** Drag a dialog by its title bar. Returns the offset to apply and the bar's pointer handler. */
+function useDragOffset() {
+	const [offset, setOffset] = useState({ x: 0, y: 0 })
+	const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+		// Buttons in the bar keep working; only the empty bar area drags.
+		if ((event.target as HTMLElement).closest('button, input, textarea, select')) return
+		event.preventDefault()
+		const startX = event.clientX
+		const startY = event.clientY
+		const origin = offset
+		const move = (e: PointerEvent) => {
+			// Keep the bar on screen.
+			const x = origin.x + e.clientX - startX
+			const y = origin.y + e.clientY - startY
+			const maxX = window.innerWidth / 2
+			const maxY = window.innerHeight / 2
+			setOffset({ x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY + 40, Math.min(maxY - 40, y)) })
+		}
+		const up = () => {
+			window.removeEventListener('pointermove', move)
+			window.removeEventListener('pointerup', up)
+		}
+		window.addEventListener('pointermove', move)
+		window.addEventListener('pointerup', up)
+	}
+	return { style: { transform: `translate(${offset.x}px, ${offset.y}px)` }, onPointerDown }
+}
+
 export function editorLang(lang: string): string {
 	if (lang === 'py' || lang === 'js' || lang === 'sql' || lang === 'json' || lang === 'text') return lang
 	return 'ts'
@@ -51,10 +87,11 @@ export function LargeEditor({
 		return () => window.removeEventListener('keydown', onKey)
 	})
 	const code = lang !== 'text'
+	const drag = useDragOffset()
 	return createPortal(
 		<div className="LargeEditor-backdrop" onPointerDown={(event) => event.target === event.currentTarget && requestClose()}>
-			<div className="LargeEditor" role="dialog" aria-label={title}>
-				<div className="LargeEditor-bar">
+			<div className="LargeEditor" role="dialog" aria-label={title} style={drag.style}>
+				<div className="LargeEditor-bar" onPointerDown={drag.onPointerDown} title="Drag to move">
 					<strong>{title}</strong>
 					<div className="LargeEditor-actions">
 						{!readOnly && code && (
@@ -93,7 +130,7 @@ export function LargeEditor({
 				{!readOnly && <div className="LargeEditor-footer">Ctrl+Enter apply · Esc close</div>}
 			</div>
 		</div>,
-		document.body
+		modalRoot()
 	)
 }
 
@@ -135,10 +172,11 @@ export function ImageZoom({
 		window.addEventListener('keydown', onKey)
 		return () => window.removeEventListener('keydown', onKey)
 	}, [onClose])
+	const drag = useDragOffset()
 	return createPortal(
 		<div className="LargeEditor-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
-			<div className="LargeEditor LargeEditor-image" role="dialog" aria-label="Image">
-				<div className="LargeEditor-bar">
+			<div className="LargeEditor LargeEditor-image" role="dialog" aria-label="Image" style={drag.style}>
+				<div className="LargeEditor-bar" onPointerDown={drag.onPointerDown} title="Drag to move">
 					<strong>Image</strong>
 					<div className="LargeEditor-actions">
 						{editor && (
@@ -157,6 +195,6 @@ export function ImageZoom({
 				</div>
 			</div>
 		</div>,
-		document.body
+		modalRoot()
 	)
 }

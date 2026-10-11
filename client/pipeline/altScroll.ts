@@ -5,6 +5,8 @@ let installed = false
 function scrollTarget(event: Event): HTMLElement | null {
 	const node = event.target
 	if (!(node instanceof Element)) return null
+	// Dialogs and floating panels are not on the canvas: the wheel scrolls them normally.
+	if (node.closest('.LargeEditor, .FloatingPanel, [role="dialog"]')) return null
 	return node.closest<HTMLElement>('textarea, .NodeScroll, .CodeArea-input, .clip-editor')
 }
 
