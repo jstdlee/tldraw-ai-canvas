@@ -4,7 +4,7 @@ import { T, useEditor } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiGenerateText, apiJev, JevResult } from '../../api/pipelineApi'
 import { RouterIcon } from '../../components/icons/RouterIcon'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiCheckbox, UiTextArea } from '../../../ui'
@@ -46,7 +46,7 @@ export const JevNode = T.object({
 
 const W = 380
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
-const portY = (row: number) => BASE_Y + NODE_ROW_HEIGHT_PX * (row + 0.5)
+const portY = (row: number, rowPx: number) => BASE_Y + rowPx * (row + 0.5)
 const QUESTION_PX = 56
 const OPTIONS_PX = 72
 const FILTER_PX = 64
@@ -79,27 +79,29 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 	override getWidthPx() {
 		return W
 	}
-	getBodyHeightPx(_shape: NodeShape, node: JevNode) {
+	getBodyHeightPx(shape: NodeShape, node: JevNode) {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return (
-			NODE_ROW_HEIGHT_PX * 6 +
+			rowPx * 6 +
 			QUESTION_PX +
 			(node.kind === 'noul' ? 0 : OPTIONS_PX) +
-			(node.filter ? FILTER_PX + NODE_ROW_HEIGHT_PX : 0) +
+			(node.filter ? FILTER_PX + rowPx : 0) +
 			BARS_PX
 		)
 	}
-	getPorts(_shape: NodeShape, node: JevNode): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: JevNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const ports: Record<string, ShapePort> = {
-			context: { id: 'context', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
-			question: { id: 'question', x: 0, y: portY(1), terminal: 'end', dataType: 'text' },
-			input: { id: 'input', x: 0, y: portY(2), terminal: 'end', dataType: 'any' },
+			context: { id: 'context', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
+			question: { id: 'question', x: 0, y: portY(1, rowPx), terminal: 'end', dataType: 'text' },
+			input: { id: 'input', x: 0, y: portY(2, rowPx), terminal: 'end', dataType: 'any' },
 			output: { id: 'output', x: W, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
-			probs: { id: 'probs', x: W, y: portY(0), terminal: 'start', dataType: 'text' },
-			final: { id: 'final', x: W, y: portY(1), terminal: 'start', dataType: 'text' },
+			probs: { id: 'probs', x: W, y: portY(0, rowPx), terminal: 'start', dataType: 'text' },
+			final: { id: 'final', x: W, y: portY(1, rowPx), terminal: 'start', dataType: 'text' },
 		}
 		if (node.kind === 'noul') {
-			ports.yes = { id: 'yes', x: W, y: portY(2), terminal: 'start', dataType: 'any' }
-			ports.no = { id: 'no', x: W, y: portY(3), terminal: 'start', dataType: 'any' }
+			ports.yes = { id: 'yes', x: W, y: portY(2, rowPx), terminal: 'start', dataType: 'any' }
+			ports.no = { id: 'no', x: W, y: portY(3, rowPx), terminal: 'start', dataType: 'any' }
 		}
 		return ports
 	}

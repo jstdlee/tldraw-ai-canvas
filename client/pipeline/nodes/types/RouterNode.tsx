@@ -2,9 +2,9 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T } from 'tldraw'
 import { RouterIcon } from '../../components/icons/RouterIcon'
 import {
+	getNodeRowHeightPx,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 	NODE_WIDTH_PX,
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
@@ -39,17 +39,18 @@ export class RouterNodeDefinition extends NodeDefinition<RouterNode> {
 			outputCount: 3,
 		}
 	}
-	getBodyHeightPx(_shape: NodeShape, node: RouterNode) {
+	getBodyHeightPx(shape: NodeShape, node: RouterNode) {
 		// 1 input row + N output rows
-		return NODE_ROW_HEIGHT_PX * (1 + node.outputCount)
+		return getNodeRowHeightPx(shape.props.fontSize) * (1 + node.outputCount)
 	}
-	getPorts(_shape: NodeShape, node: RouterNode): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: RouterNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 		const ports: Record<string, ShapePort> = {
 			input: {
 				id: 'input',
 				x: 0,
-				y: baseY + NODE_ROW_HEIGHT_PX * 0.5,
+				y: baseY + rowPx * 0.5,
 				terminal: 'end',
 				dataType: 'any',
 			},
@@ -58,7 +59,7 @@ export class RouterNodeDefinition extends NodeDefinition<RouterNode> {
 			ports[`out_${i}`] = {
 				id: `out_${i}`,
 				x: NODE_WIDTH_PX,
-				y: baseY + NODE_ROW_HEIGHT_PX * (1.5 + i),
+				y: baseY + rowPx * (1.5 + i),
 				terminal: 'start',
 				dataType: 'any',
 			}

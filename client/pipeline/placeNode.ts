@@ -1,5 +1,6 @@
 import { createShapeId, Editor, TLShapeId, VecLike } from 'tldraw'
 import { findFreeSpot, placeRightOf, type Box } from '../../shared/placement'
+import { NEW_NODE_FONT_PX } from './constants'
 import { isPacked } from './subgraph'
 import { NodeType } from './nodes/nodeTypes'
 
@@ -29,7 +30,7 @@ export function createNodeAt(
 ): TLShapeId {
 	const shapeId = createShapeId()
 	editor.run(() => {
-		editor.createShape({ id: shapeId, type: 'node', props: { node } })
+		editor.createShape({ id: shapeId, type: 'node', props: { node, fontSize: NEW_NODE_FONT_PX } })
 		const bounds = editor.getShapePageBounds(shapeId)
 		if (!bounds) return
 		const taken = collectTakenBoxes(editor, shapeId)

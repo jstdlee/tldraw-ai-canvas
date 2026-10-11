@@ -37,11 +37,12 @@ import {
 	UiTextInput,
 } from '../../ui'
 import {
+	DEFAULT_NODE_FONT_PX,
+	getNodeRowHeightPx,
 	NODE_FOOTER_HEIGHT_PX,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_BOTTOM_PADDING_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 	PORT_RADIUS_PX,
 } from '../constants'
 import { executionState, startExecution, stopExecution } from '../execution/executionState'
@@ -334,7 +335,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				{
 					'--node-header-h': `${NODE_HEADER_HEIGHT_PX}px`,
 					'--node-footer-h': `${NODE_FOOTER_HEIGHT_PX}px`,
-					'--node-row-h': `${NODE_ROW_HEIGHT_PX}px`,
+					'--node-row-h': `${getNodeRowHeightPx(fontSize)}px`,
 					...(fontSize ? { '--node-fs': `${fontSize}px` } : null),
 					...(accentColor ? { '--node-accent': accentColor } : null),
 				} as React.CSSProperties
@@ -812,7 +813,6 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 	)
 }
 
-const DEFAULT_NODE_FONT_PX = 20
 const MIN_NODE_FONT_PX = 12
 const MAX_NODE_FONT_PX = 28
 

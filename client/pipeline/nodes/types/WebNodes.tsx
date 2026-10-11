@@ -8,9 +8,9 @@ import { LoadImageIcon } from '../../components/icons/LoadImageIcon'
 import { PromptIcon } from '../../components/icons/PromptIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
 import {
+	getNodeRowHeightPx,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 	NODE_WIDTH_PX,
 } from '../../constants'
 import { Port as PortDot, ShapePort } from '../../ports/Port'
@@ -33,7 +33,7 @@ import {
 } from './shared'
 
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
-const portY = (row: number) => BASE_Y + NODE_ROW_HEIGHT_PX * (row + 0.5)
+const portY = (row: number, rowPx: number) => BASE_Y + rowPx * (row + 0.5)
 
 function formatBytes(n: number) {
 	if (n < 1024) return `${n} B`
@@ -137,20 +137,21 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 	override getWidthPx() {
 		return HTTP_WIDTH_PX
 	}
-	getBodyHeightPx(_shape: NodeShape, _node: HttpNode) {
+	getBodyHeightPx(shape: NodeShape, _node: HttpNode) {
 		// Rows: method, URL, auth, body port, "web page -> text" checkbox, status = 6.
 		return (
-			NODE_ROW_HEIGHT_PX * 6 +
+			getNodeRowHeightPx(shape.props.fontSize) * 6 +
 			HTTP_QUERY_HEIGHT_PX +
 			HTTP_HEADERS_HEIGHT_PX +
 			HTTP_BODY_HEIGHT_PX +
 			HTTP_RESULT_HEIGHT_PX
 		)
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return {
-			url: { id: 'url', x: 0, y: portY(0), terminal: 'end', dataType: 'text' },
-			body: { id: 'body', x: 0, y: portY(1), terminal: 'end', dataType: 'any' },
+			url: { id: 'url', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'text' },
+			body: { id: 'body', x: 0, y: portY(1, rowPx), terminal: 'end', dataType: 'any' },
 			output: { id: 'output', x: HTTP_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'any' },
 		}
 	}
@@ -351,12 +352,12 @@ export class DownloadNodeDefinition extends NodeDefinition<DownloadNode> {
 			error: null,
 		}
 	}
-	getBodyHeightPx(_shape: NodeShape, _node: DownloadNode) {
-		return NODE_ROW_HEIGHT_PX * 3 + DOWNLOAD_RESULT_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape, _node: DownloadNode) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 3 + DOWNLOAD_RESULT_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape, node: DownloadNode): Record<string, ShapePort> {
 		return {
-			url: { id: 'url', x: 0, y: portY(0), terminal: 'end', dataType: 'text' },
+			url: { id: 'url', x: 0, y: portY(0, getNodeRowHeightPx(shape.props.fontSize)), terminal: 'end', dataType: 'text' },
 			output: { id: 'output', x: this.getWidthPx(shape, node), y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'any' },
 		}
 	}
@@ -453,12 +454,12 @@ export class SaveNodeDefinition extends NodeDefinition<SaveNode> {
 	getDefault(): SaveNode {
 		return { type: 'save', fileName: 'canvas-{{date}}', lastPath: null, lastPreview: null, error: null }
 	}
-	getBodyHeightPx(_shape: NodeShape, _node: SaveNode) {
-		return NODE_ROW_HEIGHT_PX * 3 + 120
+	getBodyHeightPx(shape: NodeShape, _node: SaveNode) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 3 + 120
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return {
-			input: { id: 'input', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
+			input: { id: 'input', x: 0, y: portY(0, getNodeRowHeightPx(shape.props.fontSize)), terminal: 'end', dataType: 'any' },
 			output: { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}

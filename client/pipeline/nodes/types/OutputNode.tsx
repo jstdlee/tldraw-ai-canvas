@@ -2,7 +2,7 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { ContentKind } from '../../../../shared/contentKind'
 import { PreviewIcon } from '../../components/icons/PreviewIcon'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { ValuePreview } from '../../ValuePreview'
 import { NodeShape } from '../NodeShapeUtil'
@@ -55,15 +55,15 @@ export class OutputNodeDefinition extends NodeDefinition<OutputNode> {
 	getDefault(): OutputNode {
 		return { type: 'output', kind: 'auto', lastValue: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 2 + VIEW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 2 + VIEW_HEIGHT_PX
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return {
 			input: {
 				id: 'input',
 				x: 0,
-				y: NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + NODE_ROW_HEIGHT_PX * 0.5,
+				y: NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + getNodeRowHeightPx(shape.props.fontSize) * 0.5,
 				terminal: 'end',
 				dataType: 'any',
 			},

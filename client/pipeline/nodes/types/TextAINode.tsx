@@ -6,9 +6,9 @@ import { startExecution } from '../../execution/executionState'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
+	getNodeRowHeightPx,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
@@ -125,28 +125,30 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 	private vars(node: TextAINode) {
 		return llmTemplateVars([node.promptOverride ?? buildTextAIPrompt(node), node.instruction, node.system])
 	}
-	getBodyHeightPx(_shape: NodeShape, node: TextAINode) {
+	getBodyHeightPx(shape: NodeShape, node: TextAINode) {
 		// The advanced job-prompt editor adds a block when settings are open.
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return (
-			NODE_ROW_HEIGHT_PX * 3 +
+			rowPx * 3 +
 			OPTION_HEIGHT_PX +
-			llmSettingsHeight(node) +
-			llmVarsHeight(this.vars(node)) +
+			llmSettingsHeight(node, rowPx) +
+			llmVarsHeight(this.vars(node), rowPx) +
 			(node.showSettings ? 140 : 0) +
 			RESULT_HEIGHT_PX
 		)
 	}
 	getPorts(shape: NodeShape, node: TextAINode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 		// Rows above the model row: input, job dropdown, then the option/instruction block.
-		const modelY = baseY + NODE_ROW_HEIGHT_PX * 2.5 + OPTION_HEIGHT_PX
-		const settingsStartY = baseY + NODE_ROW_HEIGHT_PX * 3 + OPTION_HEIGHT_PX
+		const modelY = baseY + rowPx * 2.5 + OPTION_HEIGHT_PX
+		const settingsStartY = baseY + rowPx * 3 + OPTION_HEIGHT_PX
 		const vars = this.vars(node)
 		return {
-			input: { id: 'input', x: 0, y: baseY + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'any' },
+			input: { id: 'input', x: 0, y: baseY + rowPx * 0.5, terminal: 'end', dataType: 'any' },
 			model: llmModelPort(modelY),
-			...llmSettingsPorts(settingsStartY, !!node.showSettings),
-			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
+			...llmSettingsPorts(settingsStartY, !!node.showSettings, rowPx),
+			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node, rowPx), rowPx),
 			output: {
 				id: 'output',
 				x: this.getWidthPx(shape, node),

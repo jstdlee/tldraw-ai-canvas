@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { T, useEditor } from 'tldraw'
 import { categoryOf } from '../../../../shared/nodeGroups'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { startExecution } from '../../execution/executionState'
 import { ShapePort } from '../../ports/Port'
 import { storeFile, loadFileBytes } from '../../fileStore'
@@ -25,8 +25,8 @@ import {
 
 const BASE = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 
-function end(id: string, row: number): ShapePort {
-	return { id, x: 0, y: BASE + NODE_ROW_HEIGHT_PX * (row + 0.5), terminal: 'end', dataType: 'text' }
+function end(id: string, row: number, rowPx: number): ShapePort {
+	return { id, x: 0, y: BASE + rowPx * (row + 0.5), terminal: 'end', dataType: 'text' }
 }
 function out(id: string, index: number, width: number): ShapePort {
 	return { id, x: width, y: NODE_HEADER_HEIGHT_PX / 2 + index * 20, terminal: 'start', dataType: 'text' }
@@ -114,13 +114,14 @@ export class DatabaseNodeDefinition extends NodeDefinition<DatabaseNode> {
 		const { rowsCount, sqlExtraPx } = layout(node, sqlWired)
 		// Rows: upload button, tables panel, SQL row, hint row, then the results area, which
 		// grows to fill whatever space the card is resized to.
-		return NODE_ROW_HEIGHT_PX * rowsCount + sqlExtraPx + RESULTS_DEFAULT_PX
+		return getNodeRowHeightPx(shape.props.fontSize) * rowsCount + sqlExtraPx + RESULTS_DEFAULT_PX
 	}
 	getPorts(shape: NodeShape, node: DatabaseNode): Record<string, ShapePort> {
 		const sqlWired = isInputWired(this.editor, shape.id, 'sql')
 		const { sqlRow } = layout(node, sqlWired)
 		const width = this.getWidthPx(shape, node)
-		return { sql: end('sql', sqlRow), output: out('output', 0, width), schema: out('schema', 1, width) }
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		return { sql: end('sql', sqlRow, rowPx), output: out('output', 0, width), schema: out('schema', 1, width) }
 	}
 	async execute(shape: NodeShape, node: DatabaseNode, inputs: InputValues): Promise<ExecutionResult> {
 		try {
@@ -226,7 +227,7 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 				/>
 			</NodeRow>
 			{tables.length > 0 && (
-				<div className="NodeScroll" style={{ maxHeight: NODE_ROW_HEIGHT_PX * 6, overflowY: 'auto' }} onPointerDown={stopEvent}>
+				<div className="NodeScroll" style={{ maxHeight: getNodeRowHeightPx(shape.props.fontSize) * 6, overflowY: 'auto' }} onPointerDown={stopEvent}>
 					{tables.map((t) => (
 						<NodeRow key={t.name} className="DatabaseNode-table" onClick={() => pickTable(t.name)}>
 							<IconTable size={14} />

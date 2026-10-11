@@ -1,4 +1,4 @@
-import { Editor, T, WeakCache } from 'tldraw'
+import { Editor, T } from 'tldraw'
 import { AdjustNodeDefinition } from './types/AdjustNode'
 import { CaptureNodeDefinition } from './types/CaptureNode'
 import { ChatNodeDefinition } from './types/ChatNode'
@@ -33,18 +33,28 @@ import { ImageGenNodeDefinition } from './types/ImageGenNode'
 import { ModelSourceNodeDefinition } from './types/ModelSourceNode'
 import { RawModelNodeDefinition } from './types/RawModelNode'
 import { OpenRouterNodeDefinition, SleepNodeDefinition, VideoNodeDefinition } from './types/ToolNodes'
-import { NodeDefinition, NodeDefinitionConstructor } from './types/shared'
+import type { NodeDefinition, NodeDefinitionConstructor } from './types/shared'
+import {
+	getNodeDefinition as getNodeDefinitionFromStore,
+	getNodeDefinitions as getNodeDefinitionsFromStore,
+	setNodeDefinitionClasses,
+} from './definitionStore'
 
 /**
- * The node type registry: every node type definition, and the lookup helpers built from it.
+ * The node type registry: every node type definition, and the `NodeType` validator union built
+ * from them.
  *
- * This file (not `nodeTypes.tsx`) is the one that imports every file under `types/`, including
- * `SubgraphNode.tsx`. Keeping that big import list here, instead of in `nodeTypes.tsx`, means
- * `NodeShapeUtil.tsx` and `subgraph.ts` can depend on just the small lookup functions below
- * without pulling in the whole node-type graph at module load — `SubgraphNode.tsx` (which needs
- * `openGroup` from `subgraph.ts`, and `subgraph.ts` needs `getNodeDefinition` from here) no
- * longer closes a cycle back through them. Vite's dev server can then hot-reload a single node
- * file without "Cannot access … before initialization".
+ * This is the one file that imports every file under `types/`, including `SubgraphNode.tsx`.
+ * Anything under `types/*.tsx` (directly, or via `nodePorts.tsx` -> `nodeTypes.tsx`) used to
+ * import `getNodeDefinition`/`getNodeDefinitions` from here too, which closed a cycle back into
+ * this file while it was still initialising — Vite's dev server then failed a hot reload of a
+ * single node file with "Cannot access … before initialization". The lookup functions now live
+ * in the leaf module `definitionStore.ts`, which has no imports of `types/*.tsx` or of this file;
+ * at the bottom of this module's own load we hand it the class map with
+ * `setNodeDefinitionClasses`. Everywhere except `NodeShapeUtil.tsx` (which needs the `NodeType`
+ * validator for the shape's `props`) and tests should import `getNodeDefinition`/
+ * `getNodeDefinitions` from `definitionStore.ts` (or re-exports of them, e.g. `nodeTypes.tsx`),
+ * never from this file.
  */
 
 /** All our node types */
@@ -129,6 +139,12 @@ const AllNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {
 	...RemovedNodeDefinitions,
 }
 
+// Hand the class map to the leaf definitionStore module once, at load time, so every other
+// file can look definitions up without importing this one (see definitionStore.ts's comment).
+// registry.ts is guaranteed to run before any editor is created because NodeShapeUtil.tsx
+// (imported by App.tsx before <Tldraw> mounts) imports this file for the NodeType validator.
+setNodeDefinitionClasses(AllNodeDefinitions)
+
 /**
  * A union type of all our node types.
  */
@@ -140,23 +156,15 @@ export const NodeType = T.union(
 	}
 )
 
-const nodeDefinitions = new WeakCache<
-	Editor,
-	{ [K in keyof typeof NodeDefinitions]: InstanceType<(typeof NodeDefinitions)[K]> }
->()
-export function getNodeDefinitions(editor: Editor) {
-	return nodeDefinitions.get(editor, () => {
-		return Object.fromEntries(
-			Object.values(AllNodeDefinitions).map((value) => [value.type, new value(editor)])
-		) as any
-	})
+export function getNodeDefinitions(
+	editor: Editor
+): { [K in keyof typeof NodeDefinitions]: InstanceType<(typeof NodeDefinitions)[K]> } {
+	return getNodeDefinitionsFromStore<NodeType>(editor) as any
 }
 
 export function getNodeDefinition(
 	editor: Editor,
 	node: NodeType | NodeType['type']
 ): NodeDefinition<NodeType> {
-	return getNodeDefinitions(editor)[
-		typeof node === 'string' ? node : node.type
-	] as NodeDefinition<NodeType>
+	return getNodeDefinitionFromStore<NodeType>(editor, node)
 }

@@ -3,9 +3,9 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor, useValue } from 'tldraw'
 import { PromptConcatIcon } from '../../components/icons/PromptConcatIcon'
 import {
+	getNodeRowHeightPx,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 	NODE_WIDTH_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
@@ -50,31 +50,32 @@ export class PromptConcatNodeDefinition extends NodeDefinition<PromptConcatNode>
 			separator: 'space',
 		}
 	}
-	getBodyHeightPx() {
+	getBodyHeightPx(shape: NodeShape) {
 		// 3 input rows + separator row + preview row
-		return NODE_ROW_HEIGHT_PX * 5
+		return getNodeRowHeightPx(shape.props.fontSize) * 5
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 		return {
 			prefix: {
 				id: 'prefix',
 				x: 0,
-				y: baseY + NODE_ROW_HEIGHT_PX * 0.5,
+				y: baseY + rowPx * 0.5,
 				terminal: 'end',
 				dataType: 'text',
 			},
 			main: {
 				id: 'main',
 				x: 0,
-				y: baseY + NODE_ROW_HEIGHT_PX * 1.5,
+				y: baseY + rowPx * 1.5,
 				terminal: 'end',
 				dataType: 'text',
 			},
 			suffix: {
 				id: 'suffix',
 				x: 0,
-				y: baseY + NODE_ROW_HEIGHT_PX * 2.5,
+				y: baseY + rowPx * 2.5,
 				terminal: 'end',
 				dataType: 'text',
 			},

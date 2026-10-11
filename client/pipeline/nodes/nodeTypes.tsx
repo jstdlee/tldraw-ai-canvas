@@ -7,16 +7,32 @@ import {
 } from '../constants'
 import { PortId, ShapePort } from '../ports/Port'
 import type { NodeShape } from './NodeShapeUtil'
-import { getNodeDefinition, getNodeDefinitions, NodeType } from './registry'
-import { ExecutionResult, InfoValues } from './types/shared'
+import {
+	getNodeDefinition as getNodeDefinitionFromStore,
+	getNodeDefinitions as getNodeDefinitionsFromStore,
+} from './definitionStore'
+import type { NodeType } from './registry'
+import { ExecutionResult, InfoValues, NodeDefinition } from './types/shared'
 
-// The node type registry itself (every node definition, `NodeType`, and the lookup functions
-// built from it) lives in `registry.ts`, which is the file that imports every `types/*.tsx`
-// file. This module only re-exports that lookup surface, plus small helpers that read a
-// shape's own props (size, ports, body) — so a file that only needs those (NodeShapeUtil.tsx,
-// subgraph.ts) does not have to load the whole node-type graph at module-eval time. See
-// registry.ts's own comment for why that matters for Vite hot reload.
-export { NodeDefinitions, NodeType, getNodeDefinition, getNodeDefinitions } from './registry'
+// The node type registry itself (every node definition, and the `NodeType` validator union
+// built from them) lives in `registry.ts`, which is the file that imports every `types/*.tsx`
+// file. This module only takes a *type-only* import of `NodeType` from there (erased at build,
+// so it cannot close a runtime cycle), plus the lookup functions from the leaf module
+// `definitionStore.ts`. That keeps this file, and everything that imports it (`nodePorts.tsx`,
+// `subgraph.ts`, individual node type files, …), out of the cycle back through `registry.ts` —
+// see `registry.ts`'s own comment for why that matters for Vite hot reload.
+export type { NodeType } from './registry'
+
+export function getNodeDefinitions(editor: Editor): Record<string, NodeDefinition<NodeType>> {
+	return getNodeDefinitionsFromStore<NodeType>(editor)
+}
+
+export function getNodeDefinition(
+	editor: Editor,
+	node: NodeType | NodeType['type']
+): NodeDefinition<NodeType> {
+	return getNodeDefinitionFromStore<NodeType>(editor, node)
+}
 
 /** Whether an unconnected output should be spilled onto the canvas, given the node's spill mode. */
 export function shouldSpillOutput(editor: Editor, shape: NodeShape): boolean {

@@ -1,7 +1,7 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, TldrawUiSlider, useEditor } from 'tldraw'
 import { NumberIcon } from '../../components/icons/NumberIcon'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
@@ -35,8 +35,8 @@ export class NumberNodeDefinition extends NodeDefinition<NumberNode> {
 			value: 50,
 		}
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize)
 	}
 	getPorts(shape: NodeShape, node: NumberNode): Record<string, ShapePort> {
 		return {

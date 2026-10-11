@@ -4,7 +4,7 @@ import { chartOption, resolveColumns } from '../../../../shared/chartOption'
 import { opSpec, parseTable, runTable, splitList, TABLE_OPS } from '../../../../shared/tableOps'
 import type { TableJob } from '../../../../shared/tableOps'
 import { createShapeId, Editor, TLShapeId, T, useEditor, useValue } from 'tldraw'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { createOrUpdateConnectionBinding } from '../../connection/ConnectionBindingUtil'
 import { getNextConnectionIndex } from '../../connection/keepConnectionsAtBottom'
@@ -31,8 +31,8 @@ import {
 
 const BASE = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 
-function end(id: string, row: number): ShapePort {
-	return { id, x: 0, y: BASE + NODE_ROW_HEIGHT_PX * (row + 0.5), terminal: 'end', dataType: 'text' }
+function end(id: string, row: number, rowPx: number): ShapePort {
+	return { id, x: 0, y: BASE + rowPx * (row + 0.5), terminal: 'end', dataType: 'text' }
 }
 function out(x: number = NODE_WIDTH_PX): ShapePort {
 	return { id: 'output', x, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' }
@@ -134,14 +134,15 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 		const descriptionExtra = 20
 		// A real preview table needs room to show rows; the empty placeholder is much shorter.
 		const previewExtra = node.lastOutput ? 240 : 64
-		return NODE_ROW_HEIGHT_PX * rowsCount + inlineExtra + descriptionExtra + previewExtra
+		return getNodeRowHeightPx(shape.props.fontSize) * rowsCount + inlineExtra + descriptionExtra + previewExtra
 	}
 	getPorts(shape: NodeShape, node: TableNode): Record<string, ShapePort> {
 		const dataWired = isInputWired(this.editor, shape.id, 'data')
 		const { dataRow, secondRow } = layout(node, dataWired)
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return {
-			data: end('data', dataRow),
-			extra: end('extra', secondRow ?? dataRow),
+			data: end('data', dataRow, rowPx),
+			extra: end('extra', secondRow ?? dataRow, rowPx),
 			output: out(this.getWidthPx(shape, node)),
 		}
 	}
@@ -515,12 +516,12 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	getDefault(): ChartNode {
 		return { type: 'chart', text: SAMPLE, format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score', dualScale: false, error: null }
 	}
-	getBodyHeightPx() {
+	getBodyHeightPx(shape: NodeShape) {
 		// Rows: data port, kind/x column, y columns, dual-axes = 4, then the chart area.
-		return NODE_ROW_HEIGHT_PX * 4 + 264
+		return getNodeRowHeightPx(shape.props.fontSize) * 4 + 264
 	}
 	getPorts(shape: NodeShape, node: ChartNode): Record<string, ShapePort> {
-		return { data: end('data', 0), output: out(this.getWidthPx(shape, node)) }
+		return { data: end('data', 0, getNodeRowHeightPx(shape.props.fontSize)), output: out(this.getWidthPx(shape, node)) }
 	}
 	async execute(shape: NodeShape, node: ChartNode, inputs: InputValues): Promise<ExecutionResult> {
 		const text = getInputText(inputs, 'data') || node.text

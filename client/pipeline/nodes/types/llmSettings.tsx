@@ -1,11 +1,11 @@
 import { NodeSelect } from './NodeSelect'
 import { TLShapeId, Editor, T } from 'tldraw'
 import { IconChevronDown, IconChevronRight, UiButton, UiNumberInput, UiSlider, UiTextArea } from '../../../ui'
-import { NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
 import { findVars, fillVars, MAX_TEMPLATE_VARS } from '../../../../shared/templateVars'
 import { NodeShape } from '../NodeShapeUtil'
-import { NodeType } from '../nodeTypes'
+import type { NodeType } from '../nodeTypes'
 import { PortRow, useInputConnected } from './fields'
 import { InputValues, updateNode } from './shared'
 
@@ -47,15 +47,13 @@ export const DEFAULT_LLM_SETTINGS: Required<Omit<LlmSettings, 'lastUsage'>> & { 
 	lastUsage: '',
 }
 
-/** One row per settings port (system, params), shown only while the section is open. */
-export const LLM_PORT_ROW_HEIGHT_PX = NODE_ROW_HEIGHT_PX
 /** Height of the open settings panel (closed: just the toggle row). */
 export const LLM_SETTINGS_OPEN_HEIGHT_PX = 196
 export const LLM_SETTINGS_TOGGLE_HEIGHT_PX = 28
-export function llmSettingsHeight(node: LlmSettings) {
+export function llmSettingsHeight(node: LlmSettings, rowPx: number) {
 	return (
 		LLM_SETTINGS_TOGGLE_HEIGHT_PX +
-		(node.showSettings ? LLM_PORT_ROW_HEIGHT_PX * 2 + LLM_SETTINGS_OPEN_HEIGHT_PX : 0)
+		(node.showSettings ? rowPx * 2 + LLM_SETTINGS_OPEN_HEIGHT_PX : 0)
 	)
 }
 
@@ -63,7 +61,7 @@ export function llmSettingsHeight(node: LlmSettings) {
  * The `system` and `params` settings ports. Open: one row each, right after the toggle row.
  * Closed: both sit on the toggle row itself (stacked 6px apart), so they stay wirable.
  */
-export function llmSettingsPorts(startY: number, open: boolean): Record<string, ShapePort> {
+export function llmSettingsPorts(startY: number, open: boolean, rowPx: number): Record<string, ShapePort> {
 	if (!open) {
 		const cy = startY + LLM_SETTINGS_TOGGLE_HEIGHT_PX / 2
 		return {
@@ -75,14 +73,14 @@ export function llmSettingsPorts(startY: number, open: boolean): Record<string, 
 		system: {
 			id: 'system',
 			x: 0,
-			y: startY + LLM_SETTINGS_TOGGLE_HEIGHT_PX + LLM_PORT_ROW_HEIGHT_PX * 0.5,
+			y: startY + LLM_SETTINGS_TOGGLE_HEIGHT_PX + rowPx * 0.5,
 			terminal: 'end',
 			dataType: 'text',
 		},
 		params: {
 			id: 'params',
 			x: 0,
-			y: startY + LLM_SETTINGS_TOGGLE_HEIGHT_PX + LLM_PORT_ROW_HEIGHT_PX * 1.5,
+			y: startY + LLM_SETTINGS_TOGGLE_HEIGHT_PX + rowPx * 1.5,
 			terminal: 'end',
 			dataType: 'text',
 		},
@@ -115,13 +113,13 @@ export function llmTemplateVars(texts: (string | undefined)[]): string[] {
 }
 
 /** One input port per variable, stacked one row each, starting at `startY`. */
-export function llmVarPorts(vars: string[], startY: number): Record<string, ShapePort> {
+export function llmVarPorts(vars: string[], startY: number, rowPx: number): Record<string, ShapePort> {
 	const ports: Record<string, ShapePort> = {}
 	vars.forEach((name, i) => {
 		ports[`var:${name}`] = {
 			id: `var:${name}`,
 			x: 0,
-			y: startY + NODE_ROW_HEIGHT_PX * (i + 0.5),
+			y: startY + rowPx * (i + 0.5),
 			terminal: 'end',
 			dataType: 'any',
 		}
@@ -129,8 +127,8 @@ export function llmVarPorts(vars: string[], startY: number): Record<string, Shap
 	return ports
 }
 
-export function llmVarsHeight(vars: string[]) {
-	return vars.length * NODE_ROW_HEIGHT_PX
+export function llmVarsHeight(vars: string[], rowPx: number) {
+	return vars.length * rowPx
 }
 
 /** One `PortRow` per `{{name}}` variable, shown below the card's own rows. */
@@ -262,7 +260,7 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 				)}
 			</button>
 			{node.showSettings && (
-				<div className="LlmSettings-body" style={{ height: LLM_PORT_ROW_HEIGHT_PX * 2 + LLM_SETTINGS_OPEN_HEIGHT_PX }}>
+				<div className="LlmSettings-body" style={{ height: getNodeRowHeightPx(shape.props.fontSize) * 2 + LLM_SETTINGS_OPEN_HEIGHT_PX }}>
 					<PortRow shapeId={shape.id} portId="system" label="System" dataType="text" hint="optional" />
 					<PortRow shapeId={shape.id} portId="params" label="Params" dataType="text" hint='e.g. {"temperature":0.2}' />
 					<UiTextArea

@@ -3,7 +3,7 @@ import { T, useEditor } from 'tldraw'
 import { evaluateCondition, isTruthy, splitItems } from '../../../../shared/logic'
 import { IteratorIcon } from '../../components/icons/IteratorIcon'
 import { RouterIcon } from '../../components/icons/RouterIcon'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { executionGeneration } from '../../execution/executionState'
 import { loopBodyNodes, runLoopBody } from '../../execution/loop'
 import { clearNodeRun } from '../../execution/nodeRunState'
@@ -27,7 +27,7 @@ import {
 } from './shared'
 
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
-const portY = (row: number) => BASE_Y + NODE_ROW_HEIGHT_PX * (row + 0.5)
+const portY = (row: number, rowPx: number) => BASE_Y + rowPx * (row + 0.5)
 
 function inputInfo(inputs: InfoValues, id: string): PipelineValue | undefined {
 	const v = inputs[id]
@@ -77,15 +77,16 @@ export class IfNodeDefinition extends NodeDefinition<IfNode> {
 	getDefault(): IfNode {
 		return { type: 'if', condition: 'contains', operand: 'yes', lastResult: null, lastValue: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 6
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 6
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return {
-			input: { id: 'input', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
-			test: { id: 'test', x: 0, y: portY(1), terminal: 'end', dataType: 'any' },
-			then: { id: 'then', x: NODE_WIDTH_PX, y: portY(4), terminal: 'start', dataType: 'any' },
-			else: { id: 'else', x: NODE_WIDTH_PX, y: portY(5), terminal: 'start', dataType: 'any' },
+			input: { id: 'input', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
+			test: { id: 'test', x: 0, y: portY(1, rowPx), terminal: 'end', dataType: 'any' },
+			then: { id: 'then', x: NODE_WIDTH_PX, y: portY(4, rowPx), terminal: 'start', dataType: 'any' },
+			else: { id: 'else', x: NODE_WIDTH_PX, y: portY(5, rowPx), terminal: 'start', dataType: 'any' },
 		}
 	}
 	async execute(shape: NodeShape, node: IfNode, inputs: InputValues): Promise<ExecutionResult> {
@@ -165,13 +166,14 @@ export class LogicNodeDefinition extends NodeDefinition<LogicNode> {
 	getDefault(): LogicNode {
 		return { type: 'logic', op: 'and', lastResult: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + 8
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 3 + 8
 	}
-	getPorts(_shape: NodeShape, node: LogicNode): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: LogicNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return {
-			a: { id: 'a', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
-			...(node.op === 'not' ? {} : { b: { id: 'b', x: 0, y: portY(1), terminal: 'end', dataType: 'any' } as ShapePort }),
+			a: { id: 'a', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
+			...(node.op === 'not' ? {} : { b: { id: 'b', x: 0, y: portY(1, rowPx), terminal: 'end', dataType: 'any' } as ShapePort }),
 			output: { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}
@@ -262,15 +264,16 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 	getDefault(): ForEachNode {
 		return { type: 'for_each', split: 'lines', separator: ',', joiner: '\\n', progress: null, lastResults: null, error: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 6 + 18
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 6 + 18
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return {
-			list: { id: 'list', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
+			list: { id: 'list', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
 			// Loop body: "item" → … → back into "result".
-			item: { id: 'item', x: NODE_WIDTH_PX, y: portY(3), terminal: 'start', dataType: 'text' },
-			result: { id: 'result', x: 0, y: portY(4), terminal: 'end', dataType: 'any', feedback: true },
+			item: { id: 'item', x: NODE_WIDTH_PX, y: portY(3, rowPx), terminal: 'start', dataType: 'text' },
+			result: { id: 'result', x: 0, y: portY(4, rowPx), terminal: 'end', dataType: 'any', feedback: true },
 			output: { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}

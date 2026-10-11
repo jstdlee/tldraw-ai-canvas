@@ -19,6 +19,7 @@ import {
 	useEditor,
 	Vec,
 } from 'tldraw'
+import { NEW_NODE_FONT_PX } from '../constants'
 import { NodeShape } from '../nodes/NodeShapeUtil'
 import { getNodeDefinitions, NodeType } from '../nodes/nodeTypes'
 import { TemplatePicker } from './TemplatePicker'
@@ -30,7 +31,7 @@ function createNodeShape(editor: Editor, shapeId: TLShapeId, center: Vec, node: 
 		editor.createShape({
 			id: shapeId,
 			type: 'node',
-			props: { node },
+			props: { node, fontSize: NEW_NODE_FONT_PX },
 		})
 
 		const shape = editor.getShape<NodeShape>(shapeId)!
@@ -68,7 +69,7 @@ export const overrides: TLUiOverrides = {
 							editor.createShape({
 								id,
 								type: 'node',
-								props: { node: nodeDef.getDefault() },
+								props: { node: nodeDef.getDefault(), fontSize: NEW_NODE_FONT_PX },
 							})
 						},
 					})

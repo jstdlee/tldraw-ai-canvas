@@ -66,31 +66,10 @@
 	box-shadow: var(--tl-shadow-1);
 	color: var(--tl-color-text-1);
 	font: inherit;
-	font-size: 12px;
+	font-size: var(--fs-body);
 	resize: none;
 	pointer-events: all;
 }
-
-/* Per-node text size. Rows, fields and labels follow the node's own size. */
-.NodeShape_fs {
-	font-size: var(--node-fs);
-}
-
-.NodeShape_fs .NodeShape-label,
-.NodeShape_fs .NodeField-input,
-.NodeShape_fs .NodeField-select,
-.NodeShape_fs .NodeField-textarea,
-.NodeShape_fs .NodeField-button,
-.NodeShape_fs .NodeInputRow-label,
-.NodeShape_fs .NodePortLabel,
-.NodeShape_fs .NodeStatus,
-.NodeShape_fs .NodeHint,
-.NodeShape_fs .NodeRow-value,
-.NodeShape_fs .NodeRow-connected-value,
-.NodeShape_fs .NodeRow-disconnected {
-	font-size: var(--node-fs);
-}
-
 
 
 @media (prefers-reduced-motion: reduce) {

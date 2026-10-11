@@ -7,7 +7,7 @@ import { toImageUrl } from '../../imageOps'
 import { startExecution } from '../../execution/executionState'
 import { placeImageOnCanvas } from '../../placeOnCanvas'
 import { ImageZoom } from '../../editors/LargeEditor'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { IconChevronDown, IconChevronRight, IconSparkle, UiButton, UiEmpty, UiNumberInput, UiSegmented, UiTextArea, UiTextInput } from '../../../ui'
@@ -44,25 +44,24 @@ import {
 const { lastUsage: _llmLastUsageField, ...llmFieldsForImageGen } = LlmSettingsFields
 const { lastUsage: _llmLastUsageDefault, ...defaultLlmSettingsForImageGen } = DEFAULT_LLM_SETTINGS
 
-const ROW = NODE_ROW_HEIGHT_PX
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 // Enough room for at least 4 lines of prompt text at the default node font.
 const PROMPT_AREA_PX = 100
 // "More settings" (negative prompt + seed): collapsed is just the title row; open adds one content row.
 const MORE_SETTINGS_CLOSED_PX = 28
-const MORE_SETTINGS_OPEN_PX = MORE_SETTINGS_CLOSED_PX + ROW
+const moreSettingsOpenPx = (rowPx: number) => MORE_SETTINGS_CLOSED_PX + rowPx
 // Empty results: a compact placeholder, about 3 rows. Only the real grid (once there
 // are images) takes the full height.
-const EMPTY_RESULTS_PX = ROW * 3
+const emptyResultsPx = (rowPx: number) => rowPx * 3
 const GRID_AREA_PX = 220
 
 // Row layout, top to bottom: Model, Prompt (grows), count/size, Ref., More settings, results.
-const MODEL_ROW_Y = BASE_Y + ROW * 0.5
-const PROMPT_TOP = BASE_Y + ROW
-const PROMPT_PORT_Y = PROMPT_TOP + ROW * 0.5
-const NSIZE_TOP = PROMPT_TOP + PROMPT_AREA_PX
-const REF_TOP = NSIZE_TOP + ROW
-const IMAGE_PORT_Y = REF_TOP + ROW * 0.5
+const modelRowY = (rowPx: number) => BASE_Y + rowPx * 0.5
+const promptTop = (rowPx: number) => BASE_Y + rowPx
+const promptPortY = (rowPx: number) => promptTop(rowPx) + rowPx * 0.5
+const nsizeTop = (rowPx: number) => promptTop(rowPx) + PROMPT_AREA_PX
+const refTop = (rowPx: number) => nsizeTop(rowPx) + rowPx
+const imagePortY = (rowPx: number) => refTop(rowPx) + rowPx * 0.5
 
 const SIZES = [
 	{ value: '1024x1024', label: 'Square (1024×1024)' },
@@ -131,24 +130,26 @@ export class ImageGenNodeDefinition extends NodeDefinition<ImageGenNode> {
 	private vars(node: ImageGenNode) {
 		return llmTemplateVars([node.prompt])
 	}
-	getBodyHeightPx(_shape: NodeShape, node: ImageGenNode) {
+	getBodyHeightPx(shape: NodeShape, node: ImageGenNode) {
 		// Model, prompt box, count/size, Ref., More settings, settings panel, variables, then results.
 		// The error is not shown here: the card's own error banner already covers it.
-		const results = parseImages(node).length ? GRID_AREA_PX : EMPTY_RESULTS_PX
-		const moreSettings = node.moreOpen ? MORE_SETTINGS_OPEN_PX : MORE_SETTINGS_CLOSED_PX
-		return ROW * 3 + PROMPT_AREA_PX + moreSettings + llmSettingsHeight(node) + llmVarsHeight(this.vars(node)) + results
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		const results = parseImages(node).length ? GRID_AREA_PX : emptyResultsPx(rowPx)
+		const moreSettings = node.moreOpen ? moreSettingsOpenPx(rowPx) : MORE_SETTINGS_CLOSED_PX
+		return rowPx * 3 + PROMPT_AREA_PX + moreSettings + llmSettingsHeight(node, rowPx) + llmVarsHeight(this.vars(node), rowPx) + results
 	}
 	getPorts(shape: NodeShape, node: ImageGenNode): Record<string, ShapePort> {
 		const width = this.getWidthPx(shape, node)
-		const moreSettings = node.moreOpen ? MORE_SETTINGS_OPEN_PX : MORE_SETTINGS_CLOSED_PX
-		const settingsStartY = REF_TOP + ROW + moreSettings
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		const moreSettings = node.moreOpen ? moreSettingsOpenPx(rowPx) : MORE_SETTINGS_CLOSED_PX
+		const settingsStartY = refTop(rowPx) + rowPx + moreSettings
 		const vars = this.vars(node)
 		return {
-			model: { id: 'model', x: 0, y: MODEL_ROW_Y, terminal: 'end', dataType: 'model' },
-			prompt: { id: 'prompt', x: 0, y: PROMPT_PORT_Y, terminal: 'end', dataType: 'text' },
-			image: { id: 'image', x: 0, y: IMAGE_PORT_Y, terminal: 'end', dataType: 'image' },
-			...llmSettingsPorts(settingsStartY, !!node.showSettings),
-			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
+			model: { id: 'model', x: 0, y: modelRowY(rowPx), terminal: 'end', dataType: 'model' },
+			prompt: { id: 'prompt', x: 0, y: promptPortY(rowPx), terminal: 'end', dataType: 'text' },
+			image: { id: 'image', x: 0, y: imagePortY(rowPx), terminal: 'end', dataType: 'image' },
+			...llmSettingsPorts(settingsStartY, !!node.showSettings, rowPx),
+			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node, rowPx), rowPx),
 			output: { id: 'output', x: width, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'image' },
 			images: { id: 'images', x: width, y: NODE_HEADER_HEIGHT_PX / 2 + 20, terminal: 'start', dataType: 'text' },
 		}
@@ -212,7 +213,7 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 	const images = parseImages(node)
 	const run = () => void startExecution(editor, new Set([shape.id]))
 
-	const resultsHeight = (images.length ? GRID_AREA_PX : EMPTY_RESULTS_PX) - 8
+	const resultsHeight = (images.length ? GRID_AREA_PX : emptyResultsPx(getNodeRowHeightPx(shape.props.fontSize))) - 8
 
 	return (
 		<>

@@ -15,7 +15,7 @@ import { extractCode, runCode } from '../../codeRunner'
 import { CodeArea, TextAreaField } from '../../editors/CodeArea'
 import { runPython } from '../../pythonRunner'
 import { NumberIcon } from '../../components/icons/NumberIcon'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { Port } from '../../ports/Port'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
@@ -107,27 +107,28 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 	private outCount(node: CodeNode) {
 		return clampCodeCount(node.outputCount)
 	}
-	getBodyHeightPx(_shape: NodeShape, node: CodeNode) {
+	getBodyHeightPx(shape: NodeShape, node: CodeNode) {
 		const portRows = Math.max(this.inCount(node), this.outCount(node) - 1, 1)
 		return (
-			NODE_ROW_HEIGHT_PX * (portRows + 1) +
+			getNodeRowHeightPx(shape.props.fontSize) * (portRows + 1) +
 			CODE_HEIGHT_PX +
 			(node.showAI ? AI_HEIGHT_PX : 0) +
 			RESULT_HEIGHT_PX
 		)
 	}
-	getPorts(_shape: NodeShape, node: CodeNode): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: CodeNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const ports: Record<string, ShapePort> = {}
 		for (let i = 0; i < this.inCount(node); i++) {
 			const id = inputId(i)
-			ports[id] = { id, x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * (i + 0.5), terminal: 'end', dataType: 'any' }
+			ports[id] = { id, x: 0, y: BASE_Y + rowPx * (i + 0.5), terminal: 'end', dataType: 'any' }
 		}
 		for (let i = 0; i < this.outCount(node); i++) {
 			const id = outputId(i)
 			ports[id] =
 				i === 0
 					? { id, x: this.getWidthPx(), y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'any' }
-					: { id, x: this.getWidthPx(), y: BASE_Y + NODE_ROW_HEIGHT_PX * (i - 0.5), terminal: 'start', dataType: 'any' }
+					: { id, x: this.getWidthPx(), y: BASE_Y + rowPx * (i - 0.5), terminal: 'start', dataType: 'any' }
 		}
 		return ports
 	}

@@ -7,9 +7,10 @@ import {
 import { getNextConnectionIndex } from '../connection/keepConnectionsAtBottom'
 import {
 	DEFAULT_NODE_SPACING_PX,
+	getNodeRowHeightPx,
+	NEW_NODE_FONT_PX,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 	PortDataType,
 } from '../constants.tsx'
 import { getNodePortConnections, getNodePorts } from '../nodes/nodePorts'
@@ -121,7 +122,7 @@ export class PointingPort extends StateNode {
 
 		const targetPositionInConnectionSpace = this.editor
 			.getPointInShapeSpace(connectionShapeId, targetPositionInPageSpace)
-			.addXY(0, NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + NODE_ROW_HEIGHT_PX / 2)
+			.addXY(0, NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + getNodeRowHeightPx(NEW_NODE_FONT_PX) / 2)
 
 		this.editor.updateShape({
 			id: connectionShapeId,

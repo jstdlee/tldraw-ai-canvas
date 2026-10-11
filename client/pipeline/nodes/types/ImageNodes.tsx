@@ -6,10 +6,10 @@ import { AdjustIcon } from '../../components/icons/AdjustIcon'
 import { CaptureIcon } from '../../components/icons/CaptureIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
 import {
+	getNodeRowHeightPx,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_IMAGE_PREVIEW_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 	NODE_WIDTH_PX,
 } from '../../constants'
 import {
@@ -48,8 +48,8 @@ import {
 } from './shared'
 
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
-const portY = (row: number) => BASE_Y + NODE_ROW_HEIGHT_PX * (row + 0.5)
-const imageIn = (): ShapePort => ({ id: 'image', x: 0, y: portY(0), terminal: 'end', dataType: 'image' })
+const portY = (row: number, rowPx: number) => BASE_Y + rowPx * (row + 0.5)
+const imageIn = (rowPx: number): ShapePort => ({ id: 'image', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'image' })
 const imageOut = (): ShapePort => ({
 	id: 'output',
 	x: NODE_WIDTH_PX,
@@ -148,8 +148,8 @@ export class CameraNodeDefinition extends NodeDefinition<CameraNode> {
 	getDefault(): CameraNode {
 		return { type: 'camera', lastResultUrl: null, error: null }
 	}
-	getBodyHeightPx() {
-		return CAMERA_VIEW_PX + NODE_ROW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape) {
+		return CAMERA_VIEW_PX + getNodeRowHeightPx(shape.props.fontSize)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { output: imageOut() }
@@ -264,11 +264,11 @@ export class CropNodeDefinition extends NodeDefinition<CropNode> {
 	getDefault(): CropNode {
 		return { type: 'crop', aspect: '1:1', x: 10, y: 10, w: 80, h: 80, lastResultUrl: null, error: null }
 	}
-	getBodyHeightPx(_s: NodeShape, node: CropNode) {
-		return NODE_ROW_HEIGHT_PX * (node.aspect === 'Custom' ? 4 : 2) + NODE_IMAGE_PREVIEW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape, node: CropNode) {
+		return getNodeRowHeightPx(shape.props.fontSize) * (node.aspect === 'Custom' ? 4 : 2) + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { image: imageIn(), output: imageOut() }
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		return { image: imageIn(getNodeRowHeightPx(shape.props.fontSize)), output: imageOut() }
 	}
 	async execute(shape: NodeShape, node: CropNode, inputs: InputValues) {
 		return runImageOp<CropNode>(this, shape, inputs, async (src) => {
@@ -363,11 +363,11 @@ export class ImageResizeNodeDefinition extends NodeDefinition<ImageResizeNode> {
 	getDefault(): ImageResizeNode {
 		return { type: 'image_resize', mode: 'fit', value: 1024, value2: 1024, lastResultUrl: null, error: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 3 + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { image: imageIn(), output: imageOut() }
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		return { image: imageIn(getNodeRowHeightPx(shape.props.fontSize)), output: imageOut() }
 	}
 	async execute(shape: NodeShape, node: ImageResizeNode, inputs: InputValues) {
 		return runImageOp<ImageResizeNode>(this, shape, inputs, (src) =>
@@ -465,11 +465,11 @@ export class ImageFilterNodeDefinition extends NodeDefinition<ImageFilterNode> {
 	getDefault(): ImageFilterNode {
 		return { type: 'image_filter', ...NO_FILTER, lastResultUrl: null, error: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + SLIDERS.length * 26 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 3 + SLIDERS.length * 26 + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { image: imageIn(), output: imageOut() }
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		return { image: imageIn(getNodeRowHeightPx(shape.props.fontSize)), output: imageOut() }
 	}
 	async execute(shape: NodeShape, node: ImageFilterNode, inputs: InputValues) {
 		return runImageOp<ImageFilterNode>(this, shape, inputs, (src) => filterImage(src, node))
@@ -567,11 +567,11 @@ export class ImageToolNodeDefinition extends NodeDefinition<ImageToolNode> {
 	getDefault(): ImageToolNode {
 		return { type: 'image_tool', tool: 'info', a: '', b: '', lastResultUrl: null, lastText: null, error: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 3 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 3 + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { image: imageIn(), output: { ...imageOut(), dataType: 'any' } }
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		return { image: imageIn(getNodeRowHeightPx(shape.props.fontSize)), output: { ...imageOut(), dataType: 'any' } }
 	}
 	async execute(shape: NodeShape, node: ImageToolNode, inputs: InputValues): Promise<ExecutionResult> {
 		const raw = coerceToText(getInput(inputs, 'image'))

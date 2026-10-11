@@ -8,7 +8,7 @@ import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import { NumberIcon } from '../../components/icons/NumberIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextArea, UiTextInput } from '../../../ui'
@@ -35,7 +35,7 @@ import {
 } from './shared'
 
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
-const portY = (row: number) => BASE_Y + NODE_ROW_HEIGHT_PX * (row + 0.5)
+const portY = (row: number, rowPx: number) => BASE_Y + rowPx * (row + 0.5)
 const out = (dataType: ShapePort['dataType'] = 'text', x = NODE_WIDTH_PX): ShapePort => ({
 	id: 'output',
 	x,
@@ -81,14 +81,15 @@ export class RandomNodeDefinition extends NodeDefinition<RandomNode> {
 	getDefault(): RandomNode {
 		return { type: 'random', mode: 'number', a: '1', b: '100', list: 'red\ngreen\nblue', lastValue: null }
 	}
-	getBodyHeightPx(_s: NodeShape, node: RandomNode) {
-		return NODE_ROW_HEIGHT_PX * 5 + (node.mode === 'pick' || node.mode === 'shuffle' ? 80 : 0)
+	getBodyHeightPx(shape: NodeShape, node: RandomNode) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 5 + (node.mode === 'pick' || node.mode === 'shuffle' ? 80 : 0)
 	}
 	getPorts(shape: NodeShape, node: RandomNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return {
-			list: { id: 'list', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
-			a: { id: 'a', x: 0, y: portY(1), terminal: 'end', dataType: 'any' },
-			b: { id: 'b', x: 0, y: portY(2), terminal: 'end', dataType: 'any' },
+			list: { id: 'list', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
+			a: { id: 'a', x: 0, y: portY(1, rowPx), terminal: 'end', dataType: 'any' },
+			b: { id: 'b', x: 0, y: portY(2, rowPx), terminal: 'end', dataType: 'any' },
 			output: out('text', this.getWidthPx(shape, node)),
 		}
 	}
@@ -214,11 +215,11 @@ export class NetToolNodeDefinition extends NodeDefinition<NetToolNode> {
 	override getWidthPx() {
 		return 340
 	}
-	getBodyHeightPx(_shape: NodeShape, _node: NetToolNode) {
-		return NODE_ROW_HEIGHT_PX * 4
+	getBodyHeightPx(shape: NodeShape, _node: NetToolNode) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 4
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { target: { id: 'target', x: 0, y: portY(0), terminal: 'end', dataType: 'text' }, output: out('text', 340) }
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		return { target: { id: 'target', x: 0, y: portY(0, getNodeRowHeightPx(shape.props.fontSize)), terminal: 'end', dataType: 'text' }, output: out('text', 340) }
 	}
 	async execute(shape: NodeShape, node: NetToolNode, inputs: InputValues): Promise<ExecutionResult> {
 		const target = (coerceToText(getInput(inputs, 'target')) || node.target).trim()
@@ -352,12 +353,13 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 			...DEFAULT_LLM_SETTINGS,
 		}
 	}
-	getBodyHeightPx(_s: NodeShape, node: SummarizeNode) {
-		return NODE_ROW_HEIGHT_PX * 5 + llmSettingsHeight(node) + SUM_RESULT_PX
+	getBodyHeightPx(shape: NodeShape, node: SummarizeNode) {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		return rowPx * 5 + llmSettingsHeight(node, rowPx) + SUM_RESULT_PX
 	}
 	getPorts(shape: NodeShape, node: SummarizeNode): Record<string, ShapePort> {
 		return {
-			input: { id: 'input', x: 0, y: portY(0), terminal: 'end', dataType: 'any' },
+			input: { id: 'input', x: 0, y: portY(0, getNodeRowHeightPx(shape.props.fontSize)), terminal: 'end', dataType: 'any' },
 			output: out('text', this.getWidthPx(shape, node)),
 		}
 	}

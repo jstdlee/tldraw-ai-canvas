@@ -1,5 +1,5 @@
 import { T } from 'tldraw'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import {
@@ -39,8 +39,8 @@ export function removedNodeDefinition<Type extends string>(
 		getDefault(): RemovedNode {
 			return { type } as RemovedNode
 		}
-		getBodyHeightPx() {
-			return NODE_ROW_HEIGHT_PX
+		getBodyHeightPx(shape: NodeShape) {
+			return getNodeRowHeightPx(shape.props.fontSize)
 		}
 		getPorts(): Record<string, ShapePort> {
 			return {

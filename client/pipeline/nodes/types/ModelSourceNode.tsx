@@ -4,7 +4,7 @@ import { buildAdhocModelValue } from '../../../../shared/modelRef'
 import { useAIConfig } from '../../../ai/aiConfig'
 import { cloudflareBase } from '../../../../shared/aiConfig'
 import { apiProviderModels } from '../../api/pipelineApi'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiSecretInput, UiSegmented, UiTextInput } from '../../../ui'
@@ -20,7 +20,6 @@ function ModelProviderIcon() {
 	)
 }
 
-const ROW = NODE_ROW_HEIGHT_PX
 const CURRENT_PX = 52
 const WIDTH = 420
 
@@ -100,10 +99,10 @@ export class ModelSourceNodeDefinition extends NodeDefinition<ModelSourceNode> {
 	override getWidthPx() {
 		return WIDTH
 	}
-	getBodyHeightPx(): number {
+	getBodyHeightPx(shape: NodeShape): number {
 		// kind, URL, key, fetch (with the model count/fetched-at line inline), filter/select rows,
 		// plus the big chosen-model line.
-		return ROW * 5 + CURRENT_PX
+		return getNodeRowHeightPx(shape.props.fontSize) * 5 + CURRENT_PX
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {

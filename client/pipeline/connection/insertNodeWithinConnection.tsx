@@ -1,6 +1,6 @@
 import { createShapeId, Editor } from 'tldraw'
 import { onCanvasNodePickerState } from '../components/OnCanvasNodePicker'
-import { DEFAULT_NODE_SPACING_PX, NODE_WIDTH_PX } from '../constants'
+import { DEFAULT_NODE_SPACING_PX, NEW_NODE_FONT_PX, NODE_WIDTH_PX } from '../constants'
 import { getNodePorts, getPortDataType } from '../nodes/nodePorts'
 import { findFirstCompatiblePort } from '../ports/portCompatibility'
 import { createOrUpdateConnectionBinding, getConnectionBindings } from './ConnectionBindingUtil'
@@ -33,7 +33,7 @@ export function insertNodeWithinConnection(editor: Editor, connection: Connectio
 				id: newNodeId,
 				x: newNodeX,
 				y: newNodeY,
-				props: { node: nodeType },
+				props: { node: nodeType, fontSize: NEW_NODE_FONT_PX },
 			})
 
 			const sourceType = getPortDataType(

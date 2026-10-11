@@ -2,7 +2,7 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { PromptIcon } from '../../components/icons/PromptIcon'
 import { TextAreaField } from '../../editors/CodeArea'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
@@ -34,9 +34,9 @@ export class PromptNodeDefinition extends NodeDefinition<PromptNode> {
 			text: 'a photo of a cat sitting on a windowsill',
 		}
 	}
-	getBodyHeightPx() {
+	getBodyHeightPx(shape: NodeShape) {
 		// One growing text box; roomy enough at the default font not to feel crowded.
-		return NODE_ROW_HEIGHT_PX * 3
+		return getNodeRowHeightPx(shape.props.fontSize) * 3
 	}
 	getPorts(shape: NodeShape, node: PromptNode): Record<string, ShapePort> {
 		return {

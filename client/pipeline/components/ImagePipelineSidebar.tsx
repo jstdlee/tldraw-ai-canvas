@@ -29,6 +29,7 @@ import {
 	UiIconButton,
 	UiTextInput,
 } from '../../ui'
+import { NEW_NODE_FONT_PX } from '../constants'
 import { $customNodes, addCustomNodeToCanvas, deleteCustomNode, refreshCustomNodes, type CustomNodeMeta } from '../customNodes'
 import { getNodeDefinitions, NodeType } from '../nodes/nodeTypes'
 import { createNodeAt } from '../placeNode'
@@ -154,7 +155,7 @@ function SidebarItem({
 										editor.createShape({
 											id,
 											type: 'node',
-											props: { node: getDefault() },
+											props: { node: getDefault(), fontSize: NEW_NODE_FONT_PX },
 										})
 									},
 								}

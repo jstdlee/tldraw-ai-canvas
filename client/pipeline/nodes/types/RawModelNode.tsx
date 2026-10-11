@@ -4,7 +4,7 @@ import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { parseModelValue } from '../../../../shared/modelRef'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiSecretInput, UiTextArea, UiTextInput } from '../../../ui'
@@ -83,17 +83,19 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 	private vars(node: RawModelNode) {
 		return llmTemplateVars([node.system])
 	}
-	getBodyHeightPx(_shape: NodeShape, node: RawModelNode) {
+	getBodyHeightPx(shape: NodeShape, node: RawModelNode) {
 		// Rows: prompt, model, URL, model id, key, temp, max tokens, think = 8, plus the
 		// system-prompt text box (72), the {{var}} rows, and the result area.
-		return NODE_ROW_HEIGHT_PX * 8 + 72 + llmVarsHeight(this.vars(node)) + RESULT_HEIGHT_PX
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		return rowPx * 8 + 72 + llmVarsHeight(this.vars(node), rowPx) + RESULT_HEIGHT_PX
 	}
-	getPorts(_shape: NodeShape, node: RawModelNode): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: RawModelNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const vars = this.vars(node)
 		return {
-			prompt: { id: 'prompt', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'text' },
-			model: { id: 'model', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 1.5, terminal: 'end', dataType: 'model' },
-			...llmVarPorts(vars, BASE_Y + NODE_ROW_HEIGHT_PX * 8 + 72),
+			prompt: { id: 'prompt', x: 0, y: BASE_Y + rowPx * 0.5, terminal: 'end', dataType: 'text' },
+			model: { id: 'model', x: 0, y: BASE_Y + rowPx * 1.5, terminal: 'end', dataType: 'model' },
+			...llmVarPorts(vars, BASE_Y + rowPx * 8 + 72, rowPx),
 			output: { id: 'output', x: WIDTH, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}

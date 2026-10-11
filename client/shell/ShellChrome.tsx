@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { DefaultColorStyle, Editor, TLDefaultColorStyle, TLShapeId, useActions, useEditor, useValue } from 'tldraw'
 import { FEATURE_ROWS } from '../../shared/featureList'
 import { getNodeDefinitions } from '../pipeline/nodes/nodeTypes'
+import { NEW_NODE_FONT_PX } from '../pipeline/constants'
 import { createShapeId } from 'tldraw'
 import { diveGroup, groupPlainText, leaveGroup } from '../pipeline/groups/groupActions'
 import { $findOpen } from '../clips/FindBar'
@@ -228,7 +229,7 @@ function insertNode(editor: Editor, type: string) {
 	const id = createShapeId()
 	const center = editor.getViewportPageBounds().center
 	editor.run(() => {
-		editor.createShape({ id, type: 'node', x: center.x - 130, y: center.y - 40, props: { node: def.getDefault() } })
+		editor.createShape({ id, type: 'node', x: center.x - 130, y: center.y - 40, props: { node: def.getDefault(), fontSize: NEW_NODE_FONT_PX } })
 		editor.select(id)
 	})
 }

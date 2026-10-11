@@ -3,10 +3,10 @@ import classNames from 'classnames'
 import { T, useEditor, useValue } from 'tldraw'
 import { AdjustIcon } from '../../components/icons/AdjustIcon'
 import {
+	getNodeRowHeightPx,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_IMAGE_PREVIEW_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 	NODE_WIDTH_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
@@ -80,16 +80,16 @@ export class AdjustNodeDefinition extends NodeDefinition<AdjustNode> {
 			lastResultUrl: null,
 		}
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 4 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 4 + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 		return {
 			image: {
 				id: 'image',
 				x: 0,
-				y: baseY + NODE_ROW_HEIGHT_PX * 0.5,
+				y: baseY + getNodeRowHeightPx(shape.props.fontSize) * 0.5,
 				terminal: 'end',
 				dataType: 'image',
 			},

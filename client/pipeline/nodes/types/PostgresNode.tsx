@@ -13,7 +13,7 @@ import {
 import { apiHttp } from '../../api/pipelineApi'
 import { runSql } from '../../pg'
 import { NumberIcon } from '../../components/icons/NumberIcon'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { CodeArea } from '../../editors/CodeArea'
@@ -88,15 +88,16 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 	override getWidthPx() {
 		return WIDTH
 	}
-	getBodyHeightPx(_shape: NodeShape, node: PostgresNode) {
+	getBodyHeightPx(shape: NodeShape, node: PostgresNode) {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		if (node.mode === 'import') {
 			const columns = readRecipe(node)?.columns.length ?? 0
-			return NODE_ROW_HEIGHT_PX * (4 + columns) + CSV_HEIGHT + 56
+			return rowPx * (4 + columns) + CSV_HEIGHT + 56
 		}
-		return NODE_ROW_HEIGHT_PX * 2 + SQL_HEIGHT
+		return rowPx * 2 + SQL_HEIGHT
 	}
-	getPorts(): Record<string, ShapePort> {
-		const y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + NODE_ROW_HEIGHT_PX * 0.5
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		const y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + getNodeRowHeightPx(shape.props.fontSize) * 0.5
 		return {
 			input: { id: 'input', x: 0, y, terminal: 'end', dataType: 'text' },
 			output: { id: 'output', x: WIDTH, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },

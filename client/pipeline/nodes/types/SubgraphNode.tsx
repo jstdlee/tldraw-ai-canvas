@@ -1,6 +1,6 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, TLShapeId, useEditor } from 'tldraw'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, PortDataType } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, PortDataType } from '../../constants'
 import { ExecutionGraph } from '../../execution/ExecutionGraph'
 import { ShapePort } from '../../ports/Port'
 import { openGroup } from '../../subgraph'
@@ -58,7 +58,6 @@ export const SubgraphNode = T.object({
 
 const BOX_WIDTH_PX = 360
 const THUMB_PX = 170
-const FOOTER_ROW_PX = NODE_ROW_HEIGHT_PX
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 
 /**
@@ -94,19 +93,21 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 	private rows(node: SubgraphNode) {
 		return Math.max(node.inputs.length, node.outputs.length, 1)
 	}
-	getBodyHeightPx(_shape: NodeShape, node: SubgraphNode) {
-		return NODE_ROW_HEIGHT_PX * this.rows(node) + THUMB_PX + FOOTER_ROW_PX
+	getBodyHeightPx(shape: NodeShape, node: SubgraphNode) {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		return rowPx * this.rows(node) + THUMB_PX + rowPx
 	}
-	getPorts(_shape: NodeShape, node: SubgraphNode): Record<string, ShapePort> {
+	getPorts(shape: NodeShape, node: SubgraphNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const ports: Record<string, ShapePort> = {}
 		node.inputs.forEach((p, i) => {
-			ports[p.id] = { id: p.id, x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * (i + 0.5), terminal: 'end', dataType: p.dataType }
+			ports[p.id] = { id: p.id, x: 0, y: BASE_Y + rowPx * (i + 0.5), terminal: 'end', dataType: p.dataType }
 		})
 		node.outputs.forEach((p, i) => {
 			ports[p.id] = {
 				id: p.id,
 				x: this.getWidthPx(),
-				y: BASE_Y + NODE_ROW_HEIGHT_PX * (i + 0.5),
+				y: BASE_Y + rowPx * (i + 0.5),
 				terminal: 'start',
 				dataType: p.dataType,
 			}

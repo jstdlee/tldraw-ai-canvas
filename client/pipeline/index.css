@@ -43,6 +43,13 @@ body {
 	font-size: var(--node-fs, 20px);
 	line-height: 1.4;
 
+	/* WP16: one type scale for everything inside a card, relative to the card's own font. */
+	--fs-title: 1em; /* card title: weight 600 */
+	--fs-body: 0.875em; /* field values, inputs, selects, buttons, table cells, results */
+	--fs-label: 0.8125em; /* field and port labels: weight 500, --tl-color-text-2 */
+	--fs-meta: 0.75em; /* hints, row counts, usage line, badges: --tl-color-text-3 */
+	--fs-mono: 0.8125em; /* code, SQL, formulas, CSV previews */
+
 	/* A slightly stronger shadow on hover, like tldraw's own cards. */
 	[data-state='select.idle'] &:hover {
 		box-shadow:
@@ -70,13 +77,13 @@ body {
 
 	.NodeShape-label {
 		flex: 1 1 auto;
-		font-weight: 500;
-		font-size: 0.87em;
+		font-weight: 600;
+		font-size: var(--fs-title);
 	}
 
 	.NodeShape-output {
 		font-variant-numeric: tabular-nums;
-		font-size: 0.74em;
+		font-size: var(--fs-meta);
 		color: var(--tl-color-text-3);
 		max-width: 80px;
 		overflow: hidden;
@@ -86,7 +93,7 @@ body {
 
 	.NodeShape-kindBadge {
 		flex: 0 0 auto;
-		font-size: 0.7em;
+		font-size: var(--fs-meta);
 		font-weight: 500;
 		color: var(--tl-color-text-3);
 		text-transform: uppercase;
@@ -129,7 +136,7 @@ body {
 		margin: 0 -6px;
 		border-radius: var(--tl-radius-2);
 		font: inherit;
-		font-size: 0.74em;
+		font-size: var(--fs-meta);
 		color: var(--tl-color-text-3);
 		cursor: pointer;
 
@@ -216,7 +223,7 @@ body {
 		border-radius: var(--tl-radius-3);
 		background: none;
 		font: inherit;
-		font-size: 0.8em;
+		font-size: var(--fs-body);
 		outline: none;
 
 		&:focus {
@@ -246,7 +253,7 @@ body {
 		border-radius: var(--tl-radius-3);
 		background: none;
 		font: inherit;
-		font-size: 0.8em;
+		font-size: var(--fs-body);
 		outline: none;
 		resize: none;
 
@@ -258,8 +265,9 @@ body {
 
 .NodeInputRow {
 	.NodeInputRow-label {
-		font-size: 0.74em;
-		color: var(--tl-color-text-3);
+		font-size: var(--fs-label);
+		font-weight: 500;
+		color: var(--tl-color-text-2);
 		flex: 0 0 auto;
 		min-width: 48px;
 	}
@@ -287,7 +295,7 @@ body {
 }
 
 .NodeRow-connected-value {
-	font-size: 0.74em;
+	font-size: var(--fs-body);
 	color: var(--tl-color-text-3);
 	flex: 1 1 auto;
 	text-align: right;
@@ -297,7 +305,7 @@ body {
 }
 
 .NodeRow-disconnected {
-	font-size: 0.74em;
+	font-size: var(--fs-meta);
 	color: var(--tl-color-text-3);
 	opacity: 0.5;
 	flex: 1 1 auto;
@@ -313,7 +321,7 @@ body {
 }
 
 .NodeRow-value {
-	font-size: 0.74em;
+	font-size: var(--fs-body);
 	color: var(--tl-color-text-3);
 	font-variant-numeric: tabular-nums;
 	flex: 0 0 auto;
@@ -322,7 +330,8 @@ body {
 }
 
 .NodePortLabel {
-	font-size: 0.74em;
+	/* Tinted per port data type via inline style (PORT_TYPE_COLORS), not a flat text color. */
+	font-size: var(--fs-label);
 	font-weight: 500;
 	flex: 0 0 auto;
 }
@@ -404,7 +413,7 @@ body {
 	border-radius: var(--tl-radius-3);
 	padding: var(--tl-space-2) var(--tl-space-3);
 	font: inherit;
-	font-size: 0.93em;
+	font-size: var(--fs-body);
 	line-height: 1;
 	background: var(--tl-color-panel);
 	cursor: pointer;
@@ -424,7 +433,7 @@ body {
 	justify-content: center;
 
 	span {
-		font-size: 0.74em;
+		font-size: var(--fs-meta);
 		color: var(--tl-color-text-3);
 		opacity: 0.5;
 	}
@@ -475,7 +484,7 @@ body {
 	width: 100%;
 	min-height: 100%;
 	padding: var(--tl-space-3) var(--tl-space-4);
-	font-size: 0.74em;
+	font-size: var(--fs-body);
 	line-height: 1.4;
 	color: var(--tl-color-text-1);
 	overflow: visible;
@@ -492,7 +501,7 @@ body {
 	justify-content: center;
 
 	span {
-		font-size: 0.74em;
+		font-size: var(--fs-meta);
 		color: var(--tl-color-text-3);
 		opacity: 0.5;
 	}
@@ -1109,7 +1118,7 @@ body {
 	box-sizing: border-box;
 	resize: none;
 	font: inherit;
-	font-size: 0.8em;
+	font-size: var(--fs-body);
 	padding: 6px 8px;
 	padding-right: 40px;
 	border-radius: var(--tl-radius-2);
@@ -1133,7 +1142,7 @@ body {
 .ModelSourceNode-meta {
 	margin-left: auto;
 	color: var(--tl-color-text-3);
-	font-size: 0.85em;
+	font-size: var(--fs-meta);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1143,7 +1152,7 @@ body {
 	display: block;
 	line-height: 2;
 	padding: 0 var(--tl-space-4);
-	font-size: 0.95em;
+	font-size: var(--fs-body);
 	font-weight: 500;
 	color: var(--tl-color-text-1);
 	overflow: hidden;
@@ -1155,7 +1164,7 @@ body {
 .LlmSubmitHint {
 	padding: 0 var(--tl-space-4);
 	color: var(--tl-color-text-3);
-	font-size: 0.75em;
+	font-size: var(--fs-meta);
 	pointer-events: none;
 }
 
@@ -1169,7 +1178,7 @@ body {
 
 .LlmSettings {
 	padding: 0 var(--tl-space-4);
-	font-size: 0.74em;
+	font-size: var(--fs-body);
 }
 
 .LlmSettings-toggle {
@@ -1229,7 +1238,7 @@ body {
 /* Run status (tokens, time) shown below the settings, near the node bottom. */
 .LlmSettings-status {
 	padding: 2px var(--tl-space-4) 4px;
-	font-size: 0.74em;
+	font-size: var(--fs-meta);
 	color: var(--tl-color-text-3);
 	font-variant-numeric: tabular-nums;
 	border-top: 1px solid var(--tl-color-divider);
@@ -1249,7 +1258,7 @@ body {
 	min-height: 0;
 	resize: none;
 	font: inherit;
-	font-size: 1em;
+	font-size: var(--fs-body);
 	padding: 5px 7px;
 	border-radius: var(--tl-radius-2);
 	border: 1px solid var(--tl-color-divider);
@@ -1283,7 +1292,7 @@ body {
 	flex: 1;
 	min-width: 0;
 	font: inherit;
-	font-size: 1em;
+	font-size: var(--fs-body);
 	padding: 3px 6px;
 	border-radius: var(--tl-radius-2);
 	border: 1px solid var(--tl-color-divider);
@@ -1321,21 +1330,22 @@ body {
 }
 
 .NodeField-label {
-	font-size: 0.74em;
-	color: var(--tl-color-text-3);
+	font-size: var(--fs-label);
+	font-weight: 500;
+	color: var(--tl-color-text-2);
 }
 
 .NodeField-check {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 0.74em;
+	font-size: var(--fs-label);
 	color: var(--tl-color-text-2);
 	pointer-events: all;
 }
 
 .NodeStatus {
-	font-size: 0.74em;
+	font-size: var(--fs-meta);
 	color: var(--tl-color-text-3);
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1369,7 +1379,7 @@ body {
 	right: 0;
 	top: calc(100% + 6px);
 	padding: 2px 8px;
-	font-size: 0.75em;
+	font-size: var(--fs-meta);
 	line-height: 1.3;
 	color: var(--tl-color-text-3);
 	background: none;
@@ -1420,7 +1430,7 @@ body {
 	min-width: 0;
 	min-height: 0;
 	overflow: auto;
-	font-size: 0.8em;
+	font-size: var(--fs-body);
 	color: var(--tl-color-text-1);
 }
 
@@ -1452,7 +1462,7 @@ body {
 
 .ValuePreview-text.is-mono {
 	font-family: ui-monospace, monospace;
-	font-size: 0.74em;
+	font-size: var(--fs-mono);
 }
 
 .ValuePreview-markdown {
@@ -1508,7 +1518,7 @@ body {
 	gap: 4px;
 	flex: 1;
 	min-width: 0;
-	font-size: 0.74em;
+	font-size: var(--fs-meta);
 	color: var(--tl-color-text-3);
 }
 
@@ -1522,7 +1532,7 @@ body {
 	gap: 6px;
 	align-items: center;
 	height: 22px;
-	font-size: 0.74em;
+	font-size: var(--fs-meta);
 	color: var(--tl-color-text-3);
 	pointer-events: all;
 }
@@ -1659,7 +1669,7 @@ body {
 	background: var(--tl-color-muted-0);
 	overflow: hidden;
 	font-family: ui-monospace, monospace;
-	font-size: 0.74em;
+	font-size: var(--fs-mono);
 	line-height: 1.45;
 	pointer-events: all;
 }
@@ -2216,7 +2226,7 @@ body {
 	width: 76px;
 	min-width: 56px;
 	padding: 0 6px !important;
-	font-size: 11px !important;
+	font-size: var(--fs-mono);
 	font-family: ui-monospace, Menlo, monospace;
 	align-self: center !important;
 }
@@ -2226,7 +2236,7 @@ body {
 	width: 52px;
 	min-width: 44px;
 	padding: 0 4px !important;
-	font-size: 12px !important;
+	font-size: var(--fs-body);
 	align-self: center !important;
 }
 
@@ -2235,8 +2245,9 @@ body {
 	right: var(--tl-space-4);
 	top: 50%;
 	transform: translateY(-50%);
-	font-size: 0.74em;
-	color: var(--tl-color-text-3);
+	font-size: var(--fs-label);
+	font-weight: 500;
+	color: var(--tl-color-text-2);
 }
 
 /* The out-name row keeps its label next to its input (not floating). */
@@ -2248,7 +2259,7 @@ body {
 
 .CodeNode-editor {
 	font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
-	font-size: 11.5px;
+	font-size: var(--fs-mono);
 	line-height: 1.45;
 	tab-size: 2;
 	white-space: pre;
@@ -2273,7 +2284,7 @@ body {
 }
 
 .NodeBranch {
-	font-size: 0.74em;
+	font-size: var(--fs-meta);
 	padding: 2px 8px;
 	border-radius: 999px;
 	color: var(--tl-color-text-3);
@@ -2319,7 +2330,7 @@ body {
 
 .NodeField-textarea.is-mono {
 	font-family: ui-monospace, monospace;
-	font-size: 0.74em;
+	font-size: var(--fs-mono);
 }
 
 /* Group box node */
@@ -2370,7 +2381,7 @@ body {
 }
 
 .Subgraph-count {
-	font-size: 0.74em;
+	font-size: var(--fs-meta);
 	color: var(--tl-color-text-3);
 }
 
@@ -2383,7 +2394,7 @@ body {
 	flex-direction: column;
 	gap: 4px;
 	overflow: auto;
-	font-size: 0.74em;
+	font-size: var(--fs-meta);
 }
 
 .JevBar {
@@ -2430,12 +2441,13 @@ body {
 .JevBars-source {
 	margin-top: auto;
 	color: var(--tl-color-text-3);
-	font-size: 10px;
+	font-size: var(--fs-meta);
 }
 
 .CodeNode-outLabel-static {
-	font-size: 0.74em;
-	color: var(--tl-color-text-3);
+	font-size: var(--fs-label);
+	font-weight: 500;
+	color: var(--tl-color-text-2);
 }
 
 .ImagePipelineSidebar-empty {
@@ -2571,7 +2583,6 @@ body {
 
 .ImageGenNode-grid > .NodeRow-disconnected {
 	margin: auto;
-	font-size: 0.8em;
 }
 
 .ImageGenNode-tiles {
@@ -2629,9 +2640,17 @@ body {
 
 /* Row labels look the same in every card, also outside the rows they were first styled for. */
 .NodeBody .NodeInputRow-label {
-	font-size: 0.74em;
-	color: var(--tl-color-text-3);
+	font-size: var(--fs-label);
+	font-weight: 500;
+	color: var(--tl-color-text-2);
 	flex: 0 0 auto;
 	min-width: 48px;
 	white-space: nowrap;
+}
+
+/* "Model settings" toggle reads as a label, like the rows around it. */
+.NodeShape .LlmSettings-toggle {
+	font-size: var(--fs-label);
+	font-weight: 500;
+	color: var(--tl-color-text-2);
 }

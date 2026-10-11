@@ -3,9 +3,9 @@ import { T, useEditor } from 'tldraw'
 import { runTextTool, TEXT_TOOL_OPS, TextToolOp } from '../../../../shared/textTools'
 import { PromptConcatIcon } from '../../components/icons/PromptConcatIcon'
 import {
+	getNodeRowHeightPx,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
@@ -55,13 +55,14 @@ export class TextToolNodeDefinition extends NodeDefinition<TextToolNode> {
 	getDefault(): TextToolNode {
 		return { type: 'text_tool', op: 'template', a: '{{input}}', b: '', lastResultText: null, error: null }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 5
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 5
 	}
 	getPorts(shape: NodeShape, node: TextToolNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return {
-			input: { id: 'input', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'any' },
-			input2: { id: 'input2', x: 0, y: BASE_Y + NODE_ROW_HEIGHT_PX * 1.5, terminal: 'end', dataType: 'any' },
+			input: { id: 'input', x: 0, y: BASE_Y + rowPx * 0.5, terminal: 'end', dataType: 'any' },
+			input2: { id: 'input2', x: 0, y: BASE_Y + rowPx * 1.5, terminal: 'end', dataType: 'any' },
 			output: { id: 'output', x: this.getWidthPx(shape, node), y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}

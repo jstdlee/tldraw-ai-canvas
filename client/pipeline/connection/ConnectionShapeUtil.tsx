@@ -23,7 +23,7 @@ import {
 import { isWireLocked } from '../nodeGuards'
 import { dropWireOnShape } from '../execution/arrows'
 import { onCanvasNodePickerState } from '../components/OnCanvasNodePicker'
-import { PORT_TYPE_COLORS, PortDataType } from '../constants'
+import { NEW_NODE_FONT_PX, PORT_TYPE_COLORS, PortDataType } from '../constants'
 import {
 	getAllConnectedNodes,
 	getNodeOutputPortInfo,
@@ -265,6 +265,7 @@ export class ConnectionShapeUtil extends ShapeUtil<ConnectionShape> {
 						y: terminalInPageSpace.y,
 						props: {
 							node: nodeType,
+							fontSize: NEW_NODE_FONT_PX,
 						},
 					})
 					this.editor.select(newNodeId)

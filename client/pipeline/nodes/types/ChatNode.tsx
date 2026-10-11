@@ -6,9 +6,9 @@ import { startExecution } from '../../execution/executionState'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
+	getNodeRowHeightPx,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
-	NODE_ROW_HEIGHT_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues, getNodePortConnections, NodePortConnection } from '../nodePorts'
@@ -95,32 +95,34 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 	private vars(node: ChatNode) {
 		return llmTemplateVars([node.userMessage, node.system])
 	}
-	getBodyHeightPx(_shape: NodeShape, node: ChatNode) {
-		return NODE_ROW_HEIGHT_PX * 3 + llmSettingsHeight(node) + llmVarsHeight(this.vars(node)) + MESSAGE_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape, node: ChatNode) {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		return rowPx * 3 + llmSettingsHeight(node, rowPx) + llmVarsHeight(this.vars(node), rowPx) + MESSAGE_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape, node: ChatNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
-		const modelY = baseY + NODE_ROW_HEIGHT_PX * 2.5
-		const settingsStartY = baseY + NODE_ROW_HEIGHT_PX * 3
+		const modelY = baseY + rowPx * 2.5
+		const settingsStartY = baseY + rowPx * 3
 		const vars = this.vars(node)
 		return {
 			parent: {
 				id: 'parent',
 				x: 0,
-				y: baseY + NODE_ROW_HEIGHT_PX * 0.5,
+				y: baseY + rowPx * 0.5,
 				terminal: 'end',
 				dataType: 'text',
 			},
 			attach: {
 				id: 'attach',
 				x: 0,
-				y: baseY + NODE_ROW_HEIGHT_PX * 1.5,
+				y: baseY + rowPx * 1.5,
 				terminal: 'end',
 				dataType: 'any',
 			},
 			model: llmModelPort(modelY),
-			...llmSettingsPorts(settingsStartY, !!node.showSettings),
-			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
+			...llmSettingsPorts(settingsStartY, !!node.showSettings, rowPx),
+			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node, rowPx), rowPx),
 			output: {
 				id: 'output',
 				x: this.getWidthPx(shape, node),

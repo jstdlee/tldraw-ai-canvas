@@ -8,7 +8,7 @@ import { readSpreadsheet } from '../../excel'
 import { loadFileBytes, storeFile } from '../../fileStore'
 import { apiImportImage, apiProbeImage } from '../../api/pipelineApi'
 import { storeBlob } from '../../imageOps'
-import { NODE_HEADER_HEIGHT_PX, NODE_IMAGE_PREVIEW_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_IMAGE_PREVIEW_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiCheckbox, UiEmpty, UiSegmented, UiTable, UiTextInput } from '../../../ui'
@@ -129,8 +129,9 @@ export class FileInNodeDefinition extends NodeDefinition<FileInNode> {
 			isImageOutput: false,
 		}
 	}
-	getBodyHeightPx(_shape: NodeShape, node: FileInNode) {
-		if (node.mode === 'path') return NODE_ROW_HEIGHT_PX * 2
+	getBodyHeightPx(shape: NodeShape, node: FileInNode) {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		if (node.mode === 'path') return rowPx * 2
 		const source = node.source ?? 'upload'
 		let rows = 2 // segmented control + main row
 		if (source === 'upload') {
@@ -139,11 +140,11 @@ export class FileInNodeDefinition extends NodeDefinition<FileInNode> {
 		} else {
 			rows += 1 // "as text" row
 		}
-		return NODE_ROW_HEIGHT_PX * rows + NODE_IMAGE_PREVIEW_HEIGHT_PX
+		return rowPx * rows + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return {
-			url: { id: 'url', x: 0, y: NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'text' },
+			url: { id: 'url', x: 0, y: NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + getNodeRowHeightPx(shape.props.fontSize) * 0.5, terminal: 'end', dataType: 'text' },
 			output: out(),
 		}
 	}
@@ -418,8 +419,8 @@ export class UrlInNodeDefinition extends NodeDefinition<UrlInNode> {
 	getDefault(): UrlInNode {
 		return { type: 'url_in', url: '', fetchBody: false, lastText: null, error: null }
 	}
-	getBodyHeightPx(_shape: NodeShape, _node: UrlInNode) {
-		return NODE_ROW_HEIGHT_PX * 3
+	getBodyHeightPx(shape: NodeShape, _node: UrlInNode) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 3
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { output: out() }

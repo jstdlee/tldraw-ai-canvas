@@ -4,7 +4,7 @@ import { HubModel } from '../../../../shared/modelPick'
 import { T, useEditor, useValue } from 'tldraw'
 import { youtubeEmbed } from '../../../../shared/youtube'
 import { getNodeInputPortValues } from '../nodePorts'
-import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
+import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
@@ -25,8 +25,8 @@ import {
 const mark = <span className="NodeShape-emoji">▹</span>
 const BASE = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 
-function end(id: string, row: number, dataType: 'text' | 'any' = 'text'): ShapePort {
-	return { id, x: 0, y: BASE + NODE_ROW_HEIGHT_PX * (row + 0.5), terminal: 'end', dataType }
+function end(id: string, row: number, rowPx: number, dataType: 'text' | 'any' = 'text'): ShapePort {
+	return { id, x: 0, y: BASE + rowPx * (row + 0.5), terminal: 'end', dataType }
 }
 function out(dataType: 'text' | 'any' = 'text'): ShapePort {
 	return { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType }
@@ -62,12 +62,13 @@ export class VideoNodeDefinition extends NodeDefinition<VideoNode> {
 	getDefault(): VideoNode {
 		return { type: 'video', url: '', autoplay: false }
 	}
-	getBodyHeightPx() {
+	getBodyHeightPx(shape: NodeShape) {
 		// Row for the link, then a 16:9 frame at the card width (260 - 16 margin).
-		return NODE_ROW_HEIGHT_PX * 2 + Math.ceil(((NODE_WIDTH_PX - 16) * 9) / 16) + 12
+		return getNodeRowHeightPx(shape.props.fontSize) * 2 + Math.ceil(((NODE_WIDTH_PX - 16) * 9) / 16) + 12
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { url: end('url', 0), output: out() }
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		return { url: end('url', 0, rowPx), output: out() }
 	}
 	async execute(_shape: NodeShape, node: VideoNode, inputs: InputValues): Promise<ExecutionResult> {
 		return { output: getInputText(inputs, 'url') || node.url }
@@ -130,11 +131,12 @@ export class SleepNodeDefinition extends NodeDefinition<SleepNode> {
 	getDefault(): SleepNode {
 		return { type: 'sleep', ms: 500 }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX * 2
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * 2
 	}
-	getPorts(): Record<string, ShapePort> {
-		return { input: end('input', 0, 'any'), output: out('any') }
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		return { input: end('input', 0, rowPx, 'any'), output: out('any') }
 	}
 	async execute(_shape: NodeShape, node: SleepNode, inputs: InputValues): Promise<ExecutionResult> {
 		await sleep(Math.max(0, Math.min(node.ms, 60_000)))
@@ -189,8 +191,8 @@ export class OpenRouterNodeDefinition extends NodeDefinition<OpenRouterNode> {
 	getDefault(): OpenRouterNode {
 		return { type: 'openrouter', model: '' }
 	}
-	getBodyHeightPx() {
-		return NODE_ROW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize)
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { output: out() }
