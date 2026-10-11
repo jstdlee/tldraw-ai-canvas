@@ -1,13 +1,14 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
-import { evaluateCondition, isTruthy, splitItems } from '../../../../shared/logic'
+import { evaluateCondition, isTruthy, resolveLoopItemResult, splitItems } from '../../../../shared/logic'
 import { IteratorIcon } from '../../components/icons/IteratorIcon'
 import { RouterIcon } from '../../components/icons/RouterIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { executionGeneration } from '../../execution/executionState'
 import { loopBodyNodes, runLoopBody } from '../../execution/loop'
 import { clearNodeRun } from '../../execution/nodeRunState'
-import { ShapePort } from '../../ports/Port'
+import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect, WireField } from './fields'
@@ -133,13 +134,32 @@ function IfNodeComponent({ shape, node }: NodeComponentProps<IfNode>) {
 					<span className="NodeRow-disconnected">no value needed</span>
 				)}
 			</WireField>
-			<NodeRow className="NodeRow-right">
-				<span className={'NodeBranch' + (node.lastResult === true ? ' is-active' : '')}>then ✓</span>
-			</NodeRow>
-			<NodeRow className="NodeRow-right">
-				<span className={'NodeBranch' + (node.lastResult === false ? ' is-active' : '')}>else ✗</span>
-			</NodeRow>
+			<IfBranchRow shapeId={shape.id} portId="then" active={node.lastResult === true} label="then ✓" />
+			<IfBranchRow shapeId={shape.id} portId="else" active={node.lastResult === false} label="else ✗" />
 		</>
+	)
+}
+
+/** WP21 Part A: the If node's `then`/`else` ports were defined in `getPorts` but never had a
+ * `<Port>` rendered, so they had no visible, draggable dot. Anchored to its own row so the dot
+ * tracks the row at any font size, like `OutputPortRow`, but keeps the `NodeBranch` styling. */
+function IfBranchRow({
+	shapeId,
+	portId,
+	active,
+	label,
+}: {
+	shapeId: NodeShape['id']
+	portId: string
+	active: boolean
+	label: string
+}) {
+	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, portId)
+	return (
+		<NodeRow ref={ref} className="NodeRow-right">
+			<span className={'NodeBranch' + (active ? ' is-active' : '')}>{label}</span>
+			<Port shapeId={shapeId} portId={portId} />
+		</NodeRow>
 	)
 }
 
@@ -244,6 +264,9 @@ export const ForEachNode = T.object({
 	split: T.string,
 	separator: T.string,
 	joiner: T.string,
+	// WP21 Part B: what happens to an item whose path never reaches "result" (e.g. an If branch
+	// that wasn't wired back). Optional: an old saved canvas without it behaves as "skip".
+	noResult: T.string.optional(),
 	progress: T.string.nullable(),
 	lastResults: T.string.nullable(),
 	error: T.string.nullable(),
@@ -260,10 +283,11 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 	category = categoryOf('for_each')
 	resultKeys = ['progress', 'lastResults', 'error'] as const
 	getDefault(): ForEachNode {
-		return { type: 'for_each', split: 'lines', separator: ',', joiner: '\\n', progress: null, lastResults: null, error: null }
+		return { type: 'for_each', split: 'lines', separator: ',', joiner: '\\n', noResult: 'skip', progress: null, lastResults: null, error: null }
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		return getNodeRowHeightPx(shape.props.fontSize) * 6 + 18
+		// +1 row (WP21 Part B): the noResult control.
+		return getNodeRowHeightPx(shape.props.fontSize) * 7 + 18
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -300,7 +324,15 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 					set({ error: `Item ${i + 1} (${previewItem(items[i])}): ${result.error}`, progress: `failed at ${i + 1} / ${items.length}` }, false)
 					return { item: STOP_EXECUTION, output: results.length ? joinResults(results) : STOP_EXECUTION }
 				}
-				results.push(result.value ?? items[i])
+				// WP21 Part B: a branch inside the loop body (e.g. an If whose "else" is never
+				// wired back to "result") can leave this item with no result at all — handled
+				// by noResult (default "skip": the item is left out, like a filter).
+				const outcome = resolveLoopItemResult(result.value, items[i], (node.noResult as 'skip' | 'keep' | 'error') ?? 'skip')
+				if (outcome.error) {
+					set({ error: `Item ${i + 1} (${previewItem(items[i])}): ${outcome.error}`, progress: `failed at ${i + 1} / ${items.length}` }, false)
+					return { item: STOP_EXECUTION, output: results.length ? joinResults(results) : STOP_EXECUTION }
+				}
+				if (outcome.value != null) results.push(outcome.value)
 			}
 			const joined = joinResults(results)
 			set({ lastResults: joined, progress: `${items.length} done` })
@@ -334,6 +366,17 @@ function forEachPercent(progress: string | null): number {
 	return 0
 }
 
+/** WP21 Part A: "item" is an output port (feeds the loop body) but had no visible dot. */
+function ForEachItemRow({ shapeId }: { shapeId: NodeShape['id'] }) {
+	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, 'item')
+	return (
+		<NodeRow ref={ref} className="NodeRow-right">
+			<span className="NodeBranch is-active">each item →</span>
+			<Port shapeId={shapeId} portId="item" />
+		</NodeRow>
+	)
+}
+
 function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) {
 	const editor = useEditor()
 	const set = (patch: Partial<ForEachNode>) => updateNode<ForEachNode>(editor, shape, (n) => ({ ...n, ...patch }))
@@ -360,12 +403,22 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 					<span className="NodeRow-disconnected">empty items are skipped</span>
 				)}
 			</WireField>
-			<NodeRow className="NodeRow-right">
-				<span className="NodeBranch is-active">each item →</span>
-			</NodeRow>
+			<ForEachItemRow shapeId={shape.id} />
 			<PortRow shapeId={shape.id} portId="result" label="← Result" dataType="any" hint="end of the loop body" />
 			<WireField shapeId={shape.id} fieldKey="joiner" label="Join with">
 				<UiTextInput value={node.joiner} onChange={(joiner) => set({ joiner })} />
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="noResult" label="No result">
+				<NodeSelect
+					className="NodeField-select"
+					value={node.noResult ?? 'skip'}
+					onPointerDown={stopEvent}
+					onChange={(e) => set({ noResult: e.target.value })}
+				>
+					<option value="skip">skip the item</option>
+					<option value="keep">keep the item as-is</option>
+					<option value="error">stop with an error</option>
+				</NodeSelect>
 			</WireField>
 			<div className="ProgressBar" title={node.progress ?? 'Wire item, then Result, then Play'}>
 				<span style={{ width: `${forEachPercent(node.progress)}%` }} />

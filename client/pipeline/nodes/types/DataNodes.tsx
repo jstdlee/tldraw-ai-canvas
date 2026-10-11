@@ -1417,8 +1417,10 @@ export class ProfileNodeDefinition extends NodeDefinition<ProfileNode> {
 		return { type: 'profile', text: SAMPLE, format: 'auto', error: null, lastOutput: null }
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		// Header row (data port) + the format row + the header line + a scrollable column list.
-		return getNodeRowHeightPx(shape.props.fontSize) * 3 + 360
+		// Data port row + (unwired: the "text" field's own label row) + the format row + the
+		// header line + a scrollable column list.
+		const dataWired = isInputWired(this.editor, shape.id, 'data')
+		return getNodeRowHeightPx(shape.props.fontSize) * (dataWired ? 3 : 4) + 360
 	}
 	getPorts(shape: NodeShape, node: ProfileNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -1555,13 +1557,16 @@ function ProfileComponent({ shape, node }: NodeComponentProps<ProfileNode>) {
 	const fileSize = useMemo(() => formatFileSize(new TextEncoder().encode(effectiveText).length), [effectiveText])
 	return (
 		<>
-			{dataWired ? (
-				<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
-			) : (
-				<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Table" />
-			)}
+			{/* WP21 follow-up: "data" is a dedicated port, separate from the wirable "text"
+			    field below — its own row/anchor must always render, not just while wired
+			    (it used to borrow the "text" field's row when unwired, leaving "data" with
+			    no visible dot at all in the default state). */}
+			<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
 			{!dataWired && (
-				<UiTextArea className="NodeField-textarea" mono rows={4} value={node.text} onChange={(text) => set({ text })} />
+				<>
+					<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Text" />
+					<UiTextArea className="NodeField-textarea" mono rows={4} value={node.text} onChange={(text) => set({ text })} />
+				</>
 			)}
 			<WireField shapeId={shape.id} fieldKey="format" label="Format">
 				<UiSelect

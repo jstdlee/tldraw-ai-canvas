@@ -88,3 +88,32 @@ export function splitItems(input: string, mode: string, separator: string): stri
 	}
 	return items.map((s) => s.trim()).filter(Boolean)
 }
+
+/** WP21 Part B ("logic inside For each"): what a For each item contributes to the loop's
+ * results list. `result` is what reached the loop body's feedback `result` port for this item
+ * — null when nothing did (e.g. the item's path ended in a branch, such as an `If`'s `else`,
+ * that was never wired back to `result`). `noResult` controls what happens to that item. */
+export type NoResultMode = 'skip' | 'keep' | 'error'
+
+export interface LoopItemOutcome {
+	/** What to add to the results list, or null to leave this item out entirely. */
+	value: string | null
+	/** Set only for `noResult: 'error'` when this item reached no result: stops the loop. */
+	error?: string
+}
+
+export function resolveLoopItemResult(
+	result: string | null,
+	item: string,
+	noResult: NoResultMode
+): LoopItemOutcome {
+	if (result != null) return { value: result }
+	switch (noResult) {
+		case 'keep':
+			return { value: item }
+		case 'error':
+			return { value: null, error: 'reached no result' }
+		default:
+			return { value: null }
+	}
+}

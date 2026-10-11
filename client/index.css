@@ -575,6 +575,24 @@ body {
 	font-weight: 400;
 }
 
+/* WP22 B5: hint shown in the canvas agent's chat input when the selection has cards. */
+.chat-cards-hint {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 6px 8px;
+	margin-bottom: 4px;
+	border-radius: 6px;
+	background: var(--tl-color-muted-1);
+	color: var(--tl-color-text-2);
+	font-size: 11px;
+}
+
+.chat-cards-hint span {
+	flex: 1;
+}
+
 /* Prompt Tags */
 
 .prompt-tags {

@@ -29,6 +29,7 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	summarize: { inn: ['input'], out: ['output'] },
 	model_source: { inn: [], out: ['model'] },
 	jev: { inn: ['context', 'question', 'input'], out: ['output', 'probs', 'final', 'yes', 'no'] },
+	decision_switch: { inn: ['decision', 'value'], out: ['yes', 'no', 'unsure', 'other'] },
 	load_image: { inn: [], out: ['output'] },
 	camera: { inn: [], out: ['output'] },
 	capture: { inn: [], out: ['output'] },

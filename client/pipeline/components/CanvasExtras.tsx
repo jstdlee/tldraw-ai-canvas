@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useEditor, useValue } from 'tldraw'
 import { NODE_SPECS } from '../../../shared/nodeSpecs'
 import {
+	FloatingPanel,
 	IconClose,
 	IconSparkle,
 	UiButton,
@@ -139,19 +140,24 @@ function FillChatCard({ shapeId, onClose }: { shapeId: import('tldraw').TLShapeI
 	}
 
 	return (
-		<div
-			className="FillChatCard"
-			role="dialog"
-			aria-label="AI for this node"
-			style={position ? { transform: `translate(${position.x}px, ${position.y}px)` } : undefined}
-			onPointerDown={(event) => event.stopPropagation()}
+		<FloatingPanel
+			storageKey="fill-chat"
+			ariaLabel="AI for this node"
+			className="FillChatCard-floating"
+			defaultRect={{ x: position?.x, y: position?.y, w: 360, h: 420 }}
+			minWidth={280}
+			minHeight={200}
+			onClose={onClose}
+			header={
+				<div className="FillChatCard-bar">
+					<strong>
+						<IconSparkle /> AI{spec ? ` · ${spec.title}` : ''}
+					</strong>
+					<UiIconButton icon={<IconClose />} title="Close" onClick={onClose} />
+				</div>
+			}
 		>
-			<div className="FillChatCard-bar">
-				<strong>
-					<IconSparkle /> AI{spec ? ` · ${spec.title}` : ''}
-				</strong>
-				<UiIconButton icon={<IconClose />} title="Close" onClick={onClose} />
-			</div>
+		<div className="FillChatCard">
 			<div className="FillChatCard-row">
 				<ModelSelect
 					capability="chat"
@@ -242,6 +248,7 @@ function FillChatCard({ shapeId, onClose }: { shapeId: import('tldraw').TLShapeI
 				)}
 			</div>
 		</div>
+		</FloatingPanel>
 	)
 }
 

@@ -3,7 +3,7 @@ import { AiPlan } from '../shared/aiPlan'
 import { layoutPlan, LayoutBox } from '../shared/planLayout'
 
 function plan(partial: Partial<AiPlan>): AiPlan {
-	return { summary: '', add: [], update: [], wires: [], notes: [], ...partial }
+	return { summary: '', add: [], update: [], wires: [], unwire: [], notes: [], arrange: 'tidy', ...partial }
 }
 
 const sizeOf = () => ({ w: 200, h: 100 })
@@ -92,5 +92,46 @@ describe('layoutPlan', () => {
 		const p = plan({ add: [{ ref: 'a', type: 'prompt', props: {} }], wires: [{ from: 'e1', fromPort: 'output', to: 'a', toPort: 'data' }] })
 		layoutPlan(p, existing, sizeOf)
 		expect(existing[0]).toEqual({ id: 'e1', x: 50, y: 60, w: 200, h: 100 })
+	})
+
+	// WP22 B2: "arrange: tidy" also repositions existing cards named in `movable`.
+	describe('movable (tidy arrange moves existing cards too)', () => {
+		it('repositions a movable existing node to the right of what feeds it', () => {
+			const existing: LayoutBox[] = [
+				{ id: 'src', x: 0, y: 0, w: 200, h: 100 },
+				{ id: 'mid', x: 20, y: 500, w: 200, h: 100 }, // far away before tidy
+			]
+			const p = plan({ wires: [{ from: 'src', fromPort: 'output', to: 'mid', toPort: 'data' }] })
+			const result = layoutPlan(p, existing, sizeOf, 48, new Set(['mid']))
+			expect(result.mid).toBeDefined()
+			expect(result.mid.x).toBeGreaterThan(existing[0].x)
+			expect(result.src).toBeUndefined() // "src" isn't movable: it keeps its position (no entry)
+		})
+
+		it('leaves a movable node with no wire in the plan untouched (no result entry)', () => {
+			const existing: LayoutBox[] = [{ id: 'e1', x: 10, y: 10, w: 200, h: 100 }]
+			const p = plan({})
+			const result = layoutPlan(p, existing, sizeOf, 48, new Set(['e1']))
+			expect(result.e1).toBeUndefined()
+		})
+
+		it('a new node wired to a movable existing node still avoids overlapping it at its new spot', () => {
+			const existing: LayoutBox[] = [
+				{ id: 'src', x: 0, y: 0, w: 200, h: 100 },
+				{ id: 'mid', x: 20, y: 500, w: 200, h: 100 },
+			]
+			const p = plan({
+				add: [{ ref: 'b', type: 'prompt', props: {} }],
+				wires: [
+					{ from: 'src', fromPort: 'output', to: 'mid', toPort: 'data' },
+					{ from: 'mid', fromPort: 'output', to: 'b', toPort: 'data' },
+				],
+			})
+			const result = layoutPlan(p, existing, sizeOf, 48, new Set(['mid']))
+			const midBox: LayoutBox = { id: 'mid', x: result.mid.x, y: result.mid.y, w: 200, h: 100 }
+			const bBox: LayoutBox = { id: 'b', x: result.b.x, y: result.b.y, w: 200, h: 100 }
+			expect(overlaps(midBox, bBox, 48)).toBe(false)
+			expect(result.b.x).toBeGreaterThan(result.mid.x)
+		})
 	})
 })

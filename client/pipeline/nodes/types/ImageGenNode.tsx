@@ -13,7 +13,7 @@ import { Port, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor, useFieldPortAnchors } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
 import { IconChevronDown, IconChevronRight, IconSparkle, UiButton, UiEmpty, UiNumberInput, UiSegmented, UiTextArea, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect, useInputConnected, WireField } from './fields'
+import { OutputPortRow, PortRow, stopEvent, NodeSelect, useInputConnected, WireField } from './fields'
 import { fieldPortId } from '../../../../shared/fieldOverrides'
 import {
 	DEFAULT_LLM_SETTINGS,
@@ -142,7 +142,8 @@ export class ImageGenNodeDefinition extends NodeDefinition<ImageGenNode> {
 		const results = parseImages(node).length ? GRID_AREA_PX : emptyResultsPx(rowPx)
 		const moreSettings = node.moreOpen ? moreSettingsOpenPx(rowPx) : MORE_SETTINGS_CLOSED_PX
 		// +1 row (WP17): count/size split onto their own rows.
-		return rowPx * 4 + PROMPT_AREA_PX + moreSettings + llmSettingsHeight(node, rowPx) + llmVarsHeight(this.vars(node), rowPx) + results
+		// +1 row (WP21 follow-up): the "images" output row, above the results grid.
+		return rowPx * 5 + PROMPT_AREA_PX + moreSettings + llmSettingsHeight(node, rowPx) + llmVarsHeight(this.vars(node), rowPx) + results
 	}
 	getPorts(shape: NodeShape, node: ImageGenNode): Record<string, ShapePort> {
 		const width = this.getWidthPx(shape, node)
@@ -321,6 +322,7 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 			<MoreSettingsSection shape={shape} node={node} set={set} />
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} modelWired={modelWired} />
 			<LlmVarRows shapeId={shape.id} vars={llmTemplateVars([node.prompt])} />
+			<OutputPortRow shapeId={shape.id} portId="images" label="All images (JSON) →" dataType="text" />
 			<div className="ImageGenNode-grid NodeScroll" style={{ height: resultsHeight }} onPointerDown={stopEvent}>
 				{images.length ? (
 					<div className={`ImageGenNode-tiles${images.length > 1 ? ' is-grid' : ''}`}>

@@ -13,6 +13,7 @@ import {
 	ImageToolNodeDefinition,
 } from './types/ImageNodes'
 import { ForEachNodeDefinition, IfNodeDefinition, LogicNodeDefinition } from './types/LogicNodes'
+import { DecisionSwitchNodeDefinition } from './types/DecisionSwitchNode'
 import { CodeNodeDefinition } from './types/CodeNode'
 import { SubgraphNodeDefinition } from './types/SubgraphNode'
 import { removedNodeDefinition } from './types/RemovedNode'
@@ -83,6 +84,7 @@ export const NodeDefinitions = {
 	image_gen: ImageGenNodeDefinition,
 	// Logic & code
 	jev: JevNodeDefinition,
+	decision_switch: DecisionSwitchNodeDefinition,
 	if: IfNodeDefinition,
 	logic: LogicNodeDefinition,
 	for_each: ForEachNodeDefinition,

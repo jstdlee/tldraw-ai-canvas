@@ -157,7 +157,11 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('http'),
 		purpose: purpose('http'),
 		useWhen: 'Use to call a web API or fetch a page; the server makes the request (no CORS limits).',
-		inputs: [port('url', 'text', 'Overrides the URL field when wired.'), port('body', 'text', 'Overrides the body field when wired.')],
+		inputs: [
+			port('url', 'text', 'Overrides the URL field when wired.'),
+			port('body', 'text', 'Overrides the body field when wired.'),
+			port('request', 'text', 'A captured request (cURL, raw HTTP, or "Copy as fetch") parsed at run time; overrides method/url/query/headers/body/auth when wired.'),
+		],
 		outputs: [port('output', 'text', 'Response text, or extracted readable text.')],
 		fields: [
 			field('method', 'enum', 'Method', 'HTTP method.', ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'], 'GET'),
@@ -303,7 +307,11 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		purpose: purpose('model_source'),
 		useWhen: 'Use to pick a model from a custom OpenAI-compatible endpoint (Ollama, OpenRouter, a local server) and output its id.',
 		inputs: [],
-		outputs: [port('model', 'model', 'The chosen model id, ready to wire into another node’s model port.')],
+		outputs: [
+			port('model', 'model', 'The chosen model id, ready to wire into another node’s model port.'),
+			port('modelId', 'text', 'The chosen model id as plain text.'),
+			port('baseURL', 'text', 'The endpoint base URL as plain text.'),
+		],
 		fields: [
 			field('baseURL', 'url', 'Base URL', 'The OpenAI-compatible /v1 endpoint to fetch models from.'),
 			field('model', 'text', 'Model', 'The model id to output, chosen from the fetched list.'),
@@ -357,6 +365,34 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		assistant: {
 			role: 'You write the question and, for choice/score, the options/levels, so the decision matches the user’s goal.',
 			chips: ['Is this about cats? (yes/no)', 'Pick a category…', 'Score the sentiment 1-5'],
+		},
+	},
+	decision_switch: {
+		type: 'decision_switch',
+		title: title('decision_switch'),
+		group: groupOf('decision_switch'),
+		purpose: purpose('decision_switch'),
+		useWhen: 'Use after a JEV decision (wire its probs or final/output into Decision) to route a value down exactly one output: yes/no, one of several options, or a score band.',
+		inputs: [
+			port('decision', 'any', 'The decision to route by: a JEV probs (JSON) or final/output value, or any yes/no/choice/score text.'),
+			port('value', 'any', 'The value to route; defaults to the decision text itself when not wired.'),
+		],
+		outputs: [
+			port('yes', 'any', 'Yes/no mode: emits when P(yes) is at or above the threshold.'),
+			port('no', 'any', 'Yes/no mode: emits when P(yes) is below the threshold.'),
+			port('unsure', 'any', 'Yes/no mode: emits instead of yes/no when within `margin` of the threshold (off when margin is 0).'),
+			port('other', 'any', 'Choice mode: emits when the decision matches none of the configured options.'),
+		],
+		fields: [
+			field('mode', 'enum', 'Mode', 'Yes/no, choice, or score — or auto, which follows the shape of the decision.', ['auto', 'noul', 'choice', 'score']),
+			field('threshold', 'number', 'Threshold', 'Yes/no mode: the P(yes) cutoff between yes and no (0-1).'),
+			field('margin', 'number', 'Margin', 'Yes/no mode: how close to the threshold counts as "unsure" (0 = off).'),
+			field('options', 'longtext', 'Options', 'Choice mode: one option per line; builds one output per option plus "other".'),
+			field('bands', 'longtext', 'Bands', 'Score mode: one band per line, "name: upper bound" (the last band is open-ended).'),
+		],
+		assistant: {
+			role: 'You set the mode (or leave it on auto) and its own fields (threshold/margin, options, or bands) so the right branch fires.',
+			chips: ['Route by yes/no at 0.5', 'One output per option', 'Low/mid/high score bands'],
 		},
 	},
 	load_image: {
@@ -610,6 +646,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			field('split', 'enum', 'Split by', 'How the list field is split into items.', ['lines', 'separator', 'json', 'regex']),
 			field('separator', 'text', 'Separator', 'Custom split separator.'),
 			field('joiner', 'text', 'Join with', 'How collected results are joined back together.'),
+			field('noResult', 'enum', 'No result', 'What happens to an item whose body never wires back to "result".', ['skip', 'keep', 'error']),
 		],
 		assistant: {
 			role: 'You set how the list is split and the results re-joined.',

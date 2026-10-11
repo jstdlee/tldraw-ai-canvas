@@ -18,7 +18,7 @@ import { NodeShape } from '../NodeShapeUtil'
 import { isInputWired } from '../nodePorts'
 import { UiButton, UiCheckbox, UiEmpty, UiSecretInput, UiSegmented, UiTable, UiTextArea, UiTextInput } from '../../../ui'
 import { IconAlert, IconDatabase, IconTable, IconUpload } from '../../../ui/icons'
-import { NodeSelect, PgliteMemoryWarning, PortRow, stopEvent, useInputConnected, WireField, WireFieldHeader } from './fields'
+import { NodeSelect, OutputPortRow, PgliteMemoryWarning, PortRow, stopEvent, useInputConnected, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -184,6 +184,7 @@ function layout(node: DatabaseNode, sqlWired: boolean) {
 	// The editor + its drag handle only render when the port is not wired.
 	const sqlExtraPx = sqlWired ? 0 : editorHeightPx(node) + DRAG_HANDLE_PX
 	row++ // write summary / risky confirm line
+	row++ // "schema" output row (WP21 follow-up: every output port is a visible dot)
 	if (external) row += 2 // rows -> table panel (header + controls)
 	const hintRow = row++
 	return { tablesRow, tablesRows, sqlRow, sqlExtraPx, hintRow, rowsCount: row }
@@ -652,6 +653,8 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 					</span>
 				</NodeRow>
 			)}
+
+			<OutputPortRow shapeId={shape.id} portId="schema" label="Schema" dataType="text" />
 
 			{external && !hiddenFields.has('targetTable') && (
 				<>

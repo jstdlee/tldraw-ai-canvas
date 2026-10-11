@@ -138,7 +138,21 @@ export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<strin
 			}, 2000)
 		}
 		for (const port of Object.values(dedicated)) {
-			if (port.terminal !== 'end' || hiddenDedicated.has(port.id)) continue
+			if (hiddenDedicated.has(port.id)) continue
+			if (port.terminal === 'start') {
+				// WP21 Part A: every output port should be a visible, draggable dot too — except
+				// the one generic "output" port, which `NodeShapeComponent` already renders by
+				// hand in the card header (not the body), for every node that has one.
+				if (port.id === 'output') continue
+				if (anchors?.[port.id] === undefined) {
+					warnOnce(
+						port.id,
+						`[WP21] "${port.id}" output on a "${node.type}" card has no port anchor — render ` +
+							`a <Port>/OutputPortRow in its row so it's visible and draggable.`
+					)
+				}
+				continue
+			}
 			// `system`/`params` (llmSettings.tsx): while "Model settings" is closed, these two
 			// stack on the toggle row by hand-coded math (llmSettingsPorts), not an anchor — a
 			// deliberate alternative to a PortRow, not a gap.

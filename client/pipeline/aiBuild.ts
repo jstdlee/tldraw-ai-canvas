@@ -84,28 +84,32 @@ export function gatherBuildScope(editor: Editor): BuildScope {
 	return { nodeShapes, notes, allNodes }
 }
 
-const BUILD_SYSTEM_INTRO = `You are a workflow builder for this canvas. You add, wire and configure nodes from a fixed catalogue so the canvas does what the user asked.
+const BUILD_SYSTEM_INTRO = `You are a workflow builder for this canvas. You work only with cards (nodes) and card wires — never propose a tldraw arrow, shape, text box, or note; that is a different tool's job.
 
 Rules:
 - Use only node types from the catalogue below; never invent a type, a field, an enum value, or a port.
-- Reuse the selected or listed existing nodes when they already fit the goal; do not recreate them.
-- Prefer the fewest nodes that get the job done.
-- Fully configure every new node: set every field it needs to run, not just some of them.
-- Wire every input a node needs; never leave a required input unwired.
+- For every selected card: reuse it, set its real field names/enum values in "update" (do not recreate it), wire it to other cards using ports from the catalogue, and fill in anything the goal needs.
+- Add a new card only for something missing; prefer the fewest cards that get the job done.
+- Fully configure every card you add or update: set every field it needs to run, not just some of them.
+- Wire every input a node needs; never leave a required input unwired. Use "unwire" first to remove an existing wire into a port before putting a new one there.
 - DataPipe ("table") is one operation per node: chain several DataPipe nodes for several steps.
 - Put anything only a person can do (uploading a file, entering an API key, approving a result) into "notes", never as a node field.
+- Set "arrange":"tidy" (the default) so the involved cards — new ones and the selected ones you update/wire — get laid out left to right by dependency; use "none" only when you are not changing any wiring or layout-relevant card.
 
 Reply with JSON only, in this shape:
-{"summary":"one sentence","add":[{"ref":"n1","type":"prompt","props":{"text":"…"},"label":"optional title"}],"update":[{"id":"<existing node id>","props":{"…":"…"},"label":"optional"}],"wires":[{"from":"n1","fromPort":"output","to":"n2","toPort":"input"}],"notes":["anything only a person can do"]}
+{"summary":"one sentence","add":[{"ref":"n1","type":"prompt","props":{"text":"…"},"label":"optional title"}],"update":[{"id":"<existing node id>","props":{"…":"…"},"label":"optional"}],"wires":[{"from":"n1","fromPort":"output","to":"n2","toPort":"input"}],"unwire":[{"to":"<existing node id>","toPort":"<port id>"}],"notes":["anything only a person can do"],"arrange":"tidy"}
 
-Example — goal "fetch https://example.com and summarise it":
-{"summary":"Fetch the page, then summarise it","add":[{"ref":"fetch","type":"http","props":{"method":"GET","url":"https://example.com"}},{"ref":"sum","type":"summarize","props":{"length":"short","format":"bullets"}}],"update":[],"wires":[{"from":"fetch","fromPort":"output","to":"sum","toPort":"input"}],"notes":[]}`
+Example 1 — goal "fetch https://example.com and summarise it", nothing selected:
+{"summary":"Fetch the page, then summarise it","add":[{"ref":"fetch","type":"http","props":{"method":"GET","url":"https://example.com"}},{"ref":"sum","type":"summarize","props":{"length":"short","format":"bullets"}}],"update":[],"wires":[{"from":"fetch","fromPort":"output","to":"sum","toPort":"input"}],"unwire":[],"notes":[],"arrange":"tidy"}
+
+Example 2 — goal "filter rows where score > 3 and chart score by name", selected: a Prompt (csv text), a DataPipe ("table", op currently "select"), and a Chart:
+{"summary":"Filter the table to score > 3, then chart score by name","add":[],"update":[{"id":"pipe1","props":{"op":"filter","column":"score","as":">","with":"3"}},{"id":"chart1","props":{"kind":"bar","xCol":"name","yCol":"score"}}],"wires":[{"from":"prompt1","fromPort":"output","to":"pipe1","toPort":"data"},{"from":"pipe1","fromPort":"output","to":"chart1","toPort":"data"}],"unwire":[],"notes":[],"arrange":"tidy"}`
 
 function buildUserPrompt(goal: string, scope: BuildScope, selectedInfos: ReturnType<typeof describeCanvasNode>[]): string {
 	const lines = [
 		`Goal: ${goal.trim()}`,
 		'',
-		'Selected nodes (reuse these if they fit the goal):',
+		'Selected cards (reuse these if they fit the goal — set their fields in "update", wire their free ports, do not recreate them):',
 		JSON.stringify(
 			selectedInfos.map((info) => ({
 				id: info.id,
@@ -113,6 +117,8 @@ function buildUserPrompt(goal: string, scope: BuildScope, selectedInfos: ReturnT
 				label: info.label,
 				props: info.props,
 				wiredInputs: info.wiredInputs,
+				freeInputs: info.inputs.filter((id) => !info.wiredInputs.includes(id)),
+				outputs: info.outputs,
 			})),
 			null,
 			2
@@ -167,6 +173,15 @@ export async function buildWithAI(
 	return { plan: result.plan, warnings: result.errors }
 }
 
+/** WP22 B2: remove the one existing wire (if any) feeding `toId.toPort`. */
+function unwireInput(editor: Editor, toId: TLShapeId, portId: string) {
+	const binding = editor.getBindingsToShape(toId, 'connection').find((b) => {
+		const props = b.props as { terminal?: string; portId?: string }
+		return props.terminal === 'end' && props.portId === portId
+	})
+	if (binding) editor.deleteShape(binding.fromId)
+}
+
 function approxNodeSize(editor: Editor, type: string): { w: number; h: number } {
 	try {
 		return { w: getNodeDefinition(editor, type as NodeType['type']).defaultWidthPx ?? NODE_WIDTH_PX, h: 200 }
@@ -175,8 +190,15 @@ function approxNodeSize(editor: Editor, type: string): { w: number; h: number } 
 	}
 }
 
-/** Create/update/wire a validated plan on the canvas, as one history step. */
-export function applyAiPlan(editor: Editor, plan: AiPlan, opts: { runAfter?: boolean } = {}): TLShapeId[] {
+/** Create/update/wire a validated plan on the canvas, as one history step.
+ * `selectedIds` (WP22 B2): the cards selected when the plan was built — "arrange: tidy" moves
+ * these (and any other existing card the plan updates or wires) into the layout too, alongside
+ * whatever it adds. Other existing cards never move. */
+export function applyAiPlan(
+	editor: Editor,
+	plan: AiPlan,
+	opts: { runAfter?: boolean; selectedIds?: TLShapeId[] } = {}
+): TLShapeId[] {
 	const touched: TLShapeId[] = []
 	editor.markHistoryStoppingPoint('ai build')
 	editor.run(() => {
@@ -188,7 +210,23 @@ export function applyAiPlan(editor: Editor, plan: AiPlan, opts: { runAfter?: boo
 			if (!bounds) continue
 			existingBoxes.push({ id: shape.id, x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height })
 		}
-		const positions = layoutPlan(plan, existingBoxes, (type) => approxNodeSize(editor, type))
+		const existingIds = new Set(existingBoxes.map((box) => box.id))
+		const movable = new Set<string>()
+		if (plan.arrange === 'tidy') {
+			for (const id of opts.selectedIds ?? []) if (existingIds.has(id)) movable.add(id)
+			for (const update of plan.update) if (existingIds.has(update.id)) movable.add(update.id)
+			for (const wire of plan.wires) {
+				if (existingIds.has(wire.from)) movable.add(wire.from)
+				if (existingIds.has(wire.to)) movable.add(wire.to)
+			}
+		}
+		const positions = layoutPlan(plan, existingBoxes, (type) => approxNodeSize(editor, type), 48, movable)
+
+		// Unwire first, so a wire into the same port later in this plan lands cleanly.
+		for (const item of plan.unwire) {
+			const toId = ids.get(item.to) ?? (editor.getShape(item.to as TLShapeId) ? (item.to as TLShapeId) : undefined)
+			if (toId) unwireInput(editor, toId, item.toPort)
+		}
 
 		for (const add of plan.add) {
 			let base: NodeType
@@ -222,6 +260,15 @@ export function applyAiPlan(editor: Editor, plan: AiPlan, opts: { runAfter?: boo
 					...(update.label ? { label: update.label } : {}),
 				},
 			})
+		}
+
+		// "arrange: tidy" (WP22 B2): move the movable existing cards layoutPlan placed, too.
+		for (const id of movable) {
+			const pos = positions[id]
+			const shape = editor.getShape(id as TLShapeId)
+			if (!pos || !shape || shape.type !== 'node') continue
+			editor.updateShape({ id: shape.id, type: 'node', x: pos.x, y: pos.y })
+			touched.push(shape.id)
 		}
 
 		for (const wire of plan.wires) {

@@ -8,7 +8,7 @@ import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiSecretInput, UiSegmented, UiTextInput } from '../../../ui'
-import { stopEvent, NodeSelect, WireField } from './fields'
+import { OutputPortRow, stopEvent, NodeSelect, WireField } from './fields'
 import { ExecutionResult, InfoValues, NodeComponentProps, NodeDefinition, NodeRow, updateNode } from './shared'
 
 function ModelProviderIcon() {
@@ -101,10 +101,15 @@ export class ModelSourceNodeDefinition extends NodeDefinition<ModelSourceNode> {
 	}
 	getBodyHeightPx(shape: NodeShape): number {
 		// kind, URL, key, fetch (with the model count/fetched-at line inline), filter, model
-		// rows (WP17: filter/model split onto their own rows), plus the big chosen-model line.
-		return getNodeRowHeightPx(shape.props.fontSize) * 6 + CURRENT_PX
+		// rows (WP17: filter/model split onto their own rows), plus the big chosen-model line,
+		// plus 2 rows (WP21 Part C) for the modelId/baseURL output rows at the bottom.
+		return getNodeRowHeightPx(shape.props.fontSize) * 8 + CURRENT_PX
 	}
-	getPorts(): Record<string, ShapePort> {
+	getPorts(shape: NodeShape): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		// Fallback position only (before the row below has ever mounted): after the 6 rows
+		// above the chosen-model box, plus that box itself.
+		const bottomY = NODE_HEADER_HEIGHT_PX / 2 + rowPx * 6.5 + CURRENT_PX
 		return {
 			model: {
 				id: 'model',
@@ -113,6 +118,9 @@ export class ModelSourceNodeDefinition extends NodeDefinition<ModelSourceNode> {
 				terminal: 'start',
 				dataType: 'model',
 			},
+			// WP21 Part C: the chosen model id and base URL, each wirable on their own.
+			modelId: { id: 'modelId', x: WIDTH, y: bottomY, terminal: 'start', dataType: 'text' },
+			baseURL: { id: 'baseURL', x: WIDTH, y: bottomY + rowPx, terminal: 'start', dataType: 'text' },
 		}
 	}
 	async execute(_shape: NodeShape, node: ModelSourceNode): Promise<ExecutionResult> {
@@ -124,6 +132,8 @@ export class ModelSourceNodeDefinition extends NodeDefinition<ModelSourceNode> {
 				model: node.model.trim(),
 				keyRef: node.keyRef || undefined,
 			}),
+			modelId: node.model.trim(),
+			baseURL: node.baseURL.trim(),
 		}
 	}
 	getOutputInfo(shape: NodeShape, node: ModelSourceNode): InfoValues {
@@ -137,6 +147,8 @@ export class ModelSourceNodeDefinition extends NodeDefinition<ModelSourceNode> {
 			: null
 		return {
 			model: { value, isOutOfDate: shape.props.isOutOfDate, dataType: 'model' },
+			modelId: { value: node.model.trim() || null, isOutOfDate: shape.props.isOutOfDate, dataType: 'text' },
+			baseURL: { value: node.baseURL.trim() || null, isOutOfDate: shape.props.isOutOfDate, dataType: 'text' },
 		}
 	}
 	Component = ModelSourceNodeComponent
@@ -252,6 +264,8 @@ function ModelSourceNodeComponent({ shape, node }: NodeComponentProps<ModelSourc
 			<div className="ModelSourceNode-current" style={{ height: CURRENT_PX - 8 }}>
 				{node.model || <span className="NodeRow-disconnected">No model chosen</span>}
 			</div>
+			<OutputPortRow shapeId={shape.id} portId="modelId" label="Model id" dataType="text" />
+			<OutputPortRow shapeId={shape.id} portId="baseURL" label="Base URL" dataType="text" />
 		</>
 	)
 }

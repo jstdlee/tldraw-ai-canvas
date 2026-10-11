@@ -7,7 +7,8 @@ import {
 	NODE_ROW_HEADER_GAP_PX,
 	NODE_WIDTH_PX,
 } from '../../constants'
-import { ShapePort } from '../../ports/Port'
+import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
 import { WireField } from './fields'
 import {
@@ -120,10 +121,20 @@ function RouterNodeComponent({ shape, node }: NodeComponentProps<RouterNode>) {
 				<span className="NodeRow-disconnected">{node.outputCount} output ports</span>
 			</WireField>
 			{Array.from({ length: node.outputCount }, (_, i) => (
-				<NodeRow key={i}>
-					<NodePortLabel dataType="any">Out {i + 1}</NodePortLabel>
-				</NodeRow>
+				<RouterOutputRow key={i} shapeId={shape.id} index={i} />
 			))}
 		</>
+	)
+}
+
+/** WP21 Part A: each `out_<i>` port was defined in `getPorts` but never had a visible `<Port>`. */
+function RouterOutputRow({ shapeId, index }: { shapeId: NodeShape['id']; index: number }) {
+	const portId = `out_${index}`
+	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, portId)
+	return (
+		<NodeRow ref={ref} className="NodeRow-right">
+			<NodePortLabel dataType="any">Out {index + 1}</NodePortLabel>
+			<Port shapeId={shapeId} portId={portId} />
+		</NodeRow>
 	)
 }

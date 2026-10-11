@@ -72,6 +72,11 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'Asks a judge model a yes/no, multiple-choice, or scored question and returns probabilities.',
 		keywords: ['ai', 'decision', 'classifier', 'judge', 'probability', 'choice'],
 	},
+	decision_switch: {
+		title: 'Decision switch',
+		description: 'Routes a value to one output based on a JEV (or other) decision: yes/no, one of several options, or a score band.',
+		keywords: ['switch', 'route', 'decide', 'branch', 'yes', 'no', 'choice', 'score', 'band', 'jev'],
+	},
 	load_image: {
 		title: 'Load image',
 		description: 'Loads an image from a URL, a file path, a paste, or a drag-and-drop.',

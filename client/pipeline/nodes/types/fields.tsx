@@ -127,6 +127,60 @@ export function PortRow({
 	)
 }
 
+/**
+ * WP21 Part A ("every output port is a visible, draggable dot"): an output-port row, right
+ * aligned, with its own anchored `<Port>` — the same idea as `PortRow` but for a `terminal:
+ * 'start'` port. Use this for a dedicated output that doesn't already get the generic header
+ * dot (that's only the node's single implicit "output" port, rendered by `NodeShapeUtil`).
+ */
+export function OutputPortRow({
+	shapeId,
+	portId,
+	label,
+	dataType = 'any',
+}: {
+	shapeId: TLShapeId
+	portId: string
+	label: ReactNode
+	dataType?: PortDataType
+}) {
+	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, portId)
+	return (
+		<NodeRow ref={ref} className="NodeRow-right">
+			<NodePortLabel dataType={dataType}>{label}</NodePortLabel>
+			<Port shapeId={shapeId} portId={portId} />
+		</NodeRow>
+	)
+}
+
+/**
+ * Like `OutputPortRow`, but anchors a port whose label floats inside a row shared with other
+ * content (e.g. an input port's row that also carries an output label on the right, as in
+ * `JevNode`). Renders the label and its `<Port>` as siblings so the port sits at the row's own
+ * right edge (via `.Port_start`), not the label's.
+ */
+export function OutputPortLabel({
+	shapeId,
+	portId,
+	children,
+	className = 'CodeNode-outLabel',
+}: {
+	shapeId: TLShapeId
+	portId: string
+	children: ReactNode
+	className?: string
+}) {
+	const ref = useFieldPortAnchor<HTMLSpanElement>(shapeId, portId)
+	return (
+		<>
+			<span ref={ref} className={className}>
+				{children}
+			</span>
+			<Port shapeId={shapeId} portId={portId} />
+		</>
+	)
+}
+
 /** The current value of an input port, or undefined when it is not connected. */
 export function useInputConnected(shapeId: TLShapeId, portId: string) {
 	const editor = useEditor()

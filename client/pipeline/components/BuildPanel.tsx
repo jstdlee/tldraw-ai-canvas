@@ -5,6 +5,7 @@ import { NODE_GROUPS } from '../../../shared/nodeGroups'
 import { NODE_SPECS } from '../../../shared/nodeSpecs'
 import { ModelSelect } from '../../ai/aiConfig'
 import {
+	FloatingPanel,
 	IconChevronDown,
 	IconChevronRight,
 	IconClose,
@@ -80,6 +81,23 @@ function summarizeProps(props: Record<string, unknown>): string {
 		.join(', ')
 }
 
+function formatDiffValue(value: unknown): string {
+	if (value == null || value === '') return '—'
+	const s = String(value)
+	return s.length > 24 ? s.slice(0, 24) + '…' : s
+}
+
+/** WP22 B4: an update's own field diffs, e.g. "op: select → filter". */
+function summarizeUpdateDiff(editor: Editor, update: AiPlan['update'][number]): string {
+	const shape = editor.getShape(update.id as TLShapeId)
+	const before = shape?.type === 'node' ? ((shape.props as { node: Record<string, unknown> }).node ?? {}) : {}
+	return Object.entries(update.props)
+		// Only real changes: a field the plan sets to its current value is not worth a line.
+		.filter(([key, value]) => formatDiffValue(before[key]) !== formatDiffValue(value))
+		.map(([key, value]) => `${key}: ${formatDiffValue(before[key])} → ${formatDiffValue(value)}`)
+		.join(', ')
+}
+
 export function BuildPanel() {
 	const open = useValue('build open', () => $buildOpen.get(), [])
 	if (!open) return null
@@ -99,6 +117,7 @@ function BuildPanelBody() {
 	const [error, setError] = useState<string | null>(null)
 	const [revise, setRevise] = useState('')
 	const [runAfter, setRunAfter] = useState(false)
+	const [arrangeCards, setArrangeCards] = useState(true)
 
 	const scope = useMemo(() => gatherBuildScope(editor), [editor])
 	const grouped = useMemo(typesByGroup, [])
@@ -133,6 +152,7 @@ function BuildPanelBody() {
 			const result = await buildWithAI(editor, goalText, { allowedTypes: [...allowedTypes], model: model || undefined })
 			setPlan(result.plan)
 			setWarnings(result.warnings)
+			setArrangeCards(result.plan.arrange !== 'none')
 		} catch (cause) {
 			setError((cause as Error).message)
 		} finally {
@@ -141,14 +161,23 @@ function BuildPanelBody() {
 	}
 
 	return (
-		<div className="BuildPanel" role="dialog" aria-label="Build with AI" onPointerDown={(e) => e.stopPropagation()}>
-			<div className="BuildPanel-bar">
-				<strong>
-					<IconSparkle /> Build with AI
-				</strong>
-				<UiIconButton icon={<IconClose />} title="Close" onClick={close} />
-			</div>
-
+		<FloatingPanel
+			storageKey="build"
+			ariaLabel="Build with AI"
+			defaultRect={{ w: 400, h: Math.min(640, (typeof window !== 'undefined' ? window.innerHeight : 800) - 68) }}
+			minWidth={320}
+			minHeight={240}
+			onClose={close}
+			header={
+				<div className="BuildPanel-bar">
+					<strong>
+						<IconSparkle /> Build with AI
+					</strong>
+					<UiIconButton icon={<IconClose />} title="Close" onClick={close} />
+				</div>
+			}
+		>
+			<div className="BuildPanel">
 			<div className="BuildPanel-using">
 				{scope.nodeShapes.length === 0 && scope.notes.length === 0 ? (
 					<UiEmpty text="Empty canvas — builds from scratch" />
@@ -241,7 +270,15 @@ function BuildPanelBody() {
 					{plan.update.map((update) => (
 						<div key={update.id} className="BuildPanel-planRow">
 							<UiChip label="Update" />
-							<span>{planNodeLine(refName(editor, plan, update.id), summarizeProps(update.props))}</span>
+							<span>{planNodeLine(refName(editor, plan, update.id), summarizeUpdateDiff(editor, update))}</span>
+						</div>
+					))}
+					{plan.unwire.map((item, index) => (
+						<div key={index} className="BuildPanel-planRow">
+							<UiChip label="Unwire" />
+							<span>
+								{refName(editor, plan, item.to)}.{item.toPort}
+							</span>
 						</div>
 					))}
 					{plan.wires.map((wire, index) => (
@@ -280,6 +317,9 @@ function BuildPanelBody() {
 				</div>
 			)}
 
+			{plan && (plan.add.length > 0 || plan.wires.length > 0) && (
+				<UiCheckbox checked={arrangeCards} onChange={setArrangeCards} label="Arrange cards (lay out new and wired cards left to right)" />
+			)}
 			<UiCheckbox checked={runAfter} onChange={setRunAfter} label="Run after building" />
 
 			<div className="BuildPanel-actions">
@@ -287,14 +327,15 @@ function BuildPanelBody() {
 				<UiButton
 					variant="primary"
 					label="Apply plan"
-					disabled={!plan || (!plan.add.length && !plan.update.length && !plan.wires.length)}
+					disabled={!plan || (!plan.add.length && !plan.update.length && !plan.wires.length && !plan.unwire.length)}
 					onClick={() => {
 						if (!plan) return
-						applyAiPlan(editor, plan, { runAfter })
+						applyAiPlan(editor, { ...plan, arrange: arrangeCards ? 'tidy' : 'none' }, { runAfter, selectedIds: scope.nodeShapes.map((s) => s.id) })
 						close()
 					}}
 				/>
 			</div>
-		</div>
+			</div>
+		</FloatingPanel>
 	)
 }

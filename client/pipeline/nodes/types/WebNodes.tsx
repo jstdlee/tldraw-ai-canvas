@@ -1,11 +1,14 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { buildHttpRequest, needsAuthValueMigration } from '../../../../shared/httpBuild'
+import { headersToLines, type ImportedHttpRequest, parseHttpImport } from '../../../../shared/httpImport'
 import { formatRunMs } from '../../../../shared/llmUsage'
 import { isAbortError } from '../../../../shared/abort'
+import { useState } from 'react'
 import { T, useEditor } from 'tldraw'
 import { apiDownload, apiHttp, apiSave, apiSaveSecret } from '../../api/pipelineApi'
 import { currentRunSignal } from '../../execution/executionState'
 import { TextAreaField } from '../../editors/CodeArea'
+import { LargeEditor } from '../../editors/LargeEditor'
 import { LoadImageIcon } from '../../components/icons/LoadImageIcon'
 import { PromptIcon } from '../../components/icons/PromptIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
@@ -18,7 +21,7 @@ import {
 import { Port as PortDot, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiCheckbox, UiSecretInput, UiTextInput } from '../../../ui'
+import { UiButton, UiCheckbox, UiSecretInput, UiTextInput } from '../../../ui'
 import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -144,11 +147,12 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 		return HTTP_WIDTH_PX
 	}
 	getBodyHeightPx(shape: NodeShape, _node: HttpNode) {
-		// Rows: method, URL, query label, auth, auth value, headers label, body port,
-		// "web page -> text" checkbox, status = 9 (WP17: query/headers/auth each got their
-		// own wirable row instead of sharing one).
+		// Rows: "Import request…" button, method, URL, request port (WP21 Part E), query
+		// label, auth, auth value, headers label, body port, "web page -> text" checkbox,
+		// status = 11 (WP17: query/headers/auth each got their own wirable row instead of
+		// sharing one).
 		return (
-			getNodeRowHeightPx(shape.props.fontSize) * 9 +
+			getNodeRowHeightPx(shape.props.fontSize) * 11 +
 			HTTP_QUERY_HEIGHT_PX +
 			HTTP_HEADERS_HEIGHT_PX +
 			HTTP_BODY_HEIGHT_PX +
@@ -158,35 +162,57 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return {
-			url: { id: 'url', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'text' },
-			body: { id: 'body', x: 0, y: portY(1, rowPx), terminal: 'end', dataType: 'any' },
+			url: { id: 'url', x: 0, y: portY(1, rowPx), terminal: 'end', dataType: 'text' },
+			// WP21 Part E: a captured request (cURL / raw HTTP / "Copy as fetch"), parsed at
+			// run time and overriding method/url/query/headers/body/auth when wired.
+			request: { id: 'request', x: 0, y: portY(2, rowPx), terminal: 'end', dataType: 'text' },
+			body: { id: 'body', x: 0, y: portY(3, rowPx), terminal: 'end', dataType: 'any' },
 			output: { id: 'output', x: HTTP_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'any' },
 		}
 	}
 	async execute(shape: NodeShape, node: HttpNode, inputs: InputValues): Promise<ExecutionResult> {
-		const url = (coerceToText(getInput(inputs, 'url')) || node.url).trim()
+		// WP21 Part E: a wired "request" overrides method/url/query/headers/body/auth.
+		let imported: ImportedHttpRequest | null = null
+		const requestInput = getInput(inputs, 'request')
+		if (requestInput != null) {
+			try {
+				imported = parseHttpImport(coerceToText(requestInput))
+			} catch (e) {
+				throw new Error(`Could not parse the wired request: ${(e as Error).message}`)
+			}
+		}
+		const url = (imported?.url || coerceToText(getInput(inputs, 'url')) || node.url).trim()
 		const bodyInput = getInput(inputs, 'body')
-		const body = bodyInput != null ? coerceToText(bodyInput) : node.body
+		const body = imported?.body ?? (bodyInput != null ? coerceToText(bodyInput) : node.body)
 		try {
-			// An old canvas may still carry a token/password typed straight into the node:
-			// move it to the server's secret store the first time this node runs.
 			let authRef = node.authRef
-			if (needsAuthValueMigration(node.auth, node.authRef, node.authValue)) {
+			let authValue: string | undefined
+			let auth = node.auth
+			if (imported?.auth) {
+				// Never persisted: a wired request is re-parsed every run, so there is nothing
+				// to save it as — the server resolves a plain authValue for this call only.
+				auth = imported.auth.kind
+				authValue = imported.auth.value
+				authRef = undefined
+			} else if (needsAuthValueMigration(node.auth, node.authRef, node.authValue)) {
+				// An old canvas may still carry a token/password typed straight into the node:
+				// move it to the server's secret store the first time this node runs.
 				authRef = await apiSaveSecret(node.authValue!)
 				updateNode<HttpNode>(this.editor, shape, (n) => ({ ...n, authRef, authValue: '' }), false)
 			}
 			const built = buildHttpRequest({
-				method: node.method,
+				method: imported?.method || node.method,
 				url,
-				query: node.query ?? '',
-				headers: node.headers,
+				query: imported?.query ?? (node.query ?? ''),
+				headers: imported ? headersToLines(imported.headers) : node.headers,
 				body,
 			})
 			const result = await apiHttp(
 				{
 					...built,
-					auth: node.auth || undefined,
+					auth: auth || undefined,
 					authRef: authRef || undefined,
+					authValue,
 					extractText: node.extractText,
 				},
 				currentRunSignal(this.editor)
@@ -231,14 +257,69 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 	const editor = useEditor()
 	const urlConnected = useInputConnected(shape.id, 'url')
 	const bodyConnected = useInputConnected(shape.id, 'body')
+	const requestConnected = useInputConnected(shape.id, 'request')
+	const [importOpen, setImportOpen] = useState(false)
+	const [importError, setImportError] = useState<string | null>(null)
 	const set = (patch: Partial<HttpNode>) => updateNode<HttpNode>(editor, shape, (n) => ({ ...n, ...patch }))
 	const needsBody = !['GET', 'HEAD'].includes(node.method)
 	const queryWired = useInputConnected(shape.id, 'field:query')
 	const authWired = useInputConnected(shape.id, 'field:auth')
 	const headersWired = useInputConnected(shape.id, 'field:headers')
 	const urlRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'url')
+
+	// WP21 Part E: "Import request…" pastes a captured request (cURL / raw HTTP / "Copy as
+	// fetch") and fills the card's own fields from it — a one-time fill, unlike the wired
+	// "request" port below, which re-parses on every run.
+	const applyImport = async (text: string) => {
+		let imported: ImportedHttpRequest
+		try {
+			imported = parseHttpImport(text)
+		} catch (e) {
+			setImportError((e as Error).message)
+			return
+		}
+		let authRef = node.authRef
+		let auth = node.auth
+		if (imported.auth) {
+			auth = imported.auth.kind
+			authRef = await apiSaveSecret(imported.auth.value)
+		}
+		set({
+			method: imported.method,
+			url: imported.url,
+			query: imported.query,
+			headers: headersToLines(imported.headers),
+			body: imported.body ?? node.body,
+			auth,
+			authRef,
+			authValue: '',
+		})
+		setImportError(null)
+		setImportOpen(false)
+	}
+
 	return (
 		<>
+			<NodeRow>
+				<UiButton
+					size="sm"
+					label="Import request…"
+					onClick={() => {
+						setImportError(null)
+						setImportOpen(true)
+					}}
+				/>
+				{importError && <span className="NodeStatus is-error">{importError}</span>}
+			</NodeRow>
+			{importOpen && (
+				<LargeEditor
+					title="Import request (cURL, raw HTTP, or fetch(...))"
+					value=""
+					lang="text"
+					onChange={(text) => void applyImport(text)}
+					onClose={() => setImportOpen(false)}
+				/>
+			)}
 			<WireField shapeId={shape.id} fieldKey="method" label="Method">
 				<NodeSelect
 					className="NodeField-select"
@@ -259,6 +340,13 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 					<UiTextInput placeholder="https://…" value={node.url} onChange={(url) => set({ url })} />
 				</NodeRow>
 			)}
+			<PortRow
+				shapeId={shape.id}
+				portId="request"
+				label="Request"
+				dataType="text"
+				hint={requestConnected ? '' : 'wire a captured request to override the fields above'}
+			/>
 			<WireFieldHeader shapeId={shape.id} fieldKey="query" label="Query" />
 			{!queryWired && (
 				<TextAreaField

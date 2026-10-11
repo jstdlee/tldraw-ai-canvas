@@ -17,20 +17,30 @@ export interface LayoutBox extends Box {
  * new node goes to the right of the rightmost node that feeds it, stacked
  * top-down within its layer; a new node with no wire at all goes in a row
  * below the existing selection.
+ *
+ * WP22 B2 ("arrange: tidy" moves existing cards too): `movable` names existing node ids that
+ * may also be repositioned instead of treated as fixed anchors — they're laid out exactly like
+ * a new node (using their own current size), while every other existing node still never moves.
  */
 export function layoutPlan(
 	plan: AiPlan,
 	existing: LayoutBox[],
 	sizeOf: (type: string) => { w: number; h: number },
-	gap = 48
+	gap = 48,
+	movable: ReadonlySet<string> = new Set()
 ): Record<string, { x: number; y: number }> {
 	const existingById = new Map(existing.map((box) => [box.id, box]))
 	const sizes = new Map(plan.add.map((node) => [node.ref, sizeOf(node.type)]))
+	for (const box of existing) {
+		if (movable.has(box.id)) sizes.set(box.id, { w: box.w, h: box.h })
+	}
 	const result: Record<string, { x: number; y: number }> = {}
-	const placed: Box[] = existing.map((box) => ({ x: box.x, y: box.y, w: box.w, h: box.h }))
+	// Movable existing boxes are being repositioned, so they aren't obstacles at their old spot.
+	const placed: Box[] = existing.filter((box) => !movable.has(box.id)).map((box) => ({ x: box.x, y: box.y, w: box.w, h: box.h }))
 
 	const incoming = new Map<string, string[]>()
 	for (const node of plan.add) incoming.set(node.ref, [])
+	for (const ref of movable) if (!incoming.has(ref)) incoming.set(ref, [])
 	const hasWire = new Set<string>()
 	for (const wire of plan.wires) {
 		hasWire.add(wire.from)
@@ -50,7 +60,7 @@ export function layoutPlan(
 	const layerCache = new Map<string, number>()
 	const visiting = new Set<string>()
 	function layerOf(ref: string): number {
-		if (existingById.has(ref)) return 0
+		if (existingById.has(ref) && !movable.has(ref)) return 0
 		if (layerCache.has(ref)) return layerCache.get(ref)!
 		if (visiting.has(ref)) return 0 // guards an unexpected cycle; validatePlan should have rejected it
 		visiting.add(ref)
@@ -62,11 +72,14 @@ export function layoutPlan(
 	}
 
 	function boxOf(ref: string): Box | undefined {
-		const ex = existingById.get(ref)
-		if (ex) return ex
+		if (!movable.has(ref)) {
+			const ex = existingById.get(ref)
+			if (ex) return ex
+		}
 		const pos = result[ref]
 		const size = sizes.get(ref)
-		return pos && size ? { x: pos.x, y: pos.y, w: size.w, h: size.h } : undefined
+		if (pos && size) return { x: pos.x, y: pos.y, w: size.w, h: size.h }
+		return existingById.get(ref)
 	}
 
 	const baselineX = existing.length ? Math.max(...existing.map((box) => box.x)) + gap : 0
@@ -74,24 +87,27 @@ export function layoutPlan(
 	const belowY = existing.length ? Math.max(...existing.map((box) => box.y + box.h)) + gap : 0
 	const leftX = existing.length ? Math.min(...existing.map((box) => box.x)) : 0
 
-	const connected = plan.add
-		.filter((node) => hasWire.has(node.ref))
-		.map((node, index) => ({ node, index, layer: layerOf(node.ref) }))
+	const movableWithWires = existing.filter((box) => movable.has(box.id) && hasWire.has(box.id))
+	const connected = [
+		...plan.add.filter((node) => hasWire.has(node.ref)).map((node) => node.ref),
+		...movableWithWires.map((box) => box.id),
+	]
+		.map((ref, index) => ({ ref, index, layer: layerOf(ref) }))
 		.sort((a, b) => a.layer - b.layer || a.index - b.index)
 	const orphans = plan.add.filter((node) => !hasWire.has(node.ref))
 
 	const columnNextY = new Map<number, number>()
-	for (const { node, layer } of connected) {
-		const size = sizes.get(node.ref)!
-		const ins = incoming.get(node.ref) ?? []
-		const rightEdges = ins.map((ref) => {
-			const box = boxOf(ref)
+	for (const { ref, layer } of connected) {
+		const size = sizes.get(ref)!
+		const ins = incoming.get(ref) ?? []
+		const rightEdges = ins.map((inRef) => {
+			const box = boxOf(inRef)
 			return box ? box.x + box.w : baselineX
 		})
 		const x = rightEdges.length ? Math.max(...rightEdges) + gap : baselineX
 		const y0 = columnNextY.get(layer) ?? baselineY
 		const spot = findFreeSpot({ x, y: y0 }, size, placed, gap)
-		result[node.ref] = spot
+		result[ref] = spot
 		placed.push({ x: spot.x, y: spot.y, w: size.w, h: size.h })
 		columnNextY.set(layer, spot.y + size.h + gap)
 	}

@@ -73,6 +73,15 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'The note is kind and short.' } },
 		{ id: 'b', type: 'jev', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'context' }]),
+	step('llm-decision-switch', 'Decision switch', 'JEV decides yes/no; the switch routes the prompt down the matching output.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'The note is kind and short.' } },
+		{ id: 'b', type: 'jev', x: 460, y: 0 },
+		{ id: 'c', type: 'decision_switch', x: 920, y: 0 },
+	], [
+		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'context' },
+		{ from: 'b', fromPort: 'probs', to: 'c', toPort: 'decision' },
+		{ from: 'a', fromPort: 'output', to: 'c', toPort: 'value' },
+	]),
 	step('image-look', 'Filter look', 'Load an image, then apply the JP 90s look. Restore default on the filter to clear it.', [
 		{ id: 'a', type: 'load_image', x: 0, y: 0, props: { imageUrl: '/examples/girl-base.jpg', source: '' } },
 		{ id: 'b', type: 'image_filter', x: 460, y: 0, props: { contrast: 118, saturate: 78, sepia: 22, brightness: 108, hue: 8 } },

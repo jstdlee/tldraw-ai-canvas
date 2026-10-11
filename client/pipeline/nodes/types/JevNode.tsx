@@ -10,7 +10,7 @@ import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } fro
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiCheckbox, UiTextArea } from '../../../ui'
-import { PortRow, stopEvent, useInputConnected, NodeSelect, WireField, WireFieldHeader } from './fields'
+import { OutputPortLabel, PortRow, stopEvent, useInputConnected, NodeSelect, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -223,17 +223,21 @@ function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 		<>
 			<div className="CodeNode-portRow">
 				<PortRow shapeId={shape.id} portId="context" label="Context" dataType="any" hint="e.g. LLM output" />
-				<span className="CodeNode-outLabel">probabilities →</span>
+				<OutputPortLabel shapeId={shape.id} portId="probs">probabilities →</OutputPortLabel>
 			</div>
 			<div className="CodeNode-portRow">
 				<PortRow shapeId={shape.id} portId="question" label="Question" dataType="text" hint="or type below" />
-				<span className="CodeNode-outLabel">final text →</span>
+				<OutputPortLabel shapeId={shape.id} portId="final">final text →</OutputPortLabel>
 			</div>
 			<div className="CodeNode-portRow">
 				<PortRow shapeId={shape.id} portId="input" label="Input text" dataType="any" hint="text to filter" />
-				{node.kind === 'noul' && <span className="CodeNode-outLabel">yes →</span>}
+				{node.kind === 'noul' && <OutputPortLabel shapeId={shape.id} portId="yes">yes →</OutputPortLabel>}
 			</div>
-			<NodeRow className="NodeRow-right">{node.kind === 'noul' ? <span className="CodeNode-outLabel-static">no →</span> : null}</NodeRow>
+			<NodeRow className="NodeRow-right">
+				{node.kind === 'noul' ? (
+					<OutputPortLabel shapeId={shape.id} portId="no" className="CodeNode-outLabel-static">no →</OutputPortLabel>
+				) : null}
+			</NodeRow>
 			<div className="NodeGrow" style={{ minHeight: QUESTION_PX }}>
 				<UiTextArea
 					className="NodeField-textarea"

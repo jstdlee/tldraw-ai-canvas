@@ -7,9 +7,20 @@ function node(id: string, type: string, inputs: string[], outputs: string[], wir
 }
 
 describe('parseAiPlan', () => {
-	it('fills in missing arrays', () => {
+	it('fills in missing arrays, and defaults arrange to tidy', () => {
 		const plan = parseAiPlan('{"summary":"hi"}')
-		expect(plan).toEqual({ summary: 'hi', add: [], update: [], wires: [], notes: [] })
+		expect(plan).toEqual({ summary: 'hi', add: [], update: [], wires: [], unwire: [], notes: [], arrange: 'tidy' })
+	})
+
+	it('reads unwire entries, and an explicit arrange', () => {
+		const plan = parseAiPlan('{"unwire":[{"to":"n2","toPort":"input"}],"arrange":"none"}')
+		expect(plan.unwire).toEqual([{ to: 'n2', toPort: 'input' }])
+		expect(plan.arrange).toBe('none')
+	})
+
+	it('drops a malformed unwire entry', () => {
+		const plan = parseAiPlan('{"unwire":[{"to":"n2"},{"toPort":"input"},"nope"]}')
+		expect(plan.unwire).toEqual([])
 	})
 
 	it('reads a fenced JSON reply', () => {
@@ -218,6 +229,40 @@ describe('validatePlan', () => {
 		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
 		expect(cleaned.wires).toEqual([])
 		expect(errors.length).toBe(1)
+	})
+
+	// WP22 B2: unwire removes an existing wire into a port before new wires are checked.
+	it('unwires an existing input, freeing it for a new wire in the same plan', () => {
+		const existing = [
+			node('a', 'prompt', [], ['output']),
+			node('b', 'prompt', [], ['output']),
+			node('c', 'output', ['input'], ['output'], ['input']),
+		]
+		const plan = parseAiPlan(
+			JSON.stringify({
+				unwire: [{ to: 'c', toPort: 'input' }],
+				wires: [{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' }],
+			})
+		)
+		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
+		expect(errors).toEqual([])
+		expect(cleaned.unwire).toEqual([{ to: 'c', toPort: 'input' }])
+		expect(cleaned.wires).toHaveLength(1)
+	})
+
+	it('rejects an unwire of a non-existing node or a port that is not an input', () => {
+		const existing = [node('c', 'output', ['input'], ['output'], ['input'])]
+		const plan = parseAiPlan(
+			JSON.stringify({ unwire: [{ to: 'ghost', toPort: 'input' }, { to: 'c', toPort: 'nope' }] })
+		)
+		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
+		expect(cleaned.unwire).toEqual([])
+		expect(errors.length).toBe(2)
+	})
+
+	it('passes arrange through unchanged', () => {
+		const plan = parseAiPlan('{"arrange":"none"}')
+		expect(validatePlan(plan, [], NODE_SPECS).plan.arrange).toBe('none')
 	})
 
 	it('rejects a field:<key> port for a field that already has a dedicated port', () => {

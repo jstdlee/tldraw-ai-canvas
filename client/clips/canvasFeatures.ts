@@ -10,7 +10,7 @@ import {
 	TLShapeId,
 	toRichText,
 } from 'tldraw'
-import { $aiNote, openFillAssist } from '../pipeline/assist'
+import { $aiNote } from '../pipeline/assist'
 import { openBuildPanel } from '../pipeline/aiBuild'
 import { apiGenerateText, apiHttp, apiImportImage, apiProbeImage } from '../pipeline/api/pipelineApi'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../pipeline/placeOnCanvas'
@@ -132,15 +132,11 @@ export async function aiExplainSelection(editor: Editor, notify: Notify) {
 }
 
 /**
- * One node selected opens its own AI specialist. Anything else (0, 2+ nodes, or
- * non-node shapes as notes) opens "Build with AI" on the current selection.
+ * WP22 B5: any card (node) in the selection always opens Build with AI — it can wire, arrange
+ * and configure, which the per-node specialist (openFillAssist, still reachable from the ✦
+ * button on a card) cannot. Anything else (0 nodes, or non-node shapes as notes) also opens it.
  */
 export function aiAskSelection(editor: Editor, _notify: Notify) {
-	const nodes = editor.getSelectedShapes().filter((shape) => shape.type === 'node')
-	if (nodes.length === 1) {
-		openFillAssist(nodes[0].id)
-		return
-	}
 	openBuildPanel()
 }
 

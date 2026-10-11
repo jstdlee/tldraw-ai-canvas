@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { T, useEditor } from 'tldraw'
 import type { LlmUsage } from '../../../../shared/llmUsage'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
@@ -7,8 +8,9 @@ import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiSecretInput, UiTextArea, UiTextInput } from '../../../ui'
-import { apiSaveSecret } from '../../api/pipelineApi'
+import { UiButton, UiSecretInput, UiTextArea, UiTextInput } from '../../../ui'
+import { apiProviderModels, apiSaveSecret } from '../../api/pipelineApi'
+import { parseModelsList, type ModelListEntry } from './ModelSourceNode'
 import { currentRunSignal } from '../../execution/executionState'
 import { isAbortError } from '../../../../shared/abort'
 import { PortRow, stopEvent, NodeSelect, NodeTextResult, useInputConnected, WireField, WireFieldHeader } from './fields'
@@ -44,6 +46,8 @@ export const RawModelNode = T.object({
 	apiKey: T.string,
 	/** `secret:<id>` from the server's secret store, or `env:NAME`. */
 	keyRef: T.string.optional(),
+	/** WP21 Part D: JSON array of the last fetched models (`ModelListEntry[]`), from "Fetch models". */
+	models: T.string.optional(),
 	system: T.string,
 	/** Empty means the model's default. */
 	temperature: T.string,
@@ -70,6 +74,7 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 			url: 'https://api.openai.com/v1',
 			model: '',
 			apiKey: '',
+			models: '',
 			system: '',
 			temperature: '',
 			thinking: '',
@@ -86,10 +91,11 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 		return llmTemplateVars([node.system])
 	}
 	getBodyHeightPx(shape: NodeShape, node: RawModelNode) {
-		// Rows: prompt, model, URL, model id, key, system label (WP17), temp, max tokens,
-		// think = 9, plus the system-prompt text box (72), the {{var}} rows, and the result area.
+		// Rows: prompt, model, URL, model id, "Fetch models" + fetched-models filter/select
+		// (WP21 Part D, 2 rows), key, system label (WP17), temp, max tokens, think = 11, plus
+		// the system-prompt text box (72), the {{var}} rows, and the result area.
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
-		return rowPx * 9 + 72 + llmVarsHeight(this.vars(node), rowPx) + RESULT_HEIGHT_PX
+		return rowPx * 11 + 72 + llmVarsHeight(this.vars(node), rowPx) + RESULT_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape, node: RawModelNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -97,7 +103,7 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 		return {
 			prompt: { id: 'prompt', x: 0, y: BASE_Y + rowPx * 0.5, terminal: 'end', dataType: 'text' },
 			model: { id: 'model', x: 0, y: BASE_Y + rowPx * 1.5, terminal: 'end', dataType: 'model' },
-			...llmVarPorts(vars, BASE_Y + rowPx * 9 + 72, rowPx),
+			...llmVarPorts(vars, BASE_Y + rowPx * 10 + 72, rowPx),
 			output: { id: 'output', x: WIDTH, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}
@@ -161,6 +167,8 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 	const editor = useEditor()
 	const vars = llmTemplateVars([node.system])
 	const systemWired = useInputConnected(shape.id, 'field:system')
+	const [filter, setFilter] = useState('')
+	const [fetchError, setFetchError] = useState<string | null>(null)
 	const set = (patch: Partial<RawModelNode>) => updateNode<RawModelNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
 	const text = (key: 'url' | 'model' | 'temperature' | 'maxTokens', placeholder: string, type = 'text') => (
 		<UiTextInput
@@ -172,6 +180,20 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 			onChange={(next) => set({ [key]: next })}
 		/>
 	)
+	const models: ModelListEntry[] = parseModelsList({ models: node.models ?? '' })
+	const filtered = filter.trim()
+		? models.filter((m) => (m.label ?? m.id).toLowerCase().includes(filter.trim().toLowerCase()))
+		: models
+	const fetchModels = async () => {
+		setFetchError(null)
+		try {
+			const result = await apiProviderModels({ kind: 'openai-compatible', baseURL: node.url, keyRef: node.keyRef })
+			const list: ModelListEntry[] = result.models.map((m) => ({ id: m.id, label: m.label }))
+			set({ models: JSON.stringify(list) })
+		} catch (e) {
+			setFetchError((e as Error).message)
+		}
+	}
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="prompt" label="Prompt" dataType="text" />
@@ -180,6 +202,37 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 			<NodeRow>
 				<span className="NodeInputRow-label">Model</span>
 				{text('model', 'model id, or wire one')}
+			</NodeRow>
+			<NodeRow>
+				<UiButton size="sm" label="Fetch models" onClick={() => void fetchModels()} />
+				<span className="ModelSourceNode-meta" title={fetchError ?? ''}>
+					{fetchError ?? (models.length ? `${models.length} models fetched` : 'no models fetched yet')}
+				</span>
+			</NodeRow>
+			<NodeRow>
+				<UiTextInput
+					placeholder="filter fetched models…"
+					disabled={!models.length}
+					value={filter}
+					onChange={setFilter}
+				/>
+				<NodeSelect
+					className="NodeField-select"
+					value=""
+					title="Fetched models"
+					disabled={!models.length}
+					onPointerDown={stopEvent}
+					onChange={(e) => {
+						if (e.target.value) set({ model: e.target.value })
+					}}
+				>
+					<option value="">{models.length ? 'Pick fetched…' : 'Fetch models first'}</option>
+					{filtered.map((m) => (
+						<option key={m.id} value={m.id}>
+							{m.label && m.label !== m.id ? `${m.label} (${m.id})` : m.id}
+						</option>
+					))}
+				</NodeSelect>
 			</NodeRow>
 			<NodeRow>
 				<span className="NodeInputRow-label">Key</span>

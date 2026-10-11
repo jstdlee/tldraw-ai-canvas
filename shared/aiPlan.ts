@@ -28,12 +28,25 @@ export interface PlanWire {
 	toPort: string
 }
 
+/** WP22 B2: remove an existing wire into an input port, so the plan can re-wire it. */
+export interface PlanUnwire {
+	to: string
+	toPort: string
+}
+
 export interface AiPlan {
 	summary: string
 	add: PlanNode[]
 	update: PlanUpdate[]
 	wires: PlanWire[]
+	/** Wires to remove before `wires` is applied (WP22 B2). */
+	unwire: PlanUnwire[]
 	notes: string[]
+	/** Whether applying the plan should also lay the involved cards out (WP22 B2). Defaults to
+	 * "tidy" when the model's reply doesn't say — Build with AI almost always adds or reuses
+	 * several cards, so that is the useful default; a plan that only updates one card in place
+	 * can say "none" to leave it where it is. */
+	arrange: 'none' | 'tidy'
 }
 
 /** A node already on the canvas, as context for validation and layout. */
@@ -92,6 +105,18 @@ function readNotes(value: unknown): string[] {
 	return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '')
 }
 
+function readUnwire(value: unknown): PlanUnwire[] {
+	return (Array.isArray(value) ? value : []).flatMap((item) => {
+		if (!isRecord(item)) return []
+		if (typeof item.to !== 'string' || typeof item.toPort !== 'string') return []
+		return [{ to: item.to, toPort: item.toPort }]
+	})
+}
+
+function readArrange(value: unknown): 'none' | 'tidy' {
+	return value === 'none' ? 'none' : 'tidy'
+}
+
 /** Tolerant JSON extraction: missing arrays become []. */
 export function parseAiPlan(text: string): AiPlan {
 	const data = extractJsonObject(text)
@@ -101,7 +126,9 @@ export function parseAiPlan(text: string): AiPlan {
 		add: readAdd(record.add),
 		update: readUpdate(record.update),
 		wires: readWires(record.wires),
+		unwire: readUnwire(record.unwire),
 		notes: readNotes(record.notes),
+		arrange: readArrange(record.arrange),
 	}
 }
 
@@ -234,9 +261,29 @@ export function validatePlan(
 		updateClean.push(clean)
 	}
 
-	// --- wires ----------------------------------------------------------------
+	// --- wires / unwire -----------------------------------------------------
 	const wiredInputs = new Set<string>()
 	for (const node of existing) for (const portId of node.wiredInputs) wiredInputs.add(`${node.id}:${portId}`)
+
+	// WP22 B2: process unwire before new wires, so a wire into a port this same plan just
+	// freed up is accepted instead of rejected as "already has a wire".
+	const unwireClean: PlanUnwire[] = []
+	for (const item of plan.unwire) {
+		const node = existingById.get(item.to)
+		if (!node) {
+			errors.push(`unwire "${item.to}": not an existing node`)
+			continue
+		}
+		const isVar = item.toPort.startsWith('var:')
+		const fieldKey = fieldKeyFromPortId(item.toPort)
+		const isWirableField = fieldKey != null && wirableFields(specs[node.type]).some((f) => f.key === fieldKey)
+		if (!isVar && !isWirableField && !node.inputs.includes(item.toPort)) {
+			errors.push(`unwire: "${item.toPort}" is not an input of ${item.to}`)
+			continue
+		}
+		unwireClean.push(item)
+		wiredInputs.delete(`${item.to}:${item.toPort}`)
+	}
 
 	// Cycle checking only matters when nothing in the graph can legitimately
 	// loop (a for_each node provides its own loop semantics).
@@ -316,7 +363,7 @@ export function validatePlan(
 	}
 
 	return {
-		plan: { summary: plan.summary, add: addClean, update: updateClean, wires: wiresClean, notes: plan.notes },
+		plan: { summary: plan.summary, add: addClean, update: updateClean, wires: wiresClean, unwire: unwireClean, notes: plan.notes, arrange: plan.arrange },
 		errors,
 	}
 }

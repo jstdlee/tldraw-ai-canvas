@@ -5,6 +5,8 @@ import { BrainIcon } from '../../shared/icons/BrainIcon'
 import { ChevronDownIcon } from '../../shared/icons/ChevronDownIcon'
 import { getModelLabel, ModelSelect } from '../ai/aiConfig'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
+import { openBuildPanel } from '../pipeline/aiBuild'
+import { UiButton } from '../ui'
 import { ContextItemTag } from './ContextItemTag'
 import { SelectionTag } from './SelectionTag'
 
@@ -30,6 +32,9 @@ export function ChatInput({
 	)
 
 	const selectedShapes = useValue('selectedShapes', () => editor.getSelectedShapes(), [editor])
+	// WP22 B5: the canvas agent draws shapes/arrows; a selection with cards (node workflow
+	// shapes) is better served by Build with AI, which can wire/arrange/configure them.
+	const selectionHasCards = selectedShapes.some((s) => s.type === 'node')
 	const contextItems = useValue('contextItems', () => agent.context.getItems(), [agent])
 	const modelName = useValue('modelName', () => agent.modelName.getModelName(), [agent])
 	const modelLabel = useValue('model label', () => getModelLabel(modelName || null, 'agent'), [modelName])
@@ -75,6 +80,21 @@ export function ChatInput({
 						/>
 					))}
 				</div>
+
+				{selectionHasCards && inputValue.trim() !== '' && (
+					<div className="chat-cards-hint">
+						<span>Your selection has cards — wiring and parameters need Build with AI.</span>
+						<UiButton
+							size="sm"
+							label="Build with cards instead"
+							onClick={() => {
+								const text = inputValue
+								setInputValue('')
+								openBuildPanel(text)
+							}}
+						/>
+					</div>
+				)}
 
 				<textarea
 					ref={inputRef}

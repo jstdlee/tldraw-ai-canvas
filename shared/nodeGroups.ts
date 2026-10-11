@@ -56,6 +56,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	image_gen: 'ai',
 	// Decide
 	jev: 'decide',
+	decision_switch: 'decide',
 	if: 'decide',
 	logic: 'decide',
 	router: 'decide',

@@ -1955,24 +1955,63 @@ body {
 	gap: 8px;
 }
 
-/* Floating "Build with AI" panel: fixed at the right, under the top bar. */
-.BuildPanel {
-	position: fixed;
-	top: 56px;
-	right: 12px;
-	bottom: 12px;
+/*
+ * WP22 B1: FloatingPanel is the generic draggable/resizable chrome (position, background,
+ * radius, shadow); BuildPanel and FillChatCard style their own header/body content inside it.
+ */
+.FloatingPanel {
 	z-index: 650;
-	width: 400px;
-	max-width: calc(100vw - 24px);
+	max-width: calc(100vw - 16px);
+	max-height: calc(100vh - 16px);
 	background: var(--tl-color-panel);
 	border-radius: var(--tl-radius-4);
 	box-shadow: var(--tl-shadow-3);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	pointer-events: all;
+}
+
+.FloatingPanel-header {
+	flex: 0 0 auto;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--tl-color-divider);
+	cursor: grab;
+	touch-action: none;
+}
+
+.FloatingPanel-header:active {
+	cursor: grabbing;
+}
+
+.FloatingPanel-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
 	padding: 12px;
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	overflow-y: auto;
-	pointer-events: all;
+}
+
+.FloatingPanel-resize {
+	position: absolute;
+	right: 2px;
+	bottom: 2px;
+	width: 14px;
+	height: 14px;
+	cursor: nwse-resize;
+	touch-action: none;
+	border-right: 2px solid var(--tl-color-muted-2);
+	border-bottom: 2px solid var(--tl-color-muted-2);
+	border-bottom-right-radius: 3px;
+}
+
+/* Build with AI: body content inside a FloatingPanel. */
+.BuildPanel {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 }
 
 .BuildPanel-bar {
@@ -2083,20 +2122,15 @@ body {
 }
 
 /* AI-star chat card: anchored under the node, not a centered modal. */
+/* AI-star chat card: body content inside a FloatingPanel, above BuildPanel's z-index. */
 .FillChatCard {
-	position: fixed;
-	top: 0;
-	left: 0;
-	z-index: 700;
-	width: min(360px, calc(100vw - 32px));
-	background: var(--tl-color-panel);
-	border-radius: var(--tl-radius-4);
-	box-shadow: var(--tl-shadow-3);
-	padding: 12px;
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	pointer-events: all;
+}
+
+.FillChatCard-floating {
+	z-index: 700;
 }
 
 .FillChatCard-bar {
