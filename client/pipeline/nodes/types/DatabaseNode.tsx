@@ -4,8 +4,8 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { DbConn, DuckDbConn, PostgresConn } from '../../../../shared/dbConn'
 import { buildLoadPlan, LoadMode } from '../../../../shared/dbLoadRows'
 import { DB_SOURCES, DbSourceId } from '../../../../shared/dbSources'
-import { parseCsv } from '../../../../shared/pgImport'
 import { summarizeScript } from '../../../../shared/sqlStatements'
+import { parseTableText, toCsv } from '../../../../shared/tableText'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { currentRunSignal, startExecution } from '../../execution/executionState'
 import { isAbortError } from '../../../../shared/abort'
@@ -220,19 +220,12 @@ function dbQuery(conn: DbConn, sql: string, opts: { transaction?: boolean; signa
 	)
 }
 
-function escapeCsvCell(value: unknown): string {
-	if (value == null) return ''
-	const s = String(value)
-	return s.includes('"') || s.includes('\n') || s.includes(',') ? `"${s.replace(/"/g, '""')}"` : s
-}
-
-/** The last SELECT-like result as CSV (for the `output` port); otherwise a per-statement summary. */
+/** The last SELECT-like result as CSV (WP26: `toCsv`, for the `output` port); otherwise a
+ * per-statement summary. */
 function resultsToOutputText(results: ExtQueryResultRow[]): string {
 	const last = results[results.length - 1]
 	if (last && last.columns.length) {
-		const header = last.columns.join(',')
-		const rows = last.rows.map((row) => row.map(escapeCsvCell).join(','))
-		return [header, ...rows].join('\n')
+		return toCsv(last.columns, last.rows)
 	}
 	return results
 		.map((r) => `${r.command}: ${r.affected ?? r.rowCount ?? 0} row${(r.affected ?? r.rowCount ?? 0) === 1 ? '' : 's'}`)
@@ -331,7 +324,10 @@ export class DatabaseNodeDefinition extends NodeDefinition<DatabaseNode> {
 		const rowsInput = getInputText(inputs, 'rows')
 		let loadSummary = ''
 		if (rowsInput && rowsInput.trim()) {
-			const plan = buildLoadPlan(parseCsv(rowsInput), node.targetTable || '', (node.loadMode as LoadMode) || 'insert', node.upsertKey || undefined)
+			// WP26: the rows port accepts anything `parseTableText` does (CSV/TSV/semicolon/JSON/
+			// Markdown), not only comma CSV; `buildLoadPlan` wants the header as csvRows[0].
+			const rowsTable = parseTableText(rowsInput)
+			const plan = buildLoadPlan([rowsTable.headers, ...rowsTable.rows], node.targetTable || '', (node.loadMode as LoadMode) || 'insert', node.upsertKey || undefined)
 			await dbQuery(conn, plan.statements.join(';\n'), { transaction: true, signal })
 			loadSummary = `Loaded ${plan.rowCount} row${plan.rowCount === 1 ? '' : 's'} into ${plan.table}\n\n`
 		}
@@ -367,12 +363,15 @@ export class DatabaseNodeDefinition extends NodeDefinition<DatabaseNode> {
 	Component = DatabaseComponent
 }
 
+/** WP26: quote-aware (a value with a comma, quote, or NULL survives), via `parseTableText`,
+ * instead of a naive `split(',')` that broke on exactly those. */
 function parseCsvPreview(csv: string): { headers: string[]; rows: string[][] } {
-	const lines = csv.split('\n').filter((l) => l.length)
-	if (!lines.length) return { headers: [], rows: [] }
-	const headers = lines[0].split(',')
-	const rows = lines.slice(1, 51).map((line) => line.split(','))
-	return { headers, rows }
+	try {
+		const table = parseTableText(csv)
+		return { headers: table.headers, rows: table.rows.slice(0, 50) }
+	} catch {
+		return { headers: [], rows: [] }
+	}
 }
 
 const SOURCE_OPTIONS = DB_SOURCES.map((s) => ({ value: s.id, label: s.label }))

@@ -5,6 +5,7 @@
  */
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js'
 import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url'
+import { toCsv } from '../../shared/tableText'
 
 let loading: Promise<SqlJsStatic> | null = null
 
@@ -44,11 +45,11 @@ export function schemaText(db: Database): string {
 	return rows.map((row) => String(row[0])).join(';\n') + (rows.length ? ';' : '')
 }
 
-function escapeCsv(value: unknown): string {
-	if (value == null) return ''
-	const s = value instanceof Uint8Array ? `\\x${[...value].map((b) => b.toString(16).padStart(2, '0')).join('')}` : String(value)
-	if (s.includes('"') || s.includes('\n') || s.includes(',')) return `"${s.replace(/"/g, '""')}"`
-	return s
+/** A BLOB column comes back as a Uint8Array; write it the way sqlite's own CLI would, not
+ * `[object Uint8Array]` (toCsv's own stringification for anything that isn't a number/boolean/
+ * Date). Everything else passes through unchanged for `toCsv` (WP26's RFC 4180 CSV writer). */
+function cellValue(value: unknown): unknown {
+	return value instanceof Uint8Array ? `\\x${[...value].map((b) => b.toString(16).padStart(2, '0')).join('')}` : value
 }
 
 /** Run SQL (one or more statements); the last result set becomes CSV (header + rows). */
@@ -58,7 +59,5 @@ export function runSqlCsv(db: Database, sql: string): string {
 	const results = db.exec(trimmed)
 	const last = results[results.length - 1]
 	if (!last) return ''
-	const header = last.columns.join(',')
-	const rows = last.values.map((row) => row.map(escapeCsv).join(','))
-	return [header, ...rows].join('\n')
+	return toCsv(last.columns, last.values.map((row) => row.map(cellValue)))
 }

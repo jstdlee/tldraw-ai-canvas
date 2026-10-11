@@ -54,13 +54,16 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 		'text', 'kind', 'xCol', 'yCol', 'dualScale', 'series', 'aggregate', 'stack', 'sort', 'top', 'otherRow',
 		'bins', 'title', 'xLabel', 'yLabel', 'labels', 'smooth',
 	],
-	profile: ['text', 'format'],
+	// WP26: the Format picker was removed (every table is auto-detected via parseTableText now);
+	// 'format' is no longer in profile's nodeSpecs field list at all.
+	profile: ['text'],
 	openrouter: ['model'],
 	raw_model: ['url', 'system', 'temperature', 'thinking', 'maxTokens'],
 	video: ['autoplay'],
 	file_in: ['source', 'action', 'asText'],
 	url_in: ['url', 'fetchBody'],
 	sleep: ['ms'],
+	table_view: ['text'],
 }
 
 /** Fields deliberately left unwired, each with a reason (kept with the `wire: false` flag

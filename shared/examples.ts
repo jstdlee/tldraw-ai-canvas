@@ -239,6 +239,10 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 		{ id: 'b', type: 'profile', x: 460, y: 0, props: { format: 'csv' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'data' }]),
+	step('table-view', 'View a table', 'The same CSV feeds Table view: a sortable, filterable grid with a row count and Copy as CSV.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
+		{ id: 'b', type: 'table_view', x: 460, y: 0 },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'data' }]),
 	step('chart-bars', 'Bar chart', 'The same CSV feeds Chart. ECharts draws name and score.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 		{ id: 'b', type: 'chart', x: 460, y: 0, props: { format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score' } },

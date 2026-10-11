@@ -60,6 +60,7 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	sleep: { inn: ['input'], out: ['output'] },
 	image_gen: { inn: ['prompt', 'image', 'model', 'system', 'params'], out: ['output', 'images'] },
 	web_search: { inn: ['query'], out: ['output', 'results', 'urls', 'answer'] },
+	table_view: { inn: ['data'], out: ['output', 'json'] },
 }
 
 describe('llm usage', () => {

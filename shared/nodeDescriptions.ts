@@ -232,4 +232,9 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'Searches the web with Exa, Tavily, or Brave and returns a list of results.',
 		keywords: ['web', 'search', 'exa', 'tavily', 'brave', 'google', 'results', 'find'],
 	},
+	table_view: {
+		title: 'Table view',
+		description: 'Shows a table as a sortable, filterable grid, with a row count and Copy as CSV.',
+		keywords: ['table', 'view', 'grid', 'sort', 'filter', 'csv', 'rows', 'spreadsheet'],
+	},
 }

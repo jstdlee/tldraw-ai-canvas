@@ -31,6 +31,11 @@ export interface PortSpec {
 	id: string
 	dataType: string
 	description: string
+	/** WP26: the port's data type stays 'text' for wiring compatibility, but this value is
+	 * always table text — RFC 4180 CSV out (`shared/tableText.ts`'s `toCsv`), any of CSV/TSV/
+	 * semicolon/JSON/Markdown in (`parseTableText`). Lets the AI know to treat it as a table,
+	 * not arbitrary text. */
+	tableHint?: boolean
 }
 
 export interface NodeSpec {
@@ -53,6 +58,11 @@ export interface NodeSpec {
 
 function port(id: string, dataType: string, description: string): PortSpec {
 	return { id, dataType, description }
+}
+
+/** A 'text' port that specifically carries table text (WP26: see `PortSpec.tableHint`). */
+function tablePort(id: string, description: string): PortSpec {
+	return { id, dataType: 'text', description, tableHint: true }
 }
 
 function field(
@@ -746,11 +756,11 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('table'),
 		purpose: purpose('table'),
 		useWhen: 'Use for one table step: filter, sort, add a column, join, summarise, etc. Chain several DataPipe nodes for a multi-step pipeline (one operation per node).',
-		inputs: [port('data', 'text', 'The input table (CSV/TSV).'), port('extra', 'text', 'A second table, used by append/lookup/newcol.')],
-		outputs: [port('output', 'text', 'The transformed table (CSV/TSV).')],
+		inputs: [tablePort('data', 'The input table.'), tablePort('extra', 'A second table, used by append/lookup/newcol.')],
+		outputs: [tablePort('output', 'The transformed table.')],
 		fields: [
-			field('text', 'longtext', 'Table text', 'Literal input table (CSV/TSV), used when the data port is not wired.'),
-			field('format', 'enum', 'Format', 'Input/output delimiter; auto detects tab vs comma.', ['auto', 'csv', 'tsv']),
+			field('text', 'longtext', 'Table text', 'Literal input table, used when the data port is not wired. Any table-text form works (CSV/TSV/semicolon/JSON/Markdown); auto-detected.'),
+			field('format', 'enum', 'Format', 'Unused (WP26): every table is read auto-detected now. Kept only so an old canvas still loads.', ['auto', 'csv', 'tsv']),
 			field('op', 'enum', 'Operation', 'Which single table operation this step runs. See the operation list below for each op’s own parameters.', TABLE_OP_IDS),
 			field('columns', 'text', 'Columns', 'Comma-separated column names (op-dependent).'),
 			field('column', 'text', 'Column', 'A single column name, or a comma list of group/row columns (op-dependent).'),
@@ -779,10 +789,10 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('chart'),
 		purpose: purpose('chart'),
 		useWhen: 'Use to draw a chart (bar, line, area, scatter, pie, histogram, heatmap, …) from a table; usually the last step after a DataPipe.',
-		inputs: [port('data', 'text', 'The table to chart (CSV/TSV).')],
+		inputs: [tablePort('data', 'The table to chart.')],
 		outputs: [port('output', 'image', 'A PNG of the chart.')],
 		fields: [
-			field('text', 'longtext', 'Table text', 'Literal input table (CSV/TSV), used when the data port is not wired.'),
+			field('text', 'longtext', 'Table text', 'Literal input table, used when the data port is not wired. Any table-text form works (CSV/TSV/semicolon/JSON/Markdown); auto-detected.'),
 			field('kind', 'enum', 'Kind', 'Chart type.', CHART_KIND_IDS),
 			field('xCol', 'text', 'X column', 'Column used for the category/x axis.'),
 			field('yCol', 'text', 'Y column(s)', 'Comma-separated column(s) to plot; one series per column.'),
@@ -812,11 +822,10 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('profile'),
 		purpose: purpose('profile'),
 		useWhen: 'Use to see what is in a table before working on it: column types, fill rate, distinct values, min/max/mean and a histogram.',
-		inputs: [port('data', 'text', 'The table to profile (CSV/TSV).')],
-		outputs: [port('output', 'text', 'One row per column: type, filled %, empty count, distinct count, min/max, mean, top values.')],
+		inputs: [tablePort('data', 'The table to profile.')],
+		outputs: [tablePort('output', 'One row per column: type, filled %, empty count, distinct count, min/max, mean, top values.')],
 		fields: [
-			field('text', 'longtext', 'Table text', 'Literal input table (CSV/TSV), used when the data port is not wired.'),
-			field('format', 'enum', 'Format', 'Input delimiter; auto detects tab vs comma.', ['auto', 'csv', 'tsv']),
+			field('text', 'longtext', 'Table text', 'Literal input table, used when the data port is not wired. Any table-text form works (CSV/TSV/semicolon/JSON/Markdown); auto-detected.'),
 		],
 		assistant: {
 			role: 'This node has nothing to configure beyond the input table; suggest it to inspect data before other DataPipe steps.',
@@ -832,9 +841,9 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			'Use to run full SQL (read, write, DDL, transactions) against a SQLite file, the built-in Postgres, or an external Postgres/DuckDB database.',
 		inputs: [
 			port('sql', 'text', 'Overrides the sql field when wired.'),
-			port('rows', 'text', 'CSV rows to load into a table (target table + mode below).'),
+			tablePort('rows', 'Rows to load into a table (target table + mode below). Any table-text form works, auto-detected.'),
 		],
-		outputs: [port('output', 'text', 'Query result as CSV.'), port('schema', 'text', 'The database’s table/column schema, as JSON.')],
+		outputs: [tablePort('output', 'Query result.'), port('schema', 'text', 'The database’s table/column schema, as JSON.')],
 		fields: [
 			field('source', 'enum', 'Source', 'Which database to use.', ['sqlite', 'pglite', 'postgres', 'duckdb']),
 			field('sql', 'sql', 'SQL', 'The statement(s) to run against the selected database.'),
@@ -982,6 +991,25 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			role: 'You choose the provider, write the search query, and set how many results to ask for.',
 			chips: ['Search the web for…', 'Find recent news about…', 'Use Tavily and include an answer'],
 			rules: ['Never write a real API key; leave the key field for the user to fill in.'],
+		},
+	},
+	table_view: {
+		type: 'table_view',
+		title: title('table_view'),
+		group: groupOf('table_view'),
+		purpose: purpose('table_view'),
+		useWhen: 'Use as a final step to look at a table: sort a column, filter rows, see the row count, and copy it as CSV. Usually the last card in a DataPipe/Database/Chart chain.',
+		inputs: [tablePort('data', 'The table to show.')],
+		outputs: [
+			tablePort('output', 'The currently visible rows (after the filter box and any column sort) as CSV.'),
+			port('json', 'text', 'The same visible rows as a JSON array of objects.'),
+		],
+		fields: [
+			field('text', 'longtext', 'Table text', 'Literal input table, used when the data port is not wired. Any table-text form works (CSV/TSV/semicolon/JSON/Markdown); auto-detected.'),
+		],
+		assistant: {
+			role: 'This node has nothing to configure beyond the input table; suggest it whenever the user wants to look at, sort, or filter a table, or copy it out as CSV.',
+			chips: ['Show this table', 'Let me sort and filter this'],
 		},
 	},
 }

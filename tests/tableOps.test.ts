@@ -34,8 +34,11 @@ describe('auto format detection', () => {
 		expect(runTable('a,b\n1,2', job({ op: 'select', columns: 'b' }))).toBe('b\n2')
 	})
 
-	it('csv/tsv still force the format', () => {
-		expect(() => runTable('a,b\n1,2', job({ format: 'tsv', op: 'select', columns: 'b' }))).toThrow()
+	// WP26: runTable now reads every table through shared/tableText.ts's parseTableText, which
+	// always auto-detects — a saved node's `format` field (kept only for old canvases) no longer
+	// forces anything, so a stored 'tsv' on data that is actually CSV still works.
+	it('the stored format field no longer forces parsing (WP26: always auto)', () => {
+		expect(runTable('a,b\n1,2', job({ format: 'tsv', op: 'select', columns: 'b' }))).toBe('b\n2')
 	})
 })
 

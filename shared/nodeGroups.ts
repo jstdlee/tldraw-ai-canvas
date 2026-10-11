@@ -80,6 +80,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	// Output
 	output: 'output',
 	save: 'output',
+	table_view: 'output',
 }
 
 export function categoryOf(type: string): string {

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { T, useEditor } from 'tldraw'
 import { detectFileKind } from '../../../../shared/fileKind'
 import { categoryOf } from '../../../../shared/nodeGroups'
-import { parseTable } from '../../../../shared/tableOps'
+import { parseTableText } from '../../../../shared/tableText'
 import { asWebUrl } from '../../../../shared/webUrl'
 import { readSpreadsheet } from '../../excel'
 import { loadFileBytes, storeFile } from '../../fileStore'
@@ -348,7 +348,7 @@ function looksTabular(node: FileInNode, text: string): boolean {
 	const name = (node.fileName || '').toLowerCase()
 	const namedAsTable = /\.(csv|tsv)$/.test(name) || node.fileType === 'csv' || node.fileType === 'tsv'
 	try {
-		const table = parseTable(text, 'auto')
+		const table = parseTableText(text)
 		if (table.headers.length >= 2) return true
 		return namedAsTable && table.headers.length >= 1
 	} catch {
@@ -386,7 +386,7 @@ function FileInPreview({ node, shape }: { node: FileInNode; shape: NodeShape }) 
 
 function safeParseTable(text: string) {
 	try {
-		return parseTable(text, 'auto')
+		return parseTableText(text)
 	} catch {
 		return null
 	}

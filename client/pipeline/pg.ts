@@ -1,6 +1,7 @@
 /** Postgres in the page, via PGlite. The first call opens (or creates) the database. */
 
 import { PGlite } from '@electric-sql/pglite'
+import { toCsv } from '../../shared/tableText'
 
 interface PgResult {
 	rows?: Record<string, unknown>[]
@@ -52,12 +53,18 @@ export function takePgliteFallbackToast(): boolean {
 	return true
 }
 
+/** WP26: the card-to-card table contract is RFC 4180 CSV (`shared/tableText.ts`'s `toCsv`), not
+ * TSV with JSON-quoted cells — the old format broke on a value with a tab, quote or newline, and
+ * turned NULL into the four-letter text "null" instead of an empty cell. When the query returns
+ * no rows but PGlite still reports the columns (e.g. a SELECT matching nothing), the header row
+ * alone is still a valid table; only a result with no columns at all (DDL, etc.) falls back to
+ * the old "(no rows)" plain-text note. */
 function table(result: PgResult): string {
 	const rows = result.rows ?? []
-	if (!rows.length) return '(no rows)'
-	const fields = result.fields?.map((field) => field.name) ?? Object.keys(rows[0])
-	const body = rows.map((row) => fields.map((field) => JSON.stringify(row[field] ?? null)).join('\t'))
-	return [fields.join('\t'), ...body].join('\n')
+	const fields = result.fields?.map((field) => field.name) ?? (rows[0] ? Object.keys(rows[0]) : [])
+	if (!fields.length) return '(no rows)'
+	const body = rows.map((row) => fields.map((field) => row[field] ?? null))
+	return toCsv(fields, body)
 }
 
 /** Run one or more SQL statements. Returns a text table. */

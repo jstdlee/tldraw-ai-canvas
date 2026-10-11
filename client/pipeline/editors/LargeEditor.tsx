@@ -1,8 +1,10 @@
-import { forwardRef, useEffect, useRef, useState } from 'react'
+import { forwardRef, ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCode, highlightCode } from '../../../shared/codeFormat'
-import { formatTable } from '../../../shared/tableOps'
-import { IconClose, IconExpand, UiButton, UiIconButton, UiTable } from '../../ui'
+import { filterTableRows, sortTableRows, toCsv } from '../../../shared/tableText'
+import { clipCell, isNumericCell, tableWindow } from '../../../shared/clipCell'
+import { IconClose, IconExpand, UiButton, UiIconButton, UiTextInput } from '../../ui'
+import { IconChevronDown, IconChevronUp } from '../../ui/icons'
 import { placeImageOnCanvas } from '../placeOnCanvas'
 import { NodeShape } from '../nodes/NodeShapeUtil'
 import type { Editor } from 'tldraw'
@@ -203,8 +205,110 @@ export function ImageZoom({
 	)
 }
 
-/** A tabular output (`UiTable`, the Profile table, a Database result, …) with the same hover
- * FieldMax as every other output, opening a full-size scrollable table (WP23 Part D). */
+// ---------------------------------------------------------------------------
+// WP26: a sortable, filterable grid, shared by every table view in the app — the compact
+// preview (`ExpandableTable`, used by DataPipe/Database/Read from/Profile), the full-size
+// viewer (`TableZoom`), and the Table view card's own body. Click a header to sort asc/desc
+// (click again to flip); the filter box matches any cell, case-insensitively.
+// ---------------------------------------------------------------------------
+
+/**
+ * The shared grid: a filter box + row count, then a scrollable table with clickable, sortable
+ * headers (sticky, via the same `.UiTable` styling `UiTable` itself used). `onVisibleRows`, when
+ * given, is called with the current filtered+sorted rows (before the `maxRows` render cap) —
+ * the Table view card uses it to keep its `output`/`json` ports in sync with what's on screen.
+ */
+export function SortFilterTable({
+	columns,
+	rows,
+	maxRows,
+	onVisibleRows,
+	toolbarExtra,
+	controlled,
+}: {
+	columns: string[]
+	rows: string[][]
+	maxRows?: number
+	onVisibleRows?: (rows: string[][]) => void
+	/** Extra controls (Copy as CSV, an expand icon, …) shown at the right of the filter toolbar —
+	 * the Table view card's own body uses this for its always-visible actions. */
+	toolbarExtra?: ReactNode
+	/** Persist the filter/sort choice on the caller's own state (the Table view card does, so
+	 * its `output`/`json` ports — computed on Run, outside React — agree with the grid on
+	 * screen) instead of this component's own, private `useState`. Omit for an ephemeral view
+	 * (the compact preview, the full-size zoom). */
+	controlled?: {
+		filter: string
+		onFilterChange: (filter: string) => void
+		sortColumn: number | null
+		sortDir: 'asc' | 'desc'
+		onSortChange: (sortColumn: number | null, sortDir: 'asc' | 'desc') => void
+	}
+}) {
+	const [localFilter, setLocalFilter] = useState('')
+	const [localSortCol, setLocalSortCol] = useState<number | null>(null)
+	const [localSortDir, setLocalSortDir] = useState<'asc' | 'desc'>('asc')
+	const filter = controlled?.filter ?? localFilter
+	const sortCol = controlled?.sortColumn ?? localSortCol
+	const sortDir = controlled?.sortDir ?? localSortDir
+	const setFilter = controlled?.onFilterChange ?? setLocalFilter
+	const visible = useMemo(() => sortTableRows(filterTableRows(rows, filter), sortCol, sortDir), [rows, filter, sortCol, sortDir])
+	useEffect(() => onVisibleRows?.(visible), [visible, onVisibleRows])
+	const windowed = tableWindow(visible.length, maxRows)
+	const shown = visible.slice(0, windowed.count)
+	const toggleSort = (index: number) => {
+		const nextDir: 'asc' | 'desc' = sortCol === index && sortDir === 'asc' ? 'desc' : 'asc'
+		if (controlled) controlled.onSortChange(index, nextDir)
+		else {
+			setLocalSortCol(index)
+			setLocalSortDir(nextDir)
+		}
+	}
+	return (
+		<div className="SortFilterTable">
+			<div className="SortFilterTable-toolbar" onPointerDown={stop}>
+				<UiTextInput value={filter} onChange={setFilter} placeholder="Filter…" />
+				<span className="NodeHint SortFilterTable-count">
+					{visible.length.toLocaleString()} of {rows.length.toLocaleString()} row{rows.length === 1 ? '' : 's'}
+				</span>
+				{toolbarExtra}
+			</div>
+			<div className="UiTable SortFilterTable-grid" onPointerDown={stop} onWheel={stop}>
+				<table>
+					<thead>
+						<tr>
+							{columns.map((column, index) => (
+								<th key={`${column}:${index}`} className="SortFilterTable-th" onClick={() => toggleSort(index)} title="Click to sort">
+									<span>{column}</span>
+									{sortCol === index && (sortDir === 'asc' ? <IconChevronUp size={11} /> : <IconChevronDown size={11} />)}
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody>
+						{shown.map((row, rowIndex) => (
+							<tr key={rowIndex}>
+								{columns.map((_, columnIndex) => {
+									const value = row[columnIndex] ?? ''
+									return (
+										<td key={columnIndex} className={isNumericCell(value) ? 'is-num' : undefined} title={value}>
+											{clipCell(value)}
+										</td>
+									)
+								})}
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			{windowed.more > 0 && <div className="UiTable-more">+{windowed.more} more rows</div>}
+		</div>
+	)
+}
+
+/** A tabular output (`SortFilterTable`, the Profile table, a Database result, …) with the same
+ * hover FieldMax as every other output, opening a full-size scrollable table (WP23 Part D; WP26:
+ * sortable/filterable, same as `TableZoom` and the Table view card). */
 export function ExpandableTable({
 	title = 'Table',
 	columns,
@@ -219,7 +323,7 @@ export function ExpandableTable({
 	const [open, setOpen] = useState(false)
 	return (
 		<div className="NodeTablePreview" onPointerDown={stop} onWheel={stop}>
-			<UiTable columns={columns} rows={rows} maxRows={maxRows} />
+			<SortFilterTable columns={columns} rows={rows} maxRows={maxRows} />
 			<FieldMax title="Open full table" onClick={() => setOpen(true)} />
 			{open && <TableZoom title={title} columns={columns} rows={rows} onClose={() => setOpen(false)} />}
 		</div>
@@ -229,7 +333,9 @@ export function ExpandableTable({
 /** How many rows the full-size table viewer shows before it says "+N more". */
 const TABLE_ZOOM_MAX_ROWS = 5000
 
-/** Full-size, sticky-header table view: up to 5,000 rows, with "Copy as CSV" (WP23 Part D). */
+/** Full-size, sticky-header, sortable/filterable table view: up to 5,000 rows, with "Copy as
+ * CSV" (WP23 Part D; WP26: copies the rows currently visible — after the filter box and any
+ * column sort — as RFC 4180 CSV via `toCsv`, not just the raw, unfiltered rows). */
 export function TableZoom({
 	title,
 	columns,
@@ -242,8 +348,7 @@ export function TableZoom({
 	onClose: () => void
 }) {
 	const [copied, setCopied] = useState(false)
-	const shown = rows.slice(0, TABLE_ZOOM_MAX_ROWS)
-	const more = rows.length - shown.length
+	const [visible, setVisible] = useState(rows)
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') onClose()
@@ -253,7 +358,7 @@ export function TableZoom({
 	}, [onClose])
 	const drag = useDragOffset()
 	const copyCsv = () => {
-		const csv = formatTable({ headers: columns, rows: shown }, 'csv')
+		const csv = toCsv(columns, visible)
 		void navigator.clipboard.writeText(csv)
 		setCopied(true)
 		window.setTimeout(() => setCopied(false), 900)
@@ -269,27 +374,7 @@ export function TableZoom({
 					</div>
 				</div>
 				<div className="LargeEditor-table-body">
-					<table className="LargeEditor-table-el">
-						<thead>
-							<tr>
-								{columns.map((column, index) => (
-									<th key={`${column}:${index}`}>{column}</th>
-								))}
-							</tr>
-						</thead>
-						<tbody>
-							{shown.map((row, rowIndex) => (
-								<tr key={rowIndex}>
-									{columns.map((_, columnIndex) => (
-										<td key={columnIndex} title={row[columnIndex] ?? ''}>
-											{row[columnIndex] ?? ''}
-										</td>
-									))}
-								</tr>
-							))}
-						</tbody>
-					</table>
-					{more > 0 && <div className="LargeEditor-table-more">+{more} more rows (showing the first {TABLE_ZOOM_MAX_ROWS.toLocaleString()})</div>}
+					<SortFilterTable columns={columns} rows={rows} maxRows={TABLE_ZOOM_MAX_ROWS} onVisibleRows={setVisible} />
 				</div>
 			</div>
 		</div>,

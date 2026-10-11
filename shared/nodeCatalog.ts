@@ -52,7 +52,7 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 			'bins', 'title', 'xLabel', 'yLabel', 'labels', 'smooth',
 		],
 	},
-	profile: { in: ['data'], out: ['output'], fields: ['text', 'format'] },
+	profile: { in: ['data'], out: ['output'], fields: ['text'] },
 	database: { in: ['sql', 'rows'], out: ['output', 'schema'], fields: ['sql', 'source'] },
 	openrouter: { in: [], out: ['output'], fields: ['model'] },
 	raw_model: { in: ['prompt', 'model'], out: ['output'], fields: ['url', 'model', 'keyRef', 'system', 'temperature', 'thinking', 'maxTokens'] },
@@ -66,6 +66,7 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 		out: ['output', 'results', 'urls', 'answer'],
 		fields: ['provider', 'query', 'count', 'tavilyDepth', 'tavilyIncludeAnswer', 'exaIncludeText', 'keyRef'],
 	},
+	table_view: { in: ['data'], out: ['output', 'json'], fields: ['text'] },
 }
 
 export function catalogPrompt(): string {

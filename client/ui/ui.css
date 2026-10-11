@@ -539,6 +539,60 @@ button.UiChip {
 	color: var(--tl-color-text-3);
 }
 
+/* WP26: the sortable/filterable grid shared by the compact preview, the full-size table view,
+   and the Table view card's body. */
+.SortFilterTable {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3em;
+	min-height: 0;
+}
+
+.SortFilterTable-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+}
+
+.SortFilterTable-toolbar .UiTextInput {
+	flex: 1;
+}
+
+.SortFilterTable-count {
+	white-space: nowrap;
+}
+
+.SortFilterTable-grid {
+	flex: 1;
+	min-height: 0;
+}
+
+.SortFilterTable-th {
+	cursor: pointer;
+	user-select: none;
+	display: table-cell;
+}
+
+.SortFilterTable-th:hover {
+	color: var(--tl-color-text-1);
+}
+
+.SortFilterTable-th span {
+	vertical-align: middle;
+}
+
+.SortFilterTable-th svg {
+	vertical-align: middle;
+	margin-left: 0.2em;
+}
+
+.TableViewNode-toolbarButtons {
+	display: flex;
+	align-items: center;
+	gap: 0.3em;
+	flex-shrink: 0;
+}
+
 .UiErrorBanner {
 	display: flex;
 	align-items: flex-start;

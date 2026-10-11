@@ -1,6 +1,16 @@
-/** CSV and TSV column tools. No network. Used by the DataPipe node and by tests. */
+/** CSV and TSV column tools. No network. Used by the DataPipe node and by tests.
+ *
+ * WP26: the card-to-card wire format is now `shared/tableText.ts`'s RFC 4180 CSV contract
+ * (`toCsv`/`parseTableText`), which this module's `runTable` uses at its own boundaries (reading
+ * the incoming text, and the second table for Append/Join). `parseTable`/`formatTable`/
+ * `detectFormat` below stay exported and unchanged for existing callers (DataPipe's own live
+ * preview, Chart, Profile, the Database card's preview) that still choose `auto`/`csv`/`tsv`
+ * directly; a saved node's `format` field is read by nothing anymore inside `runTable` itself —
+ * every table arriving there is auto-detected, so an old canvas with `format: 'tsv'` on data that
+ * is actually CSV (or vice versa) keeps working instead of throwing. */
 
 import { evaluateFormula } from './formula'
+import { toCsv, parseTableText } from './tableText'
 
 export interface Table {
 	headers: string[]
@@ -722,8 +732,7 @@ function splitRespectingQuotes(value: string, sep: string): string[] {
 }
 
 export function runTable(text: string, job: TableJob, second?: string): string {
-	const format = detectFormat(text, job.format)
-	let table = parseTable(text, format)
+	let table = parseTableText(text)
 	const sep = job.sep || ' '
 	const op = job.op
 	if (op === 'select') {
@@ -1030,8 +1039,7 @@ export function runTable(text: string, job: TableJob, second?: string): string {
 	} else if (op === 'append') {
 		const extra = second ?? job.extra
 		if (!extra || !extra.trim()) throw new Error('Append rows of second table: wire the second table')
-		const otherFormat = detectFormat(extra, format)
-		const other = parseTable(extra, otherFormat)
+		const other = parseTableText(extra)
 		const rows = other.rows.map((row) =>
 			table.headers.map((header) => {
 				const otherIndex = other.headers.indexOf(header)
@@ -1043,8 +1051,7 @@ export function runTable(text: string, job: TableJob, second?: string): string {
 		const extra = second ?? job.extra
 		if (!extra || !extra.trim()) throw new Error('Join tables by key: wire the second table')
 		if (!job.column) throw new Error('Join tables by key: choose this table’s key column')
-		const otherFormat = detectFormat(extra, format)
-		const other = parseTable(extra, otherFormat)
+		const other = parseTableText(extra)
 		const leftIndex = indexOf(table, job.column)
 		const rightKey = job.with || job.column
 		const rightIndex = other.headers.findIndex((h) => h === rightKey)
@@ -1101,5 +1108,5 @@ export function runTable(text: string, job: TableJob, second?: string): string {
 		const valueCols = splitList(job.columns2 ?? '')
 		table = unpivotTable(table, idCols, valueCols, job.name || 'key', job.as || 'value')
 	} else throw new Error('Choose an operation')
-	return formatTable(table, format)
+	return toCsv(table.headers, table.rows)
 }

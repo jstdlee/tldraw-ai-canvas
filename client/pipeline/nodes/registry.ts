@@ -21,6 +21,7 @@ import { JevNodeDefinition } from './types/JevNode'
 import { NetToolNodeDefinition, RandomNodeDefinition, SummarizeNodeDefinition } from './types/UtilityNodes'
 import { DownloadNodeDefinition, HttpNodeDefinition, SaveNodeDefinition } from './types/WebNodes'
 import { WebSearchNodeDefinition } from './types/WebSearchNode'
+import { TableViewNodeDefinition } from './types/TableViewNode'
 import { PostgresNodeDefinition } from './types/PostgresNode'
 import { GenerateTextNodeDefinition } from './types/GenerateTextNode'
 import { LoadImageNodeDefinition } from './types/LoadImageNode'
@@ -105,6 +106,7 @@ export const NodeDefinitions = {
 	chart: ChartNodeDefinition,
 	profile: ProfileNodeDefinition,
 	database: DatabaseNodeDefinition,
+	table_view: TableViewNodeDefinition,
 	openrouter: OpenRouterNodeDefinition,
 	raw_model: RawModelNodeDefinition,
 	video: VideoNodeDefinition,

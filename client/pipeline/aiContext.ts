@@ -4,7 +4,8 @@
  */
 
 import { Editor } from 'tldraw'
-import { opSpec, parseTable } from '../../shared/tableOps'
+import { opSpec } from '../../shared/tableOps'
+import { parseTableText } from '../../shared/tableText'
 import { CanvasNodeInfo } from '../../shared/aiPlan'
 import { nodeRunState } from './execution/nodeRunState'
 import { NodeShape } from './nodes/NodeShapeUtil'
@@ -105,7 +106,7 @@ export function nodeAssistContext(editor: Editor, shape: NodeShape): string {
 		const text = dataInputText(ctx, String(node.text ?? ''))
 		if (text.trim()) {
 			try {
-				const table = parseTable(text, String(node.format ?? 'auto'))
+				const table = parseTableText(text)
 				lines.push(`Input headers: ${table.headers.join(', ')}`)
 				lines.push('First rows:')
 				for (const row of table.rows.slice(0, 5)) lines.push('  ' + row.join(', '))
@@ -119,7 +120,7 @@ export function nodeAssistContext(editor: Editor, shape: NodeShape): string {
 		const text = dataInputText(ctx, String(node.text ?? ''))
 		if (text.trim()) {
 			try {
-				const table = parseTable(text, String(node.format ?? 'auto'))
+				const table = parseTableText(text)
 				lines.push(`Input headers: ${table.headers.join(', ')}`)
 				for (const row of table.rows.slice(0, 3)) lines.push('  ' + row.join(', '))
 			} catch (error) {

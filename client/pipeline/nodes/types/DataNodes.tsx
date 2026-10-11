@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { buildChart, CHART_KINDS, columnsNumberFirst, resolveColumns } from '../../../../shared/chartOption'
 import type { ChartSpec, ChartTheme } from '../../../../shared/chartOption'
-import { detectFormat, evalFormula, formatTable, opSpec, parseTable, runTable, splitList, TABLE_OPS } from '../../../../shared/tableOps'
+import { evalFormula, opSpec, runTable, splitList, TABLE_OPS } from '../../../../shared/tableOps'
 import type { TableJob } from '../../../../shared/tableOps'
+import { parseTableText, toCsv } from '../../../../shared/tableText'
 import { profileTable } from '../../../../shared/profile'
 import type { ColumnProfile } from '../../../../shared/profile'
 import { createShapeId, Editor, getColorValue, TLShapeId, T, useEditor, useValue } from 'tldraw'
@@ -691,7 +692,7 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 	)
 	const inputTable = useMemo(() => {
 		try {
-			return parseTable(effectiveText, 'auto')
+			return parseTableText(effectiveText)
 		} catch {
 			return null
 		}
@@ -763,7 +764,7 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 	const preview = useMemo(() => {
 		if (!node.lastOutput) return null
 		try {
-			return parseTable(node.lastOutput, 'auto')
+			return parseTableText(node.lastOutput)
 		} catch {
 			return null
 		}
@@ -781,10 +782,10 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 	return (
 		<>
 			{dataWired ? (
-				<PortRow shapeId={shape.id} portId="data" label="Input" dataType="text" />
+				<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
 			) : (
 				<NodeRow>
-					<span className="NodePortLabel">Input</span>
+					<span className="NodePortLabel">Table</span>
 					<UiSegmented
 						value={source === 'file' ? 'file' : 'inline'}
 						options={[
@@ -1087,7 +1088,7 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	}
 	async execute(shape: NodeShape, node: ChartNode, inputs: InputValues): Promise<ExecutionResult> {
 		const text = getInputText(inputs, 'data') || node.text
-		const table = parseTable(text, detectFormat(text, node.format))
+		const table = parseTableText(text)
 		if (table.headers.length === 0) throw new Error('No table to chart. Wire in a table, or paste one into Text.')
 		const columns = resolveColumns(table, chartXFor(node), splitList(node.yCol))
 		const series = node.series && table.headers.includes(node.series) ? node.series : ''
@@ -1215,11 +1216,11 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	)
 	const table = useMemo(() => {
 		try {
-			return parseTable(source, detectFormat(source, node.format))
+			return parseTableText(source)
 		} catch {
 			return { headers: [] as string[], rows: [] as string[][] }
 		}
-	}, [source, node.format])
+	}, [source])
 	const columns = resolveColumns(table, chartXFor(node), splitList(node.yCol))
 	const ySelected = splitList(node.yCol)
 	const yOptions = useMemo(() => columnsNumberFirst(table), [table])
@@ -1442,10 +1443,11 @@ export class ProfileNodeDefinition extends NodeDefinition<ProfileNode> {
 		return { type: 'profile', text: SAMPLE, format: 'auto', error: null, lastOutput: null }
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		// Data port row + (unwired: the "text" field's own label row) + the format row + the
-		// header line + a scrollable column list.
+		// Data port row + (unwired: the "text" field's own label row) + the header line + a
+		// scrollable column list. WP26: the per-card Format picker is gone (every table is read
+		// through `parseTableText`, auto-detected), so this is one row shorter than before.
 		const dataWired = isInputWired(this.editor, shape.id, 'data')
-		return getNodeRowHeightPx(shape.props.fontSize) * (dataWired ? 3 : 4) + 360
+		return getNodeRowHeightPx(shape.props.fontSize) * (dataWired ? 2 : 3) + 360
 	}
 	getPorts(shape: NodeShape, node: ProfileNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -1454,9 +1456,9 @@ export class ProfileNodeDefinition extends NodeDefinition<ProfileNode> {
 	async execute(shape: NodeShape, node: ProfileNode, inputs: InputValues): Promise<ExecutionResult> {
 		const text = getInputText(inputs, 'data') || node.text
 		try {
-			const table = parseTable(text, detectFormat(text, node.format))
+			const table = parseTableText(text)
 			const { headers, rows } = profileTableRows(profileTable(table))
-			const output = formatTable({ headers, rows }, 'csv')
+			const output = toCsv(headers, rows)
 			updateNode<ProfileNode>(this.editor, shape, (n) => ({ ...n, error: null, lastOutput: output }), false)
 			return { output }
 		} catch (error) {
@@ -1559,13 +1561,17 @@ function ProfileComponent({ shape, node }: NodeComponentProps<ProfileNode>) {
 		},
 		[editor, shape.id, node.text]
 	)
+	// WP26: every table arriving here (wired or pasted into Text) is read through
+	// `parseTableText` — CSV, TSV, semicolon CSV, JSON, or a Markdown table, auto-detected. The
+	// per-card Format picker that used to force `csv`/`tsv` is gone; `node.format` stays in the
+	// schema (unused) only so an old saved canvas still loads.
 	const table = useMemo(() => {
 		try {
-			return parseTable(effectiveText, detectFormat(effectiveText, node.format))
+			return parseTableText(effectiveText)
 		} catch {
 			return null
 		}
-	}, [effectiveText, node.format])
+	}, [effectiveText])
 	const columns = useMemo(() => (table ? profileTable(table) : []), [table])
 	const fileSize = useMemo(() => formatFileSize(new TextEncoder().encode(effectiveText).length), [effectiveText])
 	const [tableOpen, setTableOpen] = useState(false)
@@ -1583,17 +1589,6 @@ function ProfileComponent({ shape, node }: NodeComponentProps<ProfileNode>) {
 					<UiTextArea className="NodeField-textarea" mono rows={4} value={node.text} onChange={(text) => set({ text })} />
 				</>
 			)}
-			<WireField shapeId={shape.id} fieldKey="format" label="Format">
-				<UiSelect
-					value={node.format}
-					options={[
-						{ value: 'auto', label: 'Auto' },
-						{ value: 'csv', label: 'CSV' },
-						{ value: 'tsv', label: 'TSV' },
-					]}
-					onChange={(format) => set({ format })}
-				/>
-			</WireField>
 			{table ? (
 				<>
 					<div className="NodeHint Profile-hint">
