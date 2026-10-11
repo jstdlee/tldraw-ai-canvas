@@ -55,7 +55,7 @@ show a small "2 wired" badge when wired. The card's default height drops by two 
 
 - The floating AI (sparkle) chat button sits on top of tldraw's "Get a license" note in the
   bottom-right corner. Move it 56 px up, or into the top-right next to Nodes / Agent.
-- Default card font is 20 px (`DEFAULT_NODE_FONT_PX`), so cards are very large at 100 % zoom.
+- (Moved to WP16.) Default card font is 20 px, so cards are very large at 100 % zoom.
   Change the default to 16 px for **new** cards only (existing cards keep their stored font size;
   cards without a stored size must keep 20 px — store `fontSize: 16` on create instead of changing
   the constant). Re-check `getBodyHeightPx` rows still fit (rows are em-based).

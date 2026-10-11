@@ -30,7 +30,12 @@ Read from / Database ──► DataPipe steps ──► Chart
 | WP14 | Run behaviour: Run pulls stale upstream cards, input-hash cache, default-model health check | S |
 | WP15 | Fine-tuning seen in testing: results inside cards, one error place, shorter LLM cards, group box wording/placement, lighter DataPipe files, chrome, hot-reload cycle | M |
 
-Order: WP14 → WP15 (both fix daily friction) → WP11 → WP12 → WP13.
+| WP16 | One type scale for cards and labels; 16 px default for new cards | M |
+| WP17 | Every card parameter has an input port that overrides the field when wired | L |
+| WP18 | One grouping for library, menus, picker, palette; `/` to insert cards; one search engine (BM25 + trigrams + recency, optional JEV) | M |
+
+Order: WP14 → WP15 → WP16 → WP18 → WP17 → WP11 → WP12 → WP13.
+(Fix friction and looks first; wirable parameters before the new column ops so they get ports for free.)
 RULES.md applies unchanged. Every WP is checked in the browser by the planner.
 
 ## Out of scope (decided)
