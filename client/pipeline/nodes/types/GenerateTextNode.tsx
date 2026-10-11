@@ -11,10 +11,11 @@ import {
 	NODE_ROW_HEADER_GAP_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextArea } from '../../../ui'
-import { PortRow, useInputConnected, NodeTextResult } from './fields'
+import { PortRow, useInputConnected, NodeTextResult, WireFieldHeader } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	fillLlmTemplate,
@@ -85,9 +86,10 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 	getBodyHeightPx(shape: NodeShape, node: GenerateTextNode) {
 		const vars = this.vars(node)
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
-		// input + prompt-port + model rows, the prompt text box, settings, variables, result.
+		// input + prompt-port + promptText label (WP17) + model rows, the prompt text box,
+		// settings, variables, result.
 		return (
-			rowPx * 3 +
+			rowPx * 4 +
 			PROMPT_TEXT_PX +
 			llmSettingsHeight(node, rowPx) +
 			llmVarsHeight(vars, rowPx) +
@@ -97,8 +99,8 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 	getPorts(shape: NodeShape, node: GenerateTextNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
-		const modelY = baseY + rowPx * 2 + PROMPT_TEXT_PX + rowPx * 0.5
-		const settingsStartY = baseY + rowPx * 3 + PROMPT_TEXT_PX
+		const modelY = baseY + rowPx * 3 + PROMPT_TEXT_PX + rowPx * 0.5
+		const settingsStartY = baseY + rowPx * 4 + PROMPT_TEXT_PX
 		const vars = this.vars(node)
 		return {
 			input: {
@@ -187,12 +189,16 @@ function GenerateTextNodeComponent({ shape, node }: NodeComponentProps<GenerateT
 		[editor, shape.id]
 	)
 	const modelWired = useInputConnected(shape.id, 'model')
+	const promptTextWired = useInputConnected(shape.id, 'field:promptText')
 	const vars = llmTemplateVars([node.promptText, node.system])
 	const run = () => void startExecution(editor, new Set([shape.id]))
+	const promptBoxHidden = !!promptPort || promptTextWired
+	const inputRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'input')
+	const modelRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'model')
 
 	return (
 		<>
-			<NodeRow>
+			<NodeRow ref={inputRowRef}>
 				<Port shapeId={shape.id} portId="input" />
 				<NodePortLabel dataType="any">Input</NodePortLabel>
 				{inputPort ? (
@@ -211,23 +217,25 @@ function GenerateTextNodeComponent({ shape, node }: NodeComponentProps<GenerateT
 				)}
 			</NodeRow>
 			<PortRow shapeId={shape.id} portId="prompt" label="Prompt" dataType="text" hint="or type below" />
-			<div className="NodeField-block" style={{ height: PROMPT_TEXT_PX }}>
-				<UiTextArea
-					className="NodeField-textarea"
-					grow
-					disabled={!!promptPort}
-					placeholder={promptPort ? '(from the Prompt input)' : DEFAULT_PROMPT}
-					value={promptPort ? '' : (node.promptText ?? '')}
-					onChange={(promptText) => updateNode<GenerateTextNode>(editor, shape, (n) => ({ ...n, promptText }), false)}
-					onSubmit={run}
-					submitOn="enter"
-				/>
-				{!promptPort && <div className="LlmSubmitHint">Enter to run · Shift+Enter new line</div>}
-			</div>
+			<WireFieldHeader shapeId={shape.id} fieldKey="promptText" label="Prompt text" />
+			{!promptBoxHidden && (
+				<div className="NodeField-block" style={{ height: PROMPT_TEXT_PX }}>
+					<UiTextArea
+						className="NodeField-textarea"
+						grow
+						placeholder={DEFAULT_PROMPT}
+						value={node.promptText ?? ''}
+						onChange={(promptText) => updateNode<GenerateTextNode>(editor, shape, (n) => ({ ...n, promptText }), false)}
+						onSubmit={run}
+						submitOn="enter"
+					/>
+					<div className="LlmSubmitHint">Enter to run · Shift+Enter new line</div>
+				</div>
+			)}
 			{modelWired ? (
 				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="model" />
 			) : (
-				<NodeRow>
+				<NodeRow ref={modelRowRef}>
 					<Port shapeId={shape.id} portId="model" />
 					<span className="NodeInputRow-label">Model</span>
 					<ModelSelect

@@ -8,10 +8,12 @@ import { startExecution } from '../../execution/executionState'
 import { placeImageOnCanvas } from '../../placeOnCanvas'
 import { ImageZoom } from '../../editors/LargeEditor'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
-import { ShapePort } from '../../ports/Port'
+import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor, useFieldPortAnchors } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
 import { IconChevronDown, IconChevronRight, IconSparkle, UiButton, UiEmpty, UiNumberInput, UiSegmented, UiTextArea, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect, useInputConnected } from './fields'
+import { PortRow, stopEvent, NodeSelect, useInputConnected, WireField } from './fields'
+import { fieldPortId } from '../../../../shared/fieldOverrides'
 import {
 	DEFAULT_LLM_SETTINGS,
 	fillLlmTemplate,
@@ -47,9 +49,10 @@ const { lastUsage: _llmLastUsageDefault, ...defaultLlmSettingsForImageGen } = DE
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 // Enough room for at least 4 lines of prompt text at the default node font.
 const PROMPT_AREA_PX = 100
-// "More settings" (negative prompt + seed): collapsed is just the title row; open adds one content row.
+// "More settings" (negative prompt + seed): collapsed is just the title row (WP17: both
+// fields' ports anchor there); open gives each its own row.
 const MORE_SETTINGS_CLOSED_PX = 28
-const moreSettingsOpenPx = (rowPx: number) => MORE_SETTINGS_CLOSED_PX + rowPx
+const moreSettingsOpenPx = (rowPx: number) => MORE_SETTINGS_CLOSED_PX + rowPx * 2
 // Empty results: a compact placeholder, about 3 rows. Only the real grid (once there
 // are images) takes the full height.
 const emptyResultsPx = (rowPx: number) => rowPx * 3
@@ -60,7 +63,8 @@ const modelRowY = (rowPx: number) => BASE_Y + rowPx * 0.5
 const promptTop = (rowPx: number) => BASE_Y + rowPx
 const promptPortY = (rowPx: number) => promptTop(rowPx) + rowPx * 0.5
 const nsizeTop = (rowPx: number) => promptTop(rowPx) + PROMPT_AREA_PX
-const refTop = (rowPx: number) => nsizeTop(rowPx) + rowPx
+// +1 row (WP17): count/size split onto their own rows.
+const refTop = (rowPx: number) => nsizeTop(rowPx) + rowPx * 2
 const imagePortY = (rowPx: number) => refTop(rowPx) + rowPx * 0.5
 
 const SIZES = [
@@ -136,7 +140,8 @@ export class ImageGenNodeDefinition extends NodeDefinition<ImageGenNode> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const results = parseImages(node).length ? GRID_AREA_PX : emptyResultsPx(rowPx)
 		const moreSettings = node.moreOpen ? moreSettingsOpenPx(rowPx) : MORE_SETTINGS_CLOSED_PX
-		return rowPx * 3 + PROMPT_AREA_PX + moreSettings + llmSettingsHeight(node, rowPx) + llmVarsHeight(this.vars(node), rowPx) + results
+		// +1 row (WP17): count/size split onto their own rows.
+		return rowPx * 4 + PROMPT_AREA_PX + moreSettings + llmSettingsHeight(node, rowPx) + llmVarsHeight(this.vars(node), rowPx) + results
 	}
 	getPorts(shape: NodeShape, node: ImageGenNode): Record<string, ShapePort> {
 		const width = this.getWidthPx(shape, node)
@@ -204,6 +209,53 @@ function download(url: string, name: string) {
 	a.remove()
 }
 
+/**
+ * WP17: the "More settings" fields (negative, seed) anchor their ports to this section's own
+ * header row while it's closed (both at once — `useFieldPortAnchors`), and get their own row
+ * each once it's open.
+ */
+function MoreSettingsSection({
+	shape,
+	node,
+	set,
+}: {
+	shape: NodeShape
+	node: ImageGenNode
+	set: (patch: Partial<ImageGenNode>) => void
+}) {
+	const closedRef = useFieldPortAnchors<HTMLButtonElement>(shape.id, node.moreOpen ? [] : ['negative', 'seed'])
+	return (
+		<div className="UiSection">
+			<button
+				ref={closedRef}
+				type="button"
+				className="UiSection-title"
+				onPointerDown={stopEvent}
+				onClick={() => set({ moreOpen: !node.moreOpen })}
+			>
+				{node.moreOpen ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+				More settings
+				{!node.moreOpen && (
+					<span className="LlmSettings-toggle-ports" title="Negative/Seed inputs (open to see them)">
+						<Port shapeId={shape.id} portId={fieldPortId('negative')} />
+						<Port shapeId={shape.id} portId={fieldPortId('seed')} />
+					</span>
+				)}
+			</button>
+			{node.moreOpen && (
+				<div className="UiSection-body">
+					<WireField shapeId={shape.id} fieldKey="negative" label="Negative">
+						<UiTextInput placeholder="negative prompt (optional)" value={node.negative} onChange={(negative) => set({ negative })} />
+					</WireField>
+					<WireField shapeId={shape.id} fieldKey="seed" label="Seed" dataType="number">
+						<UiNumberInput placeholder="seed" value={node.seed} onChange={(seed) => set({ seed })} />
+					</WireField>
+				</div>
+			)}
+		</div>
+	)
+}
+
 function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>) {
 	const editor = useEditor()
 	const [zoom, setZoom] = useState<string | null>(null)
@@ -214,13 +266,14 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 	const run = () => void startExecution(editor, new Set([shape.id]))
 
 	const resultsHeight = (images.length ? GRID_AREA_PX : emptyResultsPx(getNodeRowHeightPx(shape.props.fontSize))) - 8
+	const modelRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'model')
 
 	return (
 		<>
 			{modelWired ? (
 				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="model" />
 			) : (
-				<NodeRow>
+				<NodeRow ref={modelRowRef}>
 					<span className="NodeInputRow-label">Model</span>
 					<ModelSelect className="node-model-select" capability="image" value={node.model} onChange={(model) => set({ model })} />
 				</NodeRow>
@@ -241,8 +294,10 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 					}}
 				/>
 			</div>
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="n" label="Count" dataType="number">
 				<UiSegmented value={String(node.n)} options={[1, 2, 4].map((n) => ({ value: String(n), label: String(n) }))} onChange={(n) => set({ n: Number(n) })} />
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="size" label="Size">
 				<NodeSelect className="NodeField-select" value={node.size} onPointerDown={stopEvent} onChange={(e) => set({ size: e.target.value })}>
 					{SIZES.map((s) => (
 						<option key={s.value} value={s.value}>
@@ -250,7 +305,7 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			{imageWired ? (
 				<PortRow shapeId={shape.id} portId="image" label="Reference" dataType="image" />
 			) : (
@@ -259,25 +314,7 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 					<UiTextInput placeholder="reference image URL (optional)" value={node.referenceImage} onChange={(referenceImage) => set({ referenceImage })} />
 				</NodeRow>
 			)}
-			<div className="UiSection">
-				<button
-					type="button"
-					className="UiSection-title"
-					onPointerDown={stopEvent}
-					onClick={() => set({ moreOpen: !node.moreOpen })}
-				>
-					{node.moreOpen ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-					More settings
-				</button>
-				{node.moreOpen && (
-					<div className="UiSection-body">
-						<NodeRow>
-							<UiTextInput placeholder="negative prompt (optional)" value={node.negative} onChange={(negative) => set({ negative })} />
-							<UiNumberInput placeholder="seed" value={node.seed} onChange={(seed) => set({ seed })} />
-						</NodeRow>
-					</div>
-				)}
-			</div>
+			<MoreSettingsSection shape={shape} node={node} set={set} />
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} modelWired={modelWired} />
 			<LlmVarRows shapeId={shape.id} vars={llmTemplateVars([node.prompt])} />
 			<div className="ImageGenNode-grid NodeScroll" style={{ height: resultsHeight }} onPointerDown={stopEvent}>

@@ -9,9 +9,11 @@ import {
 	NODE_WIDTH_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { sleep } from '../../utils/sleep'
 import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
+import { WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -141,10 +143,13 @@ function PromptConcatNodeComponent({ shape, node }: NodeComponentProps<PromptCon
 		(v): v is string => typeof v === 'string' && v.length > 0
 	)
 	const preview = parts.join(sep)
+	const prefixRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'prefix')
+	const mainRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'main')
+	const suffixRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'suffix')
 
 	return (
 		<>
-			<NodeRow>
+			<NodeRow ref={prefixRowRef}>
 				<Port shapeId={shape.id} portId="prefix" />
 				<NodePortLabel dataType="text">Prefix</NodePortLabel>
 				{prefixInput ? (
@@ -155,7 +160,7 @@ function PromptConcatNodeComponent({ shape, node }: NodeComponentProps<PromptCon
 					<span className="NodeRow-disconnected">not connected</span>
 				)}
 			</NodeRow>
-			<NodeRow>
+			<NodeRow ref={mainRowRef}>
 				<Port shapeId={shape.id} portId="main" />
 				<NodePortLabel dataType="text">Main</NodePortLabel>
 				{mainInput ? (
@@ -166,7 +171,7 @@ function PromptConcatNodeComponent({ shape, node }: NodeComponentProps<PromptCon
 					<span className="NodeRow-disconnected">not connected</span>
 				)}
 			</NodeRow>
-			<NodeRow>
+			<NodeRow ref={suffixRowRef}>
 				<Port shapeId={shape.id} portId="suffix" />
 				<NodePortLabel dataType="text">Suffix</NodePortLabel>
 				{suffixInput ? (
@@ -177,8 +182,7 @@ function PromptConcatNodeComponent({ shape, node }: NodeComponentProps<PromptCon
 					<span className="NodeRow-disconnected">not connected</span>
 				)}
 			</NodeRow>
-			<NodeRow>
-				<span className="NodeInputRow-label">Sep</span>
+			<WireField shapeId={shape.id} fieldKey="separator" label="Sep">
 				<NodeSelect
 					value={node.separator}
 					onChange={(e) =>
@@ -194,7 +198,7 @@ function PromptConcatNodeComponent({ shape, node }: NodeComponentProps<PromptCon
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			<NodeRow>
 				<span className="NodeRow-connected-value" style={{ fontSize: 10, opacity: 0.7 }}>
 					{preview ? (preview.length > 40 ? preview.slice(0, 38) + '...' : preview) : 'no inputs'}

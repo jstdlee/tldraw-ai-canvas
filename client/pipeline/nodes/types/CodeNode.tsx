@@ -18,9 +18,10 @@ import { NumberIcon } from '../../components/icons/NumberIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { Port } from '../../ports/Port'
 import { ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
 import { IconSparkle, UiButton, UiNumberInput, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect, NodeTextResult } from './fields'
+import { PortRow, stopEvent, NodeSelect, NodeTextResult, WireField, WireFieldHeader, useInputConnected } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -109,8 +110,10 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 	}
 	getBodyHeightPx(shape: NodeShape, node: CodeNode) {
 		const portRows = Math.max(this.inCount(node), this.outCount(node) - 1, 1)
+		// +4 rows (WP17): lang/inputCount/outputCount split off the AI-toggle row onto their
+		// own, plus a label row for the code field itself.
 		return (
-			getNodeRowHeightPx(shape.props.fontSize) * (portRows + 1) +
+			getNodeRowHeightPx(shape.props.fontSize) * (portRows + 5) +
 			CODE_HEIGHT_PX +
 			(node.showAI ? AI_HEIGHT_PX : 0) +
 			RESULT_HEIGHT_PX
@@ -182,11 +185,33 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 	Component = CodeNodeComponent
 }
 
+/** Anchors a dynamically-numbered dedicated port (CodeNode's per-index in/out ports) to its
+ * own row, same idea as `useFieldPortAnchor` but for a port id that isn't a field key. */
+function CodePortAnchor({
+	shapeId,
+	portId,
+	className,
+	children,
+}: {
+	shapeId: NodeShape['id']
+	portId: string
+	className?: string
+	children: React.ReactNode
+}) {
+	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, portId)
+	return (
+		<div ref={ref} className={className}>
+			{children}
+		</div>
+	)
+}
+
 function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 	const editor = useEditor()
 	const [busy, setBusy] = useState<string | null>(null)
 	const set = (patch: Partial<CodeNode>, outOfDate = true) =>
 		updateNode<CodeNode>(editor, shape, (n) => ({ ...n, ...patch }), outOfDate)
+	const codeWired = useInputConnected(shape.id, 'field:code')
 	const inCount = clampCodeCount(node.inputCount)
 	const outCount = clampCodeCount(node.outputCount)
 	const inNames = codeInputNames(inCount, node.inputNames)
@@ -262,7 +287,7 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 			{Array.from({ length: portRows }, (_, i) => (
 				<div key={i} className="CodeNode-portRow">
 					{i < inCount ? (
-						<div className="CodeNode-portEdit">
+						<CodePortAnchor shapeId={shape.id} portId={inputId(i)} className="CodeNode-portEdit">
 							<Port shapeId={shape.id} portId={inputId(i)} />
 							<span className="CodeNode-outLabel CodeNode-portName">{inNames[i]}</span>
 							<UiTextInput
@@ -272,12 +297,12 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 								placeholder={inNames[i]}
 								onChange={(next) => setInputName(i, next)}
 							/>
-						</div>
+						</CodePortAnchor>
 					) : (
 						<span className="CodeNode-portEdit" />
 					)}
 					{i + 1 < outCount && (
-						<div className="CodeNode-portEdit CodeNode-portEdit-out">
+						<CodePortAnchor shapeId={shape.id} portId={outputId(i + 1)} className="CodeNode-portEdit CodeNode-portEdit-out">
 							<UiTextInput
 								className="CodeNode-name"
 								title="Key for this output"
@@ -287,11 +312,11 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 							/>
 							<span className="CodeNode-outLabel CodeNode-portName">{outNames[i + 1]} →</span>
 							<Port shapeId={shape.id} portId={outputId(i + 1)} />
-						</div>
+						</CodePortAnchor>
 					)}
 				</div>
 			))}
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="lang" label="Language">
 				<NodeSelect
 					className="NodeField-select"
 					value={node.lang}
@@ -308,26 +333,26 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 					<option value="js">JavaScript</option>
 					<option value="py">Python</option>
 				</NodeSelect>
-				<label className="NodeField-inline" title="Number of inputs (1–20)">
-					<span>in</span>
-					<UiNumberInput
-						className="CodeNode-count"
-						min={1}
-						max={MAX_CODE_PORTS}
-						value={inCount}
-						onChange={(next) => set({ inputCount: Math.max(1, Math.min(MAX_CODE_PORTS, next ?? 1)) })}
-					/>
-				</label>
-				<label className="NodeField-inline" title="Number of outputs (1–20)">
-					<span>out</span>
-					<UiNumberInput
-						className="CodeNode-count"
-						min={1}
-						max={MAX_CODE_PORTS}
-						value={outCount}
-						onChange={(next) => set({ outputCount: Math.max(1, Math.min(MAX_CODE_PORTS, next ?? 1)) })}
-					/>
-				</label>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="inputCount" label="Inputs" dataType="number">
+				<UiNumberInput
+					className="CodeNode-count"
+					min={1}
+					max={MAX_CODE_PORTS}
+					value={inCount}
+					onChange={(next) => set({ inputCount: Math.max(1, Math.min(MAX_CODE_PORTS, next ?? 1)) })}
+				/>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="outputCount" label="Outputs" dataType="number">
+				<UiNumberInput
+					className="CodeNode-count"
+					min={1}
+					max={MAX_CODE_PORTS}
+					value={outCount}
+					onChange={(next) => set({ outputCount: Math.max(1, Math.min(MAX_CODE_PORTS, next ?? 1)) })}
+				/>
+			</WireField>
+			<NodeRow>
 				<UiButton
 					size="sm"
 					variant={node.showAI ? 'primary' : 'low'}
@@ -359,9 +384,12 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 					</div>
 				</div>
 			)}
-			<div className="NodeGrow" style={{ minHeight: CODE_HEIGHT_PX }}>
-				<CodeArea value={node.code} lang={node.lang} onChange={(code) => set({ code })} />
-			</div>
+			<WireFieldHeader shapeId={shape.id} fieldKey="code" label="Code" />
+			{!codeWired && (
+				<div className="NodeGrow" style={{ minHeight: CODE_HEIGHT_PX }}>
+					<CodeArea value={node.code} lang={node.lang} onChange={(code) => set({ code })} />
+				</div>
+			)}
 			<NodeTextResult
 				text={[node.logs ? `stdout:\n${node.logs}` : '', result != null ? `Result:\n${result}` : ''].filter(Boolean).join('\n\n') || null}
 				error={node.error}

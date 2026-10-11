@@ -10,10 +10,12 @@ import {
 	NODE_WIDTH_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { getNodeInputPortValues } from '../nodePorts'
 import { toImageUrl } from '../../imageOps'
 import { UiSlider } from '../../../ui'
 import { NodeShape } from '../NodeShapeUtil'
+import { WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	blobToDataUrl,
@@ -134,6 +136,7 @@ function AdjustNodeComponent({ shape, node }: NodeComponentProps<AdjustNode>) {
 		editor,
 		shape.id,
 	])
+	const imageRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'image')
 
 	const makeSlider = (
 		label: string,
@@ -141,24 +144,25 @@ function AdjustNodeComponent({ shape, node }: NodeComponentProps<AdjustNode>) {
 		min: number,
 		max: number
 	) => (
-		<NodeRow className="NodeInputRow">
-			<span className="NodeInputRow-label">{label}</span>
-			<UiSlider
-				label={label}
-				min={min}
-				max={max}
-				value={node[field]}
-				onChange={(next) =>
-					updateNode<AdjustNode>(editor, shape, (n) => ({ ...n, [field]: next }), false)
-				}
-			/>
-			<span className="NodeRow-value">{node[field]}</span>
-		</NodeRow>
+		<WireField shapeId={shape.id} fieldKey={field} label={label} dataType="number">
+			<>
+				<UiSlider
+					label={label}
+					min={min}
+					max={max}
+					value={node[field]}
+					onChange={(next) =>
+						updateNode<AdjustNode>(editor, shape, (n) => ({ ...n, [field]: next }), false)
+					}
+				/>
+				<span className="NodeRow-value">{node[field]}</span>
+			</>
+		</WireField>
 	)
 
 	return (
 		<>
-			<NodeRow>
+			<NodeRow ref={imageRowRef}>
 				<Port shapeId={shape.id} portId="image" />
 				<NodePortLabel dataType="image">Image</NodePortLabel>
 				{imageInput ? (

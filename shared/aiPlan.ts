@@ -5,6 +5,7 @@
 
 import type { FieldSpec, NodeSpec } from './nodeSpecs'
 import { extractJsonObject } from './nodeAssist'
+import { fieldKeyFromPortId, fieldPortDataType, wirableFields } from './fieldOverrides'
 
 export interface PlanNode {
 	ref: string
@@ -262,6 +263,11 @@ export function validatePlan(
 		if (direction === 'in' && portId.startsWith('var:')) return 'text'
 		const node = resolved.get(ref)
 		const spec = node ? specs[node.type] : undefined
+		if (direction === 'in') {
+			const fieldKey = fieldKeyFromPortId(portId)
+			const field = fieldKey != null ? wirableFields(spec).find((f) => f.key === fieldKey) : undefined
+			if (field) return fieldPortDataType(field.kind)
+		}
 		const list = direction === 'in' ? spec?.inputs : spec?.outputs
 		return list?.find((p) => p.id === portId)?.dataType ?? 'any'
 	}
@@ -282,7 +288,10 @@ export function validatePlan(
 			continue
 		}
 		const isVar = wire.toPort.startsWith('var:')
-		if (!isVar && !to.inputs.includes(wire.toPort)) {
+		// WP17: `field:<key>` is also a valid target, for any field the type doesn't mark wire: false.
+		const fieldKey = fieldKeyFromPortId(wire.toPort)
+		const isWirableField = fieldKey != null && wirableFields(specs[to.type]).some((f) => f.key === fieldKey)
+		if (!isVar && !isWirableField && !to.inputs.includes(wire.toPort)) {
 			errors.push(`wire: "${wire.toPort}" is not an input of ${wire.to}`)
 			continue
 		}

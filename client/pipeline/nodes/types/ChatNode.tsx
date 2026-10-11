@@ -11,10 +11,11 @@ import {
 	NODE_ROW_HEADER_GAP_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { getNodeInputPortValues, getNodePortConnections, NodePortConnection } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextArea } from '../../../ui'
-import { useInputConnected, PortRow } from './fields'
+import { useInputConnected, PortRow, WireFieldHeader } from './fields'
 
 import {
 	DEFAULT_LLM_SETTINGS,
@@ -97,7 +98,8 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 	}
 	getBodyHeightPx(shape: NodeShape, node: ChatNode) {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
-		return rowPx * 3 + llmSettingsHeight(node, rowPx) + llmVarsHeight(this.vars(node), rowPx) + MESSAGE_HEIGHT_PX
+		// +1 row (WP17): the message field got its own label row above the thread.
+		return rowPx * 4 + llmSettingsHeight(node, rowPx) + llmVarsHeight(this.vars(node), rowPx) + MESSAGE_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape, node: ChatNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -260,16 +262,20 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 	const parent = inputs.parent
 	const attach = inputs.attach
 	const modelWired = useInputConnected(shape.id, 'model')
+	const userMessageWired = useInputConnected(shape.id, 'field:userMessage')
 	const vars = llmTemplateVars([node.userMessage, node.system])
 	const busy = shape.props.isOutOfDate && !node.error && node.assistantMessage === ''
 
 	// Run the whole node through the execution graph (not just sendChat directly),
 	// so a node wired downstream of this one's reply also runs.
 	const run = () => void startExecution(editor, new Set([shape.id]))
+	const parentRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'parent')
+	const attachRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'attach')
+	const modelRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'model')
 
 	return (
 		<>
-			<NodeRow>
+			<NodeRow ref={parentRowRef}>
 				<Port shapeId={shape.id} portId="parent" />
 				<NodePortLabel dataType="text">Reply to</NodePortLabel>
 				{parent ? (
@@ -280,7 +286,7 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 					<span className="NodeRow-disconnected">new conversation</span>
 				)}
 			</NodeRow>
-			<NodeRow>
+			<NodeRow ref={attachRowRef}>
 				<Port shapeId={shape.id} portId="attach" />
 				<NodePortLabel dataType="any">Attach</NodePortLabel>
 				{attach ? (
@@ -300,7 +306,7 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 			{modelWired ? (
 				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="model" />
 			) : (
-				<NodeRow>
+				<NodeRow ref={modelRowRef}>
 					<Port shapeId={shape.id} portId="model" />
 					<span className="NodeInputRow-label">Model</span>
 					<ModelSelect
@@ -313,6 +319,7 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 			)}
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} modelWired={modelWired} />
 			<LlmVarRows shapeId={shape.id} vars={vars} />
+			<WireFieldHeader shapeId={shape.id} fieldKey="userMessage" label="Message" />
 			<div className="ChatNode-thread" style={{ minHeight: MESSAGE_HEIGHT_PX }}>
 				<div className="ChatNode-reply" onPointerDown={editor.markEventAsHandled}>
 					{node.error ? (
@@ -323,33 +330,50 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 						<span className="NodeRow-disconnected">The reply fills this area.</span>
 					)}
 				</div>
-				<div className="ChatNode-compose">
-					<UiTextArea
-						className="ChatNode-input NodeScroll"
-						placeholder="Message… (Enter to send, Shift+Enter for a new line)"
-						value={node.userMessage}
-						onPointerDown={editor.markEventAsHandled}
-						onChange={(userMessage) => updateNode<ChatNode>(editor, shape, (n) => ({ ...n, userMessage }), false)}
-						onSubmit={run}
-						submitOn="enter"
-					/>
-					<button
-						className="ChatNode-send"
-						title="Send (Enter)"
-						disabled={busy}
-						onPointerDown={editor.markEventAsHandled}
-						onClick={run}
-					>
-						{busy ? (
-							<span>…</span>
-						) : (
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-								<path d="M12 19V5M5 12l7-7 7 7" />
-							</svg>
-						)}
-					</button>
-				</div>
-				<div className="LlmSubmitHint">Enter to run · Shift+Enter new line</div>
+				{userMessageWired ? (
+					<div className="ChatNode-compose">
+						<span className="NodeRow-disconnected">message from the wired input</span>
+						<button className="ChatNode-send" title="Send" disabled={busy} onPointerDown={editor.markEventAsHandled} onClick={run}>
+							{busy ? (
+								<span>…</span>
+							) : (
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+									<path d="M12 19V5M5 12l7-7 7 7" />
+								</svg>
+							)}
+						</button>
+					</div>
+				) : (
+					<>
+						<div className="ChatNode-compose">
+							<UiTextArea
+								className="ChatNode-input NodeScroll"
+								placeholder="Message… (Enter to send, Shift+Enter for a new line)"
+								value={node.userMessage}
+								onPointerDown={editor.markEventAsHandled}
+								onChange={(userMessage) => updateNode<ChatNode>(editor, shape, (n) => ({ ...n, userMessage }), false)}
+								onSubmit={run}
+								submitOn="enter"
+							/>
+							<button
+								className="ChatNode-send"
+								title="Send (Enter)"
+								disabled={busy}
+								onPointerDown={editor.markEventAsHandled}
+								onClick={run}
+							>
+								{busy ? (
+									<span>…</span>
+								) : (
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+										<path d="M12 19V5M5 12l7-7 7 7" />
+									</svg>
+								)}
+							</button>
+						</div>
+						<div className="LlmSubmitHint">Enter to run · Shift+Enter new line</div>
+					</>
+				)}
 			</div>
 		</>
 	)

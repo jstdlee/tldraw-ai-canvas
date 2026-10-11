@@ -1,16 +1,22 @@
 import { Editor, useEditor } from 'tldraw'
+import { wirableFieldsFor, fieldPortId, fieldPortDataType } from '../../../shared/fieldOverrides'
+import { layoutPorts, PortCandidate } from '../../../shared/fieldPortLayout'
 import {
 	NODE_FOOTER_HEIGHT_PX,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_BOTTOM_PADDING_PX,
 	NODE_ROW_HEADER_GAP_PX,
 } from '../constants'
+import { getFieldPortAnchors } from '../ports/fieldAnchors'
 import { PortId, ShapePort } from '../ports/Port'
+import { applyFieldOverrides, applyFieldOverridesInfo } from './fieldOverrides'
+import { hiddenDedicatedPortIds, hiddenFieldKeys } from './fieldVisibility'
 import type { NodeShape } from './NodeShapeUtil'
 import {
 	getNodeDefinition as getNodeDefinitionFromStore,
 	getNodeDefinitions as getNodeDefinitionsFromStore,
 } from './definitionStore'
+import { isInputWired } from './portWiring'
 import type { NodeType } from './registry'
 import { ExecutionResult, InfoValues, NodeDefinition } from './types/shared'
 
@@ -71,8 +77,94 @@ export function getNodeHeightPx(editor: Editor, shape: NodeShape): number {
 	)
 }
 
+// Dev-only: shape:field pairs already warned about missing a field-port anchor (see below).
+const warnedMissingFieldAnchors = new Set<string>()
+
 export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<string, ShapePort> {
-	const ports = getNodeDefinition(editor, shape.props.node).getPorts(shape, shape.props.node)
+	const node = shape.props.node
+	const dedicated = getNodeDefinition(editor, node).getPorts(shape, node)
+	const anchors = getFieldPortAnchors(editor, shape.id)
+	const headerY = NODE_HEADER_HEIGHT_PX / 2
+
+	// WP17 follow-up: every input port — dedicated ones too — takes its y from its row's
+	// measured anchor when one is registered; the hand-coded y from getPorts() is only the
+	// fallback before that row has ever mounted. A port whose row isn't part of the current
+	// render (a conditional field, or a conditionally-unused dedicated port like DataPipe's
+	// "extra") is dropped, unless it's already wired — then it's kept near the header so the
+	// wire doesn't dangle.
+	const hiddenDedicated = hiddenDedicatedPortIds(node)
+	const hiddenFields = hiddenFieldKeys(node)
+	const wirable = wirableFieldsFor(node as { type: string } & Record<string, unknown>)
+
+	const candidates: PortCandidate[] = [
+		...Object.values(dedicated).map((port): PortCandidate => {
+			if (port.terminal !== 'end' || !hiddenDedicated.has(port.id)) return port
+			return { ...port, hidden: true, wired: isInputWired(editor, shape.id, port.id) }
+		}),
+		...wirable.map((field): PortCandidate => {
+			const id = fieldPortId(field.key)
+			const base: PortCandidate = {
+				id,
+				x: 0,
+				y: headerY,
+				terminal: 'end',
+				dataType: fieldPortDataType(field.kind),
+				anchorKey: field.key,
+			}
+			if (!hiddenFields.has(field.key)) return base
+			return { ...base, hidden: true, wired: isInputWired(editor, shape.id, id) }
+		}),
+	]
+	const ports = layoutPorts(candidates, anchors, headerY) as Record<string, ShapePort>
+
+	// Dev check: a rendered (non-hidden) port — dedicated or field — with no measured anchor
+	// means its row never registered one (missing PortRow/NodeInputRow/WireField, or a
+	// useFieldPortAnchor ref). Warns once per shape+key so the console stays readable.
+	if (import.meta.env?.DEV && !shape.props.collapsed) {
+		// Rows register their anchors in a layout effect after the first render, so check
+		// again a moment later and only warn if the anchor is still missing.
+		const warnOnce = (key: string, message: string) => {
+			const warnKey = `${shape.id}:${key}`
+			if (warnedMissingFieldAnchors.has(warnKey)) return
+			warnedMissingFieldAnchors.add(warnKey)
+			setTimeout(() => {
+				const current = editor.getShape(shape.id)
+				if (!current || (current as NodeShape).props.collapsed) return
+				if (getFieldPortAnchors(editor, shape.id)?.[key] !== undefined) {
+					warnedMissingFieldAnchors.delete(warnKey)
+					return
+				}
+				console.warn(message)
+			}, 2000)
+		}
+		for (const port of Object.values(dedicated)) {
+			if (port.terminal !== 'end' || hiddenDedicated.has(port.id)) continue
+			// `system`/`params` (llmSettings.tsx): while "Model settings" is closed, these two
+			// stack on the toggle row by hand-coded math (llmSettingsPorts), not an anchor — a
+			// deliberate alternative to a PortRow, not a gap.
+			if (port.id === 'system' || port.id === 'params') continue
+			// Placed by hand on purpose: DataPipe's data port sits on the first row, and the
+			// Generate image prompt port on the first line of the prompt box.
+			if ((node.type === 'table' && port.id === 'data') || (node.type === 'image_gen' && port.id === 'prompt')) continue
+			if (anchors?.[port.id] === undefined) {
+				warnOnce(
+					port.id,
+					`[WP17] "${port.id}" on a "${node.type}" card has no port anchor — its row never ` +
+						`registered one (PortRow/NodeInputRow, or a useFieldPortAnchor ref).`
+				)
+			}
+		}
+		for (const field of wirable) {
+			if (hiddenFields.has(field.key)) continue
+			if (anchors?.[field.key] === undefined) {
+				warnOnce(
+					field.key,
+					`[WP17] "${field.key}" on a "${node.type}" card has no field-port anchor — ` +
+						`its port is stuck on the header row. Wrap its control in WireField/WireFieldHeader.`
+				)
+			}
+		}
+	}
 	const baseW = getNodeBaseWidthPx(editor, shape)
 	const w = getNodeWidthPx(editor, shape)
 	const list = Object.values(ports)
@@ -98,7 +190,9 @@ export async function executeNode(
 	shape: NodeShape,
 	inputs: Record<string, string | number | null | (string | number | null)[]>
 ): Promise<ExecutionResult> {
-	return await getNodeDefinition(editor, shape.props.node).execute(shape, shape.props.node, inputs)
+	// WP17: wired field ports override the node's own fields before it runs.
+	const node = applyFieldOverrides(shape, inputs)
+	return await getNodeDefinition(editor, node).execute(shape, node, inputs)
 }
 
 export function getNodeOutputInfo(
@@ -106,7 +200,8 @@ export function getNodeOutputInfo(
 	shape: NodeShape,
 	inputs: InfoValues
 ): InfoValues {
-	return getNodeDefinition(editor, shape.props.node).getOutputInfo(shape, shape.props.node, inputs)
+	const node = applyFieldOverridesInfo(shape, inputs)
+	return getNodeDefinition(editor, node).getOutputInfo(shape, node, inputs)
 }
 
 export function onNodePortConnect(editor: Editor, shape: NodeShape, port: PortId) {

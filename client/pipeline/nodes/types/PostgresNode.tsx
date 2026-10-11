@@ -18,7 +18,7 @@ import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { CodeArea } from '../../editors/CodeArea'
 import { UiButton, UiCheckbox, UiNumberInput, UiTextArea, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect } from './fields'
+import { PortRow, stopEvent, NodeSelect, useInputConnected, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -94,9 +94,11 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		if (node.mode === 'import') {
 			const columns = readRecipe(node)?.columns.length ?? 0
-			return rowPx * (4 + columns) + CSV_HEIGHT + 56
+			// +1 row (WP17): the CSV field got its own label row.
+			return rowPx * (5 + columns) + CSV_HEIGHT + 56
 		}
-		return rowPx * 2 + SQL_HEIGHT
+		// +1 row (WP17): the SQL field got its own label row.
+		return rowPx * 3 + SQL_HEIGHT
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		const y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX + getNodeRowHeightPx(shape.props.fontSize) * 0.5
@@ -181,48 +183,60 @@ function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>
 		// Column names and types follow the new header and skip; the table name stays.
 		saveRecipe({ ...recipe, header, skip, columns: rows.length ? suggestColumns(rows, header, skip) : recipe.columns })
 	}
+	const sqlWired = useInputConnected(shape.id, 'field:sql')
+	const csvWired = useInputConnected(shape.id, 'field:csv')
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="input" label={importing ? 'CSV' : '$1'} dataType="text" hint={importing ? 'or paste below' : 'optional value'} />
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="mode" label="Mode">
 				<NodeSelect className="NodeField-select" value={importing ? 'import' : 'sql'} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
 					<option value="sql">Run SQL</option>
 					<option value="import">Import CSV</option>
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			{!importing && (
-				<div onPointerDown={stopEvent}>
-					<CodeArea lang="sql" height={SQL_HEIGHT} value={node.sql} onChange={(sql) => set({ sql })} />
-				</div>
+				<>
+					<WireFieldHeader shapeId={shape.id} fieldKey="sql" label="SQL" dataType="text" />
+					{!sqlWired && (
+						<div onPointerDown={stopEvent}>
+							<CodeArea lang="sql" height={SQL_HEIGHT} value={node.sql} onChange={(sql) => set({ sql })} />
+						</div>
+					)}
+				</>
 			)}
 			{importing && (
 				<>
-					<NodeRow>
-						<UiTextInput
-							placeholder="https://example.com/data.csv"
-							title="Load a CSV or TSV from a URL"
-							value={node.sourceUrl ?? ''}
-							onChange={(sourceUrl) => set({ sourceUrl })}
+					<WireField shapeId={shape.id} fieldKey="sourceUrl" label="URL">
+						<>
+							<UiTextInput
+								placeholder="https://example.com/data.csv"
+								title="Load a CSV or TSV from a URL"
+								value={node.sourceUrl ?? ''}
+								onChange={(sourceUrl) => set({ sourceUrl })}
+							/>
+							<UiButton
+								size="sm"
+								variant="low"
+								title="Download the URL into the box below"
+								label="Load"
+								onClick={() => {
+									void textFromUrl(node.sourceUrl ?? '')
+										.then((csv) => set({ csv, error: null }))
+										.catch((error) => set({ error: (error as Error).message }))
+								}}
+							/>
+						</>
+					</WireField>
+					<WireFieldHeader shapeId={shape.id} fieldKey="csv" label="CSV" />
+					{!csvWired && (
+						<UiTextArea
+							className="NodeField-textarea"
+							style={{ height: CSV_HEIGHT }}
+							placeholder="name,score&#10;Ada,9"
+							value={node.csv ?? ''}
+							onChange={(csv) => set({ csv })}
 						/>
-						<UiButton
-							size="sm"
-							variant="low"
-							title="Download the URL into the box below"
-							label="Load"
-							onClick={() => {
-								void textFromUrl(node.sourceUrl ?? '')
-									.then((csv) => set({ csv, error: null }))
-									.catch((error) => set({ error: (error as Error).message }))
-							}}
-						/>
-					</NodeRow>
-					<UiTextArea
-						className="NodeField-textarea"
-						style={{ height: CSV_HEIGHT }}
-						placeholder="name,score&#10;Ada,9"
-						value={node.csv ?? ''}
-						onChange={(csv) => set({ csv })}
-					/>
+					)}
 					<NodeRow>
 						<UiTextInput
 							title="Table name"

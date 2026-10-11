@@ -7,6 +7,7 @@ import { openGroup } from '../../subgraph'
 import { shapeText } from '../../../clips/shapeText'
 import { concatMemberText } from '../../../../shared/groupText'
 import { Port } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import type { NodeShape } from '../NodeShapeUtil'
 import { IconGroup, UiButton, UiEmpty } from '../../../ui'
 import { stopEvent } from './fields'
@@ -156,6 +157,26 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 	Component = SubgraphNodeComponent
 }
 
+/** Anchors one of SubgraphNode's dynamically-numbered ports to its own cell. */
+function SubgraphPortCell({
+	shapeId,
+	portId,
+	className,
+	children,
+}: {
+	shapeId: NodeShape['id']
+	portId: string
+	className: string
+	children: React.ReactNode
+}) {
+	const ref = useFieldPortAnchor<HTMLSpanElement>(shapeId, portId)
+	return (
+		<span ref={ref} className={className}>
+			{children}
+		</span>
+	)
+}
+
 function SubgraphNodeComponent({ shape, node }: NodeComponentProps<SubgraphNode>) {
 	const editor = useEditor()
 	const rows = Math.max(node.inputs.length, node.outputs.length, 1)
@@ -166,30 +187,30 @@ function SubgraphNodeComponent({ shape, node }: NodeComponentProps<SubgraphNode>
 				const output = node.outputs[i]
 				return (
 					<NodeRow key={i} className="Subgraph-portRow">
-						<span className="Subgraph-portCell Subgraph-portCell-in">
-							{input && (
-								<>
-									<Port shapeId={shape.id} portId={input.id} />
-									<NodePortLabel dataType={input.dataType}>
-										<span className="Subgraph-portLabel" title={input.label}>
-											{input.label}
-										</span>
-									</NodePortLabel>
-								</>
-							)}
-						</span>
-						<span className="Subgraph-portCell Subgraph-portCell-out">
-							{output && (
-								<>
-									<NodePortLabel dataType={output.dataType}>
-										<span className="Subgraph-portLabel" title={output.label}>
-											{output.label}
-										</span>
-									</NodePortLabel>
-									<Port shapeId={shape.id} portId={output.id} />
-								</>
-							)}
-						</span>
+						{input ? (
+							<SubgraphPortCell shapeId={shape.id} portId={input.id} className="Subgraph-portCell Subgraph-portCell-in">
+								<Port shapeId={shape.id} portId={input.id} />
+								<NodePortLabel dataType={input.dataType}>
+									<span className="Subgraph-portLabel" title={input.label}>
+										{input.label}
+									</span>
+								</NodePortLabel>
+							</SubgraphPortCell>
+						) : (
+							<span className="Subgraph-portCell Subgraph-portCell-in" />
+						)}
+						{output ? (
+							<SubgraphPortCell shapeId={shape.id} portId={output.id} className="Subgraph-portCell Subgraph-portCell-out">
+								<NodePortLabel dataType={output.dataType}>
+									<span className="Subgraph-portLabel" title={output.label}>
+										{output.label}
+									</span>
+								</NodePortLabel>
+								<Port shapeId={shape.id} portId={output.id} />
+							</SubgraphPortCell>
+						) : (
+							<span className="Subgraph-portCell Subgraph-portCell-out" />
+						)}
 					</NodeRow>
 				)
 			})}

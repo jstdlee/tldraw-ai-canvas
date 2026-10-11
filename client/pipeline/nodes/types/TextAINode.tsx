@@ -11,9 +11,10 @@ import {
 	NODE_ROW_HEADER_GAP_PX,
 } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiTextArea, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult } from './fields'
+import { PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult, WireField, WireFieldHeader } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	fillLlmTemplate,
@@ -111,15 +112,23 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 	private vars(node: TextAINode) {
 		return llmTemplateVars([node.promptOverride ?? buildTextAIPrompt(node), node.instruction, node.system])
 	}
+	/** The option/instruction area's height: WP17 gave `option`/`instruction` their own rows
+	 * (custom job: just "Instruction", with a growing text box below its label row). */
+	private optionBlockHeightPx(node: TextAINode, rowPx: number) {
+		const op = TEXT_AI_OPERATIONS.find((o) => o.id === node.operation) ?? TEXT_AI_OPERATIONS[0]
+		if (op.id === 'custom') return rowPx + OPTION_HEIGHT_PX
+		return rowPx * (op.option ? 2 : 1)
+	}
 	getBodyHeightPx(shape: NodeShape, node: TextAINode) {
 		// The advanced job-prompt editor adds a block when settings are open.
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return (
 			rowPx * 3 +
-			OPTION_HEIGHT_PX +
+			this.optionBlockHeightPx(node, rowPx) +
 			llmSettingsHeight(node, rowPx) +
 			llmVarsHeight(this.vars(node), rowPx) +
-			(node.showSettings ? 140 : 0) +
+			// +rowPx (WP17): the job-prompt override got its own label row.
+			(node.showSettings ? 140 + rowPx : 0) +
 			RESULT_HEIGHT_PX
 		)
 	}
@@ -127,8 +136,8 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 		// Rows above the model row: input, job dropdown, then the option/instruction block.
-		const modelY = baseY + rowPx * 2.5 + OPTION_HEIGHT_PX
-		const settingsStartY = baseY + rowPx * 3 + OPTION_HEIGHT_PX
+		const modelY = baseY + rowPx * 2.5 + this.optionBlockHeightPx(node, rowPx)
+		const settingsStartY = baseY + rowPx * 3 + this.optionBlockHeightPx(node, rowPx)
 		const vars = this.vars(node)
 		return {
 			input: { id: 'input', x: 0, y: baseY + rowPx * 0.5, terminal: 'end', dataType: 'any' },
@@ -189,15 +198,17 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 	const editor = useEditor()
 	const op = TEXT_AI_OPERATIONS.find((o) => o.id === node.operation) ?? TEXT_AI_OPERATIONS[0]
 	const modelWired = useInputConnected(shape.id, 'model')
+	const modelRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'model')
 	const vars = llmTemplateVars([node.promptOverride ?? buildTextAIPrompt(node), node.instruction, node.system])
 	const set = (patch: Partial<TextAINode>, outOfDate = true) =>
 		updateNode<TextAINode>(editor, shape, (n) => ({ ...n, ...patch }), outOfDate)
 	const run = () => void startExecution(editor, new Set([shape.id]))
+	const instructionWired = useInputConnected(shape.id, 'field:instruction')
+	const promptOverrideWired = useInputConnected(shape.id, 'field:promptOverride')
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="Input" dataType="any" hint="text or image" />
-			<NodeRow>
-				<span className="NodeInputRow-label">Job</span>
+			<WireField shapeId={shape.id} fieldKey="operation" label="Job">
 				<NodeSelect
 					className="NodeField-select"
 					value={node.operation}
@@ -210,29 +221,33 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
-			<div
-				className={op.id === 'custom' ? 'NodeGrow' : 'NodeField-block'}
-				style={op.id === 'custom' ? { minHeight: OPTION_HEIGHT_PX } : { height: OPTION_HEIGHT_PX }}
-			>
-				{op.id === 'custom' ? (
-					<>
-						<UiTextArea
-							className="NodeField-textarea"
-							grow
-							placeholder="Instruction, e.g. Turn this into a tweet"
-							value={node.instruction}
-							onChange={(instruction) => set({ instruction }, false)}
-							onSubmit={run}
-							submitOn="enter"
-						/>
-						<div className="LlmSubmitHint">Enter to run · Shift+Enter new line</div>
-					</>
-				) : (
-					<>
-						{op.option && (
+			</WireField>
+			{op.id === 'custom' ? (
+				<>
+					<WireFieldHeader shapeId={shape.id} fieldKey="instruction" label="Instruction" />
+					{!instructionWired && (
+						<div className="NodeGrow" style={{ minHeight: OPTION_HEIGHT_PX }}>
+							<UiTextArea
+								className="NodeField-textarea"
+								grow
+								placeholder="Instruction, e.g. Turn this into a tweet"
+								value={node.instruction}
+								onChange={(instruction) => set({ instruction }, false)}
+								onSubmit={run}
+								submitOn="enter"
+							/>
+							<div className="LlmSubmitHint">Enter to run · Shift+Enter new line</div>
+						</div>
+					)}
+				</>
+			) : (
+				<>
+					{op.option && (
+						<WireField shapeId={shape.id} fieldKey="option" label="Option">
 							<UiTextInput placeholder={op.option} value={node.option} onChange={(option) => set({ option }, false)} />
-						)}
+						</WireField>
+					)}
+					<WireField shapeId={shape.id} fieldKey="instruction" label="Instruction">
 						<UiTextInput
 							placeholder="Extra instruction (optional, Enter to run)"
 							value={node.instruction}
@@ -241,13 +256,13 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 								if (e.key === 'Enter' && !e.nativeEvent.isComposing) run()
 							}}
 						/>
-					</>
-				)}
-			</div>
+					</WireField>
+				</>
+			)}
 			{modelWired ? (
 				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="model" />
 			) : (
-				<NodeRow>
+				<NodeRow ref={modelRowRef}>
 					<Port shapeId={shape.id} portId="model" />
 					<span className="NodeInputRow-label">Model</span>
 					<ModelSelect
@@ -261,20 +276,22 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} modelWired={modelWired} />
 			<LlmVarRows shapeId={shape.id} vars={vars} />
 			{node.showSettings && (
-				<div className="NodeField-block">
-					<span className="NodeField-label">
-						Job prompt (advanced)
-						{node.promptOverride != null && (
-							<UiButton size="sm" variant="low" label="reset" onClick={() => set({ promptOverride: undefined }, false)} />
-						)}
-					</span>
-					<UiTextArea
-						className="NodeField-textarea"
-						style={{ height: 72 }}
-						value={node.promptOverride ?? buildTextAIPrompt(node)}
-						onChange={(promptOverride) => set({ promptOverride }, false)}
-					/>
-				</div>
+				<>
+					<WireFieldHeader shapeId={shape.id} fieldKey="promptOverride" label="Job prompt (advanced)" />
+					{!promptOverrideWired && (
+						<div className="NodeField-block">
+							{node.promptOverride != null && (
+								<UiButton size="sm" variant="low" label="reset" onClick={() => set({ promptOverride: undefined }, false)} />
+							)}
+							<UiTextArea
+								className="NodeField-textarea"
+								style={{ height: 72 }}
+								value={node.promptOverride ?? buildTextAIPrompt(node)}
+								onChange={(promptOverride) => set({ promptOverride }, false)}
+							/>
+						</div>
+					)}
+				</>
 			)}
 			<NodeTextResult text={node.lastResultText} error={node.error} empty="Output appears here" height={RESULT_HEIGHT_PX} />
 		</>

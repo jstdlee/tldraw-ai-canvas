@@ -15,18 +15,7 @@ import {
 	STOP_EXECUTION,
 } from './types/shared'
 
-/**
- * Whether an input port has a wire, read straight from the bindings. Safe to call from a
- * definition's getPorts / getBodyHeightPx (unlike getNodeInputPortValues, which needs the ports).
- */
-export function isInputWired(editor: Editor, shapeId: TLShapeId, portId: string): boolean {
-	return editor
-		.getBindingsToShape(shapeId, 'connection')
-		.some((binding) => {
-			const props = binding.props as { terminal?: string; portId?: string }
-			return props.terminal === 'end' && props.portId === portId
-		})
-}
+export { isInputWired } from './portWiring'
 
 /**
  * Get the ports for a node. This is cached, because we only want to re-evaluate it when the

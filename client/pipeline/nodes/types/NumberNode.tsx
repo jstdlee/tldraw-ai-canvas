@@ -5,12 +5,12 @@ import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
+import { WireField } from './fields'
 import {
 	ExecutionResult,
 	InfoValues,
 	NodeComponentProps,
 	NodeDefinition,
-	NodeRow,
 	updateNode,
 } from './shared'
 
@@ -68,18 +68,20 @@ export class NumberNodeDefinition extends NodeDefinition<NumberNode> {
 function NumberNodeComponent({ shape, node }: NodeComponentProps<NumberNode>) {
 	const editor = useEditor()
 	return (
-		<NodeRow className="NumberNode" onPointerDown={editor.markEventAsHandled}>
-			<TldrawUiSlider
-				steps={100}
-				value={node.value}
-				label="Value"
-				title={node.value.toString()}
-				onValueChange={(value) => {
-					editor.setSelectedShapes([shape.id])
-					updateNode<NumberNode>(editor, shape, (node) => ({ ...node, value }), false)
-				}}
-				onHistoryMark={() => {}}
-			/>
-		</NodeRow>
+		<WireField shapeId={shape.id} fieldKey="value" label="Value" dataType="number">
+			<div className="NumberNode" onPointerDown={editor.markEventAsHandled}>
+				<TldrawUiSlider
+					steps={100}
+					value={node.value}
+					label="Value"
+					title={node.value.toString()}
+					onValueChange={(value) => {
+						editor.setSelectedShapes([shape.id])
+						updateNode<NumberNode>(editor, shape, (node) => ({ ...node, value }), false)
+					}}
+					onHistoryMark={() => {}}
+				/>
+			</div>
+		</WireField>
 	)
 }

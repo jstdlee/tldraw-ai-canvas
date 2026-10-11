@@ -6,6 +6,7 @@ import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
+import { useInputConnected, WireFieldHeader } from './fields'
 import {
 	ExecutionResult,
 	InfoValues,
@@ -35,8 +36,9 @@ export class PromptNodeDefinition extends NodeDefinition<PromptNode> {
 		}
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		// One growing text box; roomy enough at the default font not to feel crowded.
-		return getNodeRowHeightPx(shape.props.fontSize) * 3
+		// A label row (WP17: "text" is wirable) above a growing text box, roomy enough at the
+		// default font not to feel crowded.
+		return getNodeRowHeightPx(shape.props.fontSize) * 4
 	}
 	getPorts(shape: NodeShape, node: PromptNode): Record<string, ShapePort> {
 		return {
@@ -67,14 +69,20 @@ export class PromptNodeDefinition extends NodeDefinition<PromptNode> {
 
 function PromptNodeComponent({ shape, node }: NodeComponentProps<PromptNode>) {
 	const editor = useEditor()
+	const textWired = useInputConnected(shape.id, 'field:text')
 	return (
-		<div className="NodeGrow PromptNode-row">
-			<TextAreaField
-				title="Prompt"
-				placeholder="Enter your prompt..."
-				value={node.text}
-				onChange={(text) => updateNode<PromptNode>(editor, shape, (n) => ({ ...n, text }), false)}
-			/>
-		</div>
+		<>
+			<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Text" />
+			{!textWired && (
+				<div className="NodeGrow PromptNode-row">
+					<TextAreaField
+						title="Prompt"
+						placeholder="Enter your prompt..."
+						value={node.text}
+						onChange={(text) => updateNode<PromptNode>(editor, shape, (n) => ({ ...n, text }), false)}
+					/>
+				</div>
+			)}
+		</>
 	)
 }

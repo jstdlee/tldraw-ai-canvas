@@ -14,9 +14,10 @@ import {
 	NODE_WIDTH_PX,
 } from '../../constants'
 import { Port as PortDot, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiCheckbox, UiTextInput } from '../../../ui'
-import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult } from './fields'
+import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -138,9 +139,11 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 		return HTTP_WIDTH_PX
 	}
 	getBodyHeightPx(shape: NodeShape, _node: HttpNode) {
-		// Rows: method, URL, auth, body port, "web page -> text" checkbox, status = 6.
+		// Rows: method, URL, query label, auth, auth value, headers label, body port,
+		// "web page -> text" checkbox, status = 9 (WP17: query/headers/auth each got their
+		// own wirable row instead of sharing one).
 		return (
-			getNodeRowHeightPx(shape.props.fontSize) * 6 +
+			getNodeRowHeightPx(shape.props.fontSize) * 9 +
 			HTTP_QUERY_HEIGHT_PX +
 			HTTP_HEADERS_HEIGHT_PX +
 			HTTP_BODY_HEIGHT_PX +
@@ -215,10 +218,13 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 	const bodyConnected = useInputConnected(shape.id, 'body')
 	const set = (patch: Partial<HttpNode>) => updateNode<HttpNode>(editor, shape, (n) => ({ ...n, ...patch }))
 	const needsBody = !['GET', 'HEAD'].includes(node.method)
+	const queryWired = useInputConnected(shape.id, 'field:query')
+	const authWired = useInputConnected(shape.id, 'field:auth')
+	const headersWired = useInputConnected(shape.id, 'field:headers')
+	const urlRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'url')
 	return (
 		<>
-			<NodeRow>
-				<span className="NodeInputRow-label">Method</span>
+			<WireField shapeId={shape.id} fieldKey="method" label="Method">
 				<NodeSelect
 					className="NodeField-select"
 					value={node.method}
@@ -229,25 +235,27 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 						<option key={m}>{m}</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			{urlConnected ? (
 				<PortRow shapeId={shape.id} portId="url" label="URL" dataType="text" />
 			) : (
-				<NodeRow>
+				<NodeRow ref={urlRowRef}>
 					<PortDot shapeId={shape.id} portId="url" />
 					<UiTextInput placeholder="https://…" value={node.url} onChange={(url) => set({ url })} />
 				</NodeRow>
 			)}
-			<TextAreaField
-				mono
-				height={HTTP_QUERY_HEIGHT_PX}
-				title="Query"
-				placeholder={'Query, one per line:\nq=cat\nlimit=10'}
-				value={node.query ?? ''}
-				onChange={(query) => set({ query })}
-			/>
-			<NodeRow>
-				<span className="NodeInputRow-label">Auth</span>
+			<WireFieldHeader shapeId={shape.id} fieldKey="query" label="Query" />
+			{!queryWired && (
+				<TextAreaField
+					mono
+					height={HTTP_QUERY_HEIGHT_PX}
+					title="Query"
+					placeholder={'Query, one per line:\nq=cat\nlimit=10'}
+					value={node.query ?? ''}
+					onChange={(query) => set({ query })}
+				/>
+			)}
+			<WireField shapeId={shape.id} fieldKey="auth" label="Auth">
 				<NodeSelect
 					className="NodeField-select"
 					value={node.auth ?? ''}
@@ -258,22 +266,29 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 					<option value="bearer">Bearer</option>
 					<option value="basic">Basic</option>
 				</NodeSelect>
-				<UiTextInput
-					placeholder={node.auth === 'basic' ? 'user:password' : 'token'}
-					value={node.authValue ?? ''}
-					disabled={!node.auth}
-					onChange={(authValue) => set({ authValue })}
+			</WireField>
+			{!authWired && (
+				<NodeRow>
+					<UiTextInput
+						placeholder={node.auth === 'basic' ? 'user:password' : 'token'}
+						value={node.authValue ?? ''}
+						disabled={!node.auth}
+						onChange={(authValue) => set({ authValue })}
+					/>
+				</NodeRow>
+			)}
+			<WireFieldHeader shapeId={shape.id} fieldKey="headers" label="Headers" />
+			{!headersWired && (
+				<TextAreaField
+					mono
+					lang="text"
+					height={HTTP_HEADERS_HEIGHT_PX}
+					title="Headers"
+					placeholder={'Headers, one per line:\nAccept: application/json'}
+					value={node.headers}
+					onChange={(headers) => set({ headers })}
 				/>
-			</NodeRow>
-			<TextAreaField
-				mono
-				lang="text"
-				height={HTTP_HEADERS_HEIGHT_PX}
-				title="Headers"
-				placeholder={'Headers, one per line:\nAccept: application/json'}
-				value={node.headers}
-				onChange={(headers) => set({ headers })}
-			/>
+			)}
 			<PortRow
 				shapeId={shape.id}
 				portId="body"
@@ -293,9 +308,9 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 					set({ body: next })
 				}}
 			/>
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="extractText" label="Extract">
 				<UiCheckbox checked={node.extractText} label="Web page → readable text" onChange={(extractText) => set({ extractText })} />
-			</NodeRow>
+			</WireField>
 			<NodeRow>
 				<span className={'NodeStatus' + (node.error ? ' is-error' : '')} title={node.lastHeaders ?? node.lastStatus ?? ''}>
 					{node.error ?? node.lastStatus ?? 'Not run yet'}
@@ -396,20 +411,20 @@ function DownloadNodeComponent({ shape, node }: NodeComponentProps<DownloadNode>
 	const urlConnected = useInputConnected(shape.id, 'url')
 	const set = (patch: Partial<DownloadNode>) =>
 		updateNode<DownloadNode>(editor, shape, (n) => ({ ...n, ...patch }))
+	const urlRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'url')
 	return (
 		<>
 			{urlConnected ? (
 				<PortRow shapeId={shape.id} portId="url" label="URL" dataType="text" />
 			) : (
-				<NodeRow>
+				<NodeRow ref={urlRowRef}>
 					<PortDot shapeId={shape.id} portId="url" />
 					<UiTextInput placeholder="https://… file, image or page" value={node.url} onChange={(url) => set({ url })} />
 				</NodeRow>
 			)}
-			<NodeRow>
-				<span className="NodeInputRow-label">Save as</span>
+			<WireField shapeId={shape.id} fieldKey="fileName" label="Save as">
 				<UiTextInput placeholder="file name (optional)" value={node.fileName} onChange={(fileName) => set({ fileName })} />
-			</NodeRow>
+			</WireField>
 			<NodeRow>
 				<span
 					className={'NodeStatus' + (node.error ? ' is-error' : '')}
@@ -496,14 +511,13 @@ function SaveNodeComponent({ shape, node }: NodeComponentProps<SaveNode>) {
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="Content" dataType="any" hint="text or image" />
-			<NodeRow>
-				<span className="NodeInputRow-label">File</span>
+			<WireField shapeId={shape.id} fieldKey="fileName" label="File">
 				<UiTextInput
 					placeholder="name ({{date}} = timestamp)"
 					value={node.fileName}
 					onChange={(fileName) => updateNode<SaveNode>(editor, shape, (n) => ({ ...n, fileName }))}
 				/>
-			</NodeRow>
+			</WireField>
 			<NodeRow>
 				<span className={'NodeStatus' + (node.error ? ' is-error' : '')} title={node.lastPath ?? ''}>
 					{node.error ?? (node.lastPath ? `Saved: ${node.lastPath}` : 'Saves to data/exports')}

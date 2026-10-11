@@ -56,6 +56,7 @@ import { disableTransparency } from './pipeline/disableTransparency'
 import { NodeShapeUtil } from './pipeline/nodes/NodeShapeUtil'
 import { PointingPort } from './pipeline/ports/PointingPort'
 import { isBoxOpen, isPacked, watchPackedNodes } from './pipeline/subgraph'
+import { watchFieldPortAnchors } from './pipeline/ports/fieldAnchors'
 import { TargetAreaTool } from './tools/TargetAreaTool'
 import { TargetShapeTool } from './tools/TargetShapeTool'
 import { canvasActionOverrides, CanvasContextMenu, CanvasToolsMenuGroup, ExamplesMenu, MarkdownIcon, MermaidIcon } from './clips/CanvasMenus'
@@ -313,6 +314,7 @@ function App() {
 							disableTransparency(editor, ['connection'])
 							registerClipHandlers(editor)
 							watchPackedNodes(editor)
+							watchFieldPortAnchors(editor)
 							registerNodeGuards(editor)
 							installAltScroll()
 						}}

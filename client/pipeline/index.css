@@ -564,6 +564,39 @@ body {
 	}
 }
 
+/* ---- Wirable fields (WP17) ---- */
+
+/* A wirable field's port only shows on hover or while the card is selected (keeps the
+   card calm when there are many fields), except once it's actually wired — then it's
+   always visible, like any other connected port. */
+.WireField .Port {
+	opacity: 0;
+	transition: opacity 0.1s ease-in-out;
+}
+
+.WireField:hover .Port,
+.NodeShape_selected .WireField .Port,
+.WireField:has(.NodeRow-connected-value) .Port {
+	opacity: 1;
+}
+
+.WireField-control {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+}
+
+.WireField-control > .UiInput,
+.WireField-control > .UiSelect,
+.WireField-control > .UiTextArea,
+.WireField-control input.UiInput,
+.WireField-control textarea.UiTextArea {
+	flex: 1 1 auto;
+	min-width: 0;
+	align-self: stretch;
+}
+
 /* ---- Connections ---- */
 
 .ConnectionShape {

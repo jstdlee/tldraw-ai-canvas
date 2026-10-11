@@ -9,7 +9,7 @@ import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiSecretInput, UiTextArea, UiTextInput } from '../../../ui'
 import { apiSaveSecret } from '../../api/pipelineApi'
-import { PortRow, stopEvent, NodeSelect, NodeTextResult } from './fields'
+import { PortRow, stopEvent, NodeSelect, NodeTextResult, useInputConnected, WireField, WireFieldHeader } from './fields'
 import { fillLlmTemplate, llmTemplateVars, llmVarPorts, llmVarsHeight, LlmVarRows } from './llmSettings'
 import {
 	areAnyInputsOutOfDate,
@@ -84,10 +84,10 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 		return llmTemplateVars([node.system])
 	}
 	getBodyHeightPx(shape: NodeShape, node: RawModelNode) {
-		// Rows: prompt, model, URL, model id, key, temp, max tokens, think = 8, plus the
-		// system-prompt text box (72), the {{var}} rows, and the result area.
+		// Rows: prompt, model, URL, model id, key, system label (WP17), temp, max tokens,
+		// think = 9, plus the system-prompt text box (72), the {{var}} rows, and the result area.
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
-		return rowPx * 8 + 72 + llmVarsHeight(this.vars(node), rowPx) + RESULT_HEIGHT_PX
+		return rowPx * 9 + 72 + llmVarsHeight(this.vars(node), rowPx) + RESULT_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape, node: RawModelNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -95,7 +95,7 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 		return {
 			prompt: { id: 'prompt', x: 0, y: BASE_Y + rowPx * 0.5, terminal: 'end', dataType: 'text' },
 			model: { id: 'model', x: 0, y: BASE_Y + rowPx * 1.5, terminal: 'end', dataType: 'model' },
-			...llmVarPorts(vars, BASE_Y + rowPx * 8 + 72, rowPx),
+			...llmVarPorts(vars, BASE_Y + rowPx * 9 + 72, rowPx),
 			output: { id: 'output', x: WIDTH, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}
@@ -154,18 +154,10 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 	Component = RawModelComponent
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-	return (
-		<NodeRow>
-			<span className="NodeInputRow-label">{label}</span>
-			{children}
-		</NodeRow>
-	)
-}
-
 function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 	const editor = useEditor()
 	const vars = llmTemplateVars([node.system])
+	const systemWired = useInputConnected(shape.id, 'field:system')
 	const set = (patch: Partial<RawModelNode>) => updateNode<RawModelNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
 	const text = (key: 'url' | 'model' | 'temperature' | 'maxTokens', placeholder: string, type = 'text') => (
 		<UiTextInput
@@ -181,23 +173,30 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 		<>
 			<PortRow shapeId={shape.id} portId="prompt" label="Prompt" dataType="text" />
 			<PortRow shapeId={shape.id} portId="model" label="Model id" dataType="model" hint="or type below" />
-			<Field label="URL">{text('url', 'https://api.openai.com/v1')}</Field>
-			<Field label="Model">{text('model', 'model id, or wire one')}</Field>
-			<Field label="Key">
+			<WireField shapeId={shape.id} fieldKey="url" label="URL">{text('url', 'https://api.openai.com/v1')}</WireField>
+			<NodeRow>
+				<span className="NodeInputRow-label">Model</span>
+				{text('model', 'model id, or wire one')}
+			</NodeRow>
+			<NodeRow>
+				<span className="NodeInputRow-label">Key</span>
 				<UiSecretInput value={node.keyRef} onChange={(keyRef) => set({ keyRef })} placeholder="optional" />
-			</Field>
-			<div className="NodeGrow" style={{ minHeight: 72 }}>
-				<UiTextArea
-					className="NodeField-textarea"
-					grow
-					placeholder="System prompt"
-					value={node.system}
-					onChange={(system) => set({ system })}
-				/>
-			</div>
-			<Field label="Temp">{text('temperature', 'default', 'number')}</Field>
-			<Field label="Max tok">{text('maxTokens', 'default', 'number')}</Field>
-			<Field label="Think">
+			</NodeRow>
+			<WireFieldHeader shapeId={shape.id} fieldKey="system" label="System" />
+			{!systemWired && (
+				<div className="NodeGrow" style={{ minHeight: 72 }}>
+					<UiTextArea
+						className="NodeField-textarea"
+						grow
+						placeholder="System prompt"
+						value={node.system}
+						onChange={(system) => set({ system })}
+					/>
+				</div>
+			)}
+			<WireField shapeId={shape.id} fieldKey="temperature" label="Temp" dataType="number">{text('temperature', 'default', 'number')}</WireField>
+			<WireField shapeId={shape.id} fieldKey="maxTokens" label="Max tok" dataType="number">{text('maxTokens', 'default', 'number')}</WireField>
+			<WireField shapeId={shape.id} fieldKey="thinking" label="Think">
 				<NodeSelect className="NodeField-select" value={node.thinking} onPointerDown={stopEvent} onChange={(e) => set({ thinking: e.target.value })}>
 					<option value="">default</option>
 					<option value="none">none</option>
@@ -205,7 +204,7 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 					<option value="medium">medium</option>
 					<option value="high">high</option>
 				</NodeSelect>
-			</Field>
+			</WireField>
 			<LlmVarRows shapeId={shape.id} vars={vars} />
 			<NodeTextResult text={node.lastText} error={node.error} empty="Output appears here" height={RESULT_HEIGHT_PX} />
 		</>

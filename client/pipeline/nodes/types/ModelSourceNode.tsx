@@ -8,7 +8,7 @@ import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiSecretInput, UiSegmented, UiTextInput } from '../../../ui'
-import { stopEvent, NodeSelect } from './fields'
+import { stopEvent, NodeSelect, WireField } from './fields'
 import { ExecutionResult, InfoValues, NodeComponentProps, NodeDefinition, NodeRow, updateNode } from './shared'
 
 function ModelProviderIcon() {
@@ -100,9 +100,9 @@ export class ModelSourceNodeDefinition extends NodeDefinition<ModelSourceNode> {
 		return WIDTH
 	}
 	getBodyHeightPx(shape: NodeShape): number {
-		// kind, URL, key, fetch (with the model count/fetched-at line inline), filter/select rows,
-		// plus the big chosen-model line.
-		return getNodeRowHeightPx(shape.props.fontSize) * 5 + CURRENT_PX
+		// kind, URL, key, fetch (with the model count/fetched-at line inline), filter, model
+		// rows (WP17: filter/model split onto their own rows), plus the big chosen-model line.
+		return getNodeRowHeightPx(shape.props.fontSize) * 6 + CURRENT_PX
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {
@@ -181,8 +181,7 @@ function ModelSourceNodeComponent({ shape, node }: NodeComponentProps<ModelSourc
 
 	return (
 		<>
-			<NodeRow>
-				<span className="NodeInputRow-label">For</span>
+			<WireField shapeId={shape.id} fieldKey="kind" label="For">
 				<UiSegmented
 					value={node.kind ?? 'chat'}
 					options={[
@@ -191,32 +190,33 @@ function ModelSourceNodeComponent({ shape, node }: NodeComponentProps<ModelSourc
 					]}
 					onChange={(kind) => set({ kind }, false)}
 				/>
-			</NodeRow>
-			<NodeRow>
-				<span className="NodeInputRow-label">URL</span>
-				<UiTextInput
-					placeholder="https://api.openai.com/v1"
-					autoComplete="off"
-					value={node.baseURL}
-					onChange={(baseURL) => set({ baseURL }, false)}
-				/>
-				<NodeSelect
-					className="NodeField-select ModelSourceNode-presets"
-					value=""
-					title="Presets"
-					onPointerDown={stopEvent}
-					onChange={(e) => {
-						if (e.target.value) set({ baseURL: e.target.value }, false)
-					}}
-				>
-					<option value="">Presets…</option>
-					{presets.map((p) => (
-						<option key={p.label} value={p.baseURL}>
-							{p.label}
-						</option>
-					))}
-				</NodeSelect>
-			</NodeRow>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="baseURL" label="URL">
+				<>
+					<UiTextInput
+						placeholder="https://api.openai.com/v1"
+						autoComplete="off"
+						value={node.baseURL}
+						onChange={(baseURL) => set({ baseURL }, false)}
+					/>
+					<NodeSelect
+						className="NodeField-select ModelSourceNode-presets"
+						value=""
+						title="Presets"
+						onPointerDown={stopEvent}
+						onChange={(e) => {
+							if (e.target.value) set({ baseURL: e.target.value }, false)
+						}}
+					>
+						<option value="">Presets…</option>
+						{presets.map((p) => (
+							<option key={p.label} value={p.baseURL}>
+								{p.label}
+							</option>
+						))}
+					</NodeSelect>
+				</>
+			</WireField>
 			<NodeRow>
 				<span className="NodeInputRow-label">Key</span>
 				<UiSecretInput value={node.keyRef} onChange={(keyRef) => set({ keyRef }, false)} placeholder="optional" />
@@ -227,12 +227,14 @@ function ModelSourceNodeComponent({ shape, node }: NodeComponentProps<ModelSourc
 					{models.length ? `${models.length} models` : 'no models yet'} · {formatFetchedAt(node.fetchedAt)}
 				</span>
 			</NodeRow>
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="filter" label="Filter">
 				<UiTextInput
 					placeholder="filter…"
 					value={node.filter}
 					onChange={(filter) => set({ filter }, false)}
 				/>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="model" label="Model" dataType="model">
 				<NodeSelect
 					className="NodeField-select"
 					value={node.model}
@@ -246,7 +248,7 @@ function ModelSourceNodeComponent({ shape, node }: NodeComponentProps<ModelSourc
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			<div className="ModelSourceNode-current" style={{ height: CURRENT_PX - 8 }}>
 				{node.model || <span className="NodeRow-disconnected">No model chosen</span>}
 			</div>

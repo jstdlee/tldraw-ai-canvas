@@ -10,7 +10,7 @@ import {
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect } from './fields'
+import { PortRow, stopEvent, NodeSelect, WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -103,8 +103,7 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="Input" dataType="any" />
 			<PortRow shapeId={shape.id} portId="input2" label="Input 2" dataType="any" hint="optional" />
-			<NodeRow>
-				<span className="NodeInputRow-label">Tool</span>
+			<WireField shapeId={shape.id} fieldKey="op" label="Tool">
 				<NodeSelect
 					className="NodeField-select"
 					value={node.op}
@@ -121,15 +120,15 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 						</optgroup>
 					))}
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			{(['a', 'b'] as const).map((key) => (
-				<NodeRow key={key}>
+				<WireField key={key} shapeId={shape.id} fieldKey={key} label={key === 'a' ? 'Param A' : 'Param B'}>
 					{op[key] ? (
 						<UiTextInput placeholder={op[key]} value={node[key]} onChange={(next) => set({ [key]: next })} />
 					) : (
 						<span className="NodeRow-disconnected">{key === 'a' ? 'no options' : ''}</span>
 					)}
-				</NodeRow>
+				</WireField>
 			))}
 		</>
 	)

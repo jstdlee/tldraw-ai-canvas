@@ -8,7 +8,7 @@ import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } fro
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiCheckbox, UiTextArea } from '../../../ui'
-import { PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
+import { PortRow, stopEvent, useInputConnected, NodeSelect, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -84,7 +84,8 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 		return (
 			rowPx * 6 +
 			QUESTION_PX +
-			(node.kind === 'noul' ? 0 : OPTIONS_PX) +
+			// +rowPx (WP17): the options field got its own label row.
+			(node.kind === 'noul' ? 0 : OPTIONS_PX + rowPx) +
 			(node.filter ? FILTER_PX + rowPx : 0) +
 			BARS_PX
 		)
@@ -204,6 +205,7 @@ function Bars({ result }: { result: JevResult }) {
 function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 	const editor = useEditor()
 	const questionWired = useInputConnected(shape.id, 'question')
+	const optionsWired = useInputConnected(shape.id, 'field:options')
 	const [showFinal, setShowFinal] = useState(false)
 	const set = (patch: Partial<JevNode>, outOfDate = true) =>
 		updateNode<JevNode>(editor, shape, (n) => ({ ...n, ...patch }), outOfDate)
@@ -233,28 +235,35 @@ function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 					onChange={(question) => set({ question })}
 				/>
 			</div>
-			<NodeRow>
-				<NodeSelect className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
-					<option value="noul">Yes / no</option>
-					<option value="choice">Choose one option</option>
-					<option value="score">Score on a scale</option>
-				</NodeSelect>
-				<ModelSelect className="node-model-select" capability="jev" value={node.model} onChange={(model) => set({ model }, false)} />
-			</NodeRow>
+			<WireField shapeId={shape.id} fieldKey="kind" label="Kind">
+				<>
+					<NodeSelect className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
+						<option value="noul">Yes / no</option>
+						<option value="choice">Choose one option</option>
+						<option value="score">Score on a scale</option>
+					</NodeSelect>
+					<ModelSelect className="node-model-select" capability="jev" value={node.model} onChange={(model) => set({ model }, false)} />
+				</>
+			</WireField>
 			{node.kind !== 'noul' && (
-				<div className="NodeGrow" style={{ minHeight: OPTIONS_PX }}>
-					<UiTextArea
-						className="NodeField-textarea"
-						grow
-						placeholder={node.kind === 'choice' ? 'One option per line: label: description' : 'Levels, worst first, one per line'}
-						value={node.options}
-						onChange={(options) => set({ options })}
-					/>
-				</div>
+				<>
+					<WireFieldHeader shapeId={shape.id} fieldKey="options" label="Options" />
+					{!optionsWired && (
+						<div className="NodeGrow" style={{ minHeight: OPTIONS_PX }}>
+							<UiTextArea
+								className="NodeField-textarea"
+								grow
+								placeholder={node.kind === 'choice' ? 'One option per line: label: description' : 'Levels, worst first, one per line'}
+								value={node.options}
+								onChange={(options) => set({ options })}
+							/>
+						</div>
+					)}
+				</>
 			)}
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="filter" label="Filter">
 				<UiCheckbox checked={node.filter} label="Then filter the input text with an LLM" onChange={(filter) => set({ filter })} />
-			</NodeRow>
+			</WireField>
 			{node.filter && (
 				<>
 					<div className="NodeField-block" style={{ height: FILTER_PX }}>

@@ -202,4 +202,30 @@ describe('validatePlan', () => {
 		const { plan: cleaned } = validatePlan(plan, [], NODE_SPECS)
 		expect(cleaned.add[0].props).toEqual({ url: 'https://x' })
 	})
+
+	// WP17: every wirable field gets a `field:<key>` port the AI plan may wire into.
+	it('accepts a field:<key> port for a wirable field, with the field kind as its data type', () => {
+		const existing = [node('n', 'number', [], ['output']), node('resize', 'image_resize', ['image'], ['output'])]
+		const plan = parseAiPlan(JSON.stringify({ wires: [{ from: 'n', fromPort: 'output', to: 'resize', toPort: 'field:value' }] }))
+		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
+		expect(errors).toEqual([])
+		expect(cleaned.wires).toHaveLength(1)
+	})
+
+	it('rejects a field:<key> port for a secret field', () => {
+		const existing = [node('n', 'prompt', [], ['output']), node('raw', 'raw_model', ['prompt', 'model'], ['output'])]
+		const plan = parseAiPlan(JSON.stringify({ wires: [{ from: 'n', fromPort: 'output', to: 'raw', toPort: 'field:keyRef' }] }))
+		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
+		expect(cleaned.wires).toEqual([])
+		expect(errors.length).toBe(1)
+	})
+
+	it('rejects a field:<key> port for a field that already has a dedicated port', () => {
+		// image_gen's "model" field already has a dedicated "model" port; "field:model" is not one.
+		const existing = [node('n', 'prompt', [], ['output']), node('gen', 'image_gen', ['prompt', 'image', 'model', 'system', 'params'], ['output', 'images'])]
+		const plan = parseAiPlan(JSON.stringify({ wires: [{ from: 'n', fromPort: 'output', to: 'gen', toPort: 'field:model' }] }))
+		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
+		expect(cleaned.wires).toEqual([])
+		expect(errors.length).toBe(1)
+	})
 })

@@ -16,7 +16,7 @@ import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { IconClose, UiButton, UiIconButton, UiTextInput } from '../../../ui'
 import { NodeShape } from '../NodeShapeUtil'
-import { PortRow, useInputConnected } from './fields'
+import { PortRow, useInputConnected, WireField, WireFieldHeader } from './fields'
 import {
 	ExecutionResult,
 	getInputText,
@@ -53,7 +53,8 @@ export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
 		}
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		return getNodeRowHeightPx(shape.props.fontSize) * 3 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+		// +1 row (WP17): the imageUrl field got its own label row.
+		return getNodeRowHeightPx(shape.props.fontSize) * 4 + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return {
@@ -198,15 +199,18 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 		<>
 			<PortRow shapeId={shape.id} portId="url" label="URL" dataType="text" hint="optional: overrides the field below" />
 			{!urlWired && (
-				<NodeRow>
-					<UiTextInput
-						placeholder="Image URL"
-						value={node.source ?? ''}
-						onChange={(source) => updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, source }))}
-					/>
-					<UiButton size="sm" variant="low" className="LoadImageNode-browse" label="Load" onClick={() => void loadSource()} />
-				</NodeRow>
+				<WireField shapeId={shape.id} fieldKey="source" label="Source">
+					<>
+						<UiTextInput
+							placeholder="Image URL"
+							value={node.source ?? ''}
+							onChange={(source) => updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, source }))}
+						/>
+						<UiButton size="sm" variant="low" className="LoadImageNode-browse" label="Load" onClick={() => void loadSource()} />
+					</>
+				</WireField>
 			)}
+			<WireFieldHeader shapeId={shape.id} fieldKey="imageUrl" label="Image" />
 			<NodeRow>
 				<UiButton
 					size="sm"

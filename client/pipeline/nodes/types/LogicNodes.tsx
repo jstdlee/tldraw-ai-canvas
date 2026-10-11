@@ -10,7 +10,7 @@ import { clearNodeRun } from '../../execution/nodeRunState'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect } from './fields'
+import { PortRow, stopEvent, NodeSelect, WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -117,8 +117,7 @@ function IfNodeComponent({ shape, node }: NodeComponentProps<IfNode>) {
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="Value" dataType="any" />
 			<PortRow shapeId={shape.id} portId="test" label="Test" dataType="any" hint="optional: test this instead" />
-			<NodeRow>
-				<span className="NodeInputRow-label">If</span>
+			<WireField shapeId={shape.id} fieldKey="condition" label="If">
 				<NodeSelect className="NodeField-select" value={node.condition} onPointerDown={stopEvent} onChange={(e) => set({ condition: e.target.value })}>
 					{CONDITIONS.map((c) => (
 						<option key={c.id} value={c.id}>
@@ -126,14 +125,14 @@ function IfNodeComponent({ shape, node }: NodeComponentProps<IfNode>) {
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
-			<NodeRow>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="operand" label="Value">
 				{cond.operand ? (
 					<UiTextInput placeholder="compare with…" value={node.operand} onChange={(operand) => set({ operand })} />
 				) : (
 					<span className="NodeRow-disconnected">no value needed</span>
 				)}
-			</NodeRow>
+			</WireField>
 			<NodeRow className="NodeRow-right">
 				<span className={'NodeBranch' + (node.lastResult === true ? ' is-active' : '')}>then ✓</span>
 			</NodeRow>
@@ -217,8 +216,7 @@ function LogicNodeComponent({ shape, node }: NodeComponentProps<LogicNode>) {
 		<>
 			<PortRow shapeId={shape.id} portId="a" label="A" dataType="any" />
 			{node.op !== 'not' ? <PortRow shapeId={shape.id} portId="b" label="B" dataType="any" /> : <NodeRow>{null}</NodeRow>}
-			<NodeRow>
-				<span className="NodeInputRow-label">Result is</span>
+			<WireField shapeId={shape.id} fieldKey="op" label="Result is">
 				<NodeSelect
 					className="NodeField-select"
 					value={node.op}
@@ -231,7 +229,7 @@ function LogicNodeComponent({ shape, node }: NodeComponentProps<LogicNode>) {
 					<option value="xor">A XOR B</option>
 					<option value="nand">NOT (A AND B)</option>
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 		</>
 	)
 }
@@ -342,8 +340,7 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="list" label="List" dataType="any" />
-			<NodeRow>
-				<span className="NodeInputRow-label">Split</span>
+			<WireField shapeId={shape.id} fieldKey="split" label="Split">
 				<NodeSelect className="NodeField-select" value={node.split} onPointerDown={stopEvent} onChange={(e) => set({ split: e.target.value })}>
 					<option value="lines">per line</option>
 					<option value="separator">per separator</option>
@@ -351,8 +348,8 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 					<option value="json">JSON array items</option>
 					<option value="regex">per regex match</option>
 				</NodeSelect>
-			</NodeRow>
-			<NodeRow>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="separator" label="Separator">
 				{node.split === 'separator' || node.split === 'regex' ? (
 					<UiTextInput
 						placeholder={node.split === 'regex' ? 'pattern, e.g. \\d+' : 'separator, e.g. ,'}
@@ -362,15 +359,14 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 				) : (
 					<span className="NodeRow-disconnected">empty items are skipped</span>
 				)}
-			</NodeRow>
+			</WireField>
 			<NodeRow className="NodeRow-right">
 				<span className="NodeBranch is-active">each item →</span>
 			</NodeRow>
 			<PortRow shapeId={shape.id} portId="result" label="← Result" dataType="any" hint="end of the loop body" />
-			<NodeRow>
-				<span className="NodeInputRow-label">Join with</span>
+			<WireField shapeId={shape.id} fieldKey="joiner" label="Join with">
 				<UiTextInput value={node.joiner} onChange={(joiner) => set({ joiner })} />
-			</NodeRow>
+			</WireField>
 			<div className="ProgressBar" title={node.progress ?? 'Wire item, then Result, then Play'}>
 				<span style={{ width: `${forEachPercent(node.progress)}%` }} />
 			</div>

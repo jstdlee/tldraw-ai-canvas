@@ -284,6 +284,14 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 
 	const run = useValue('node run', () => nodeRunState.get(editor)[shape.id], [editor, shape.id])
 
+	// WP17: a wirable field's port only shows on hover, except when the card is selected
+	// (so the ports are easy to find and aim at while wiring).
+	const isSelected = useValue(
+		'is selected',
+		() => editor.getSelectedShapeIds().includes(shape.id),
+		[editor, shape.id]
+	)
+
 	// Total cards in the current run (this card, its stale upstream, and downstream), for the footer text.
 	const runningCards = useValue(
 		'running cards',
@@ -330,6 +338,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				NodeShape_pinned: !!shape.props.pinned,
 				NodeShape_fs: !!fontSize,
 				NodeShape_accent: !!accentColor,
+				NodeShape_selected: isSelected,
 			})}
 			style={
 				{

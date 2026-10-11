@@ -28,10 +28,11 @@ import {
 	resizeImage,
 	toImageUrl,
 } from '../../imageOps'
-import { ShapePort } from '../../ports/Port'
+import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
 import { FieldMax, ImageZoom } from '../../editors/LargeEditor'
-import { PortRow, stopEvent, NodeSelect } from './fields'
+import { PortRow, stopEvent, NodeSelect, WireField, useWireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -265,7 +266,8 @@ export class CropNodeDefinition extends NodeDefinition<CropNode> {
 		return { type: 'crop', aspect: '1:1', x: 10, y: 10, w: 80, h: 80, lastResultUrl: null, error: null }
 	}
 	getBodyHeightPx(shape: NodeShape, node: CropNode) {
-		return getNodeRowHeightPx(shape.props.fontSize) * (node.aspect === 'Custom' ? 4 : 2) + NODE_IMAGE_PREVIEW_HEIGHT_PX
+		// WP17: x/y/w/h each get their own row instead of sharing one.
+		return getNodeRowHeightPx(shape.props.fontSize) * (node.aspect === 'Custom' ? 6 : 2) + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return { image: imageIn(getNodeRowHeightPx(shape.props.fontSize)), output: imageOut() }
@@ -310,8 +312,7 @@ function CropNodeComponent({ shape, node }: NodeComponentProps<CropNode>) {
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
-			<NodeRow>
-				<span className="NodeInputRow-label">Shape</span>
+			<WireField shapeId={shape.id} fieldKey="aspect" label="Shape">
 				<NodeSelect className="NodeField-select" value={node.aspect} onPointerDown={stopEvent} onChange={(e) => set({ aspect: e.target.value })}>
 					{Object.keys(ASPECTS).map((a) => (
 						<option key={a} value={a}>
@@ -319,17 +320,21 @@ function CropNodeComponent({ shape, node }: NodeComponentProps<CropNode>) {
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			{node.aspect === 'Custom' && (
 				<>
-					<NodeRow>
+					<WireField shapeId={shape.id} fieldKey="x" label="X %" dataType="number">
 						<NumberField label="X" value={node.x} suffix="%" onChange={(x) => set({ x })} />
+					</WireField>
+					<WireField shapeId={shape.id} fieldKey="y" label="Y %" dataType="number">
 						<NumberField label="Y" value={node.y} suffix="%" onChange={(y) => set({ y })} />
-					</NodeRow>
-					<NodeRow>
+					</WireField>
+					<WireField shapeId={shape.id} fieldKey="w" label="W %" dataType="number">
 						<NumberField label="W" value={node.w} suffix="%" onChange={(w) => set({ w })} />
+					</WireField>
+					<WireField shapeId={shape.id} fieldKey="h" label="H %" dataType="number">
 						<NumberField label="H" value={node.h} suffix="%" onChange={(h) => set({ h })} />
-					</NodeRow>
+					</WireField>
 				</>
 			)}
 			<Preview url={node.lastResultUrl} error={node.error} shape={shape} />
@@ -363,8 +368,10 @@ export class ImageResizeNodeDefinition extends NodeDefinition<ImageResizeNode> {
 	getDefault(): ImageResizeNode {
 		return { type: 'image_resize', mode: 'fit', value: 1024, value2: 1024, lastResultUrl: null, error: null }
 	}
-	getBodyHeightPx(shape: NodeShape) {
-		return getNodeRowHeightPx(shape.props.fontSize) * 3 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape, node: ImageResizeNode) {
+		// WP17: value/value2 each get their own row instead of sharing one.
+		const needsValue2 = node.mode === 'fit' || node.mode === 'exact'
+		return getNodeRowHeightPx(shape.props.fontSize) * (needsValue2 ? 4 : 3) + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return { image: imageIn(getNodeRowHeightPx(shape.props.fontSize)), output: imageOut() }
@@ -387,8 +394,7 @@ function ImageResizeNodeComponent({ shape, node }: NodeComponentProps<ImageResiz
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
-			<NodeRow>
-				<span className="NodeInputRow-label">Mode</span>
+			<WireField shapeId={shape.id} fieldKey="mode" label="Mode">
 				<NodeSelect
 					className="NodeField-select"
 					value={node.mode}
@@ -404,18 +410,20 @@ function ImageResizeNodeComponent({ shape, node }: NodeComponentProps<ImageResiz
 					<option value="width">Width (px), keep ratio</option>
 					<option value="height">Height (px), keep ratio</option>
 				</NodeSelect>
-			</NodeRow>
-			<NodeRow>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="value" label="Value" dataType="number">
 				<NumberField
 					label={node.mode === 'fit' || node.mode === 'exact' ? 'W' : node.mode === 'scale' ? 'Scale' : node.mode === 'width' ? 'Width' : 'Height'}
 					value={node.value}
 					suffix={node.mode === 'scale' ? '%' : 'px'}
 					onChange={(value) => set({ value })}
 				/>
-				{(node.mode === 'fit' || node.mode === 'exact') && (
+			</WireField>
+			{(node.mode === 'fit' || node.mode === 'exact') && (
+				<WireField shapeId={shape.id} fieldKey="value2" label="Value 2" dataType="number">
 					<NumberField label="H" value={node.value2} suffix="px" onChange={(value2) => set({ value2 })} />
-				)}
-			</NodeRow>
+				</WireField>
+			)}
 			<Preview url={node.lastResultUrl} error={node.error} shape={shape} />
 		</>
 	)
@@ -450,8 +458,48 @@ const SLIDERS: { key: keyof ImageFilter; label: string; min: number; max: number
 	{ key: 'hue', label: 'Hue', min: -180, max: 180 },
 	{ key: 'grayscale', label: 'Gray', min: 0, max: 100 },
 	{ key: 'sepia', label: 'Sepia', min: 0, max: 100 },
+	{ key: 'invert', label: 'Invert', min: 0, max: 100 },
 	{ key: 'blur', label: 'Blur', min: 0, max: 20 },
 ]
+
+/** One slider row with its own `field:<key>` port (WP17), at the slider's compact (26px)
+ * height rather than a full card row — `WireField` would be too tall here. */
+function WireSlider({
+	shapeId,
+	fieldKey,
+	label,
+	value,
+	onChange,
+	...sliderProps
+}: {
+	shapeId: NodeShape['id']
+	fieldKey: string
+	label: string
+	value: number
+	onChange: (v: number) => void
+	min: number
+	max: number
+}) {
+	const ref = useFieldPortAnchor<HTMLLabelElement>(shapeId, fieldKey)
+	const { portId, port, sourceName } = useWireField(shapeId, fieldKey)
+	return (
+		<label ref={ref} className="NodeSlider WireField" onPointerDown={stopEvent}>
+			<Port shapeId={shapeId} portId={portId} />
+			<span>{label}</span>
+			{port ? (
+				<span className="NodeRow-connected-value" title={sourceName ? `from ${sourceName}` : String(port.value ?? '')}>
+					{sourceName ? `${sourceName} → ` : ''}
+					{port.isOutOfDate ? '…' : String(port.value ?? '')}
+				</span>
+			) : (
+				<>
+					<UiSlider label={label} min={sliderProps.min} max={sliderProps.max} value={value} onChange={onChange} />
+					<span className="NodeSlider-value">{value}</span>
+				</>
+			)}
+		</label>
+	)
+}
 
 export class ImageFilterNodeDefinition extends NodeDefinition<ImageFilterNode> {
 	static type = 'image_filter'
@@ -466,7 +514,8 @@ export class ImageFilterNodeDefinition extends NodeDefinition<ImageFilterNode> {
 		return { type: 'image_filter', ...NO_FILTER, lastResultUrl: null, error: null }
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		return getNodeRowHeightPx(shape.props.fontSize) * 3 + SLIDERS.length * 26 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+		// WP17: rotate/flip/restore each get their own row instead of sharing one.
+		return getNodeRowHeightPx(shape.props.fontSize) * 6 + SLIDERS.length * 26 + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return { image: imageIn(getNodeRowHeightPx(shape.props.fontSize)), output: imageOut() }
@@ -487,8 +536,7 @@ function ImageFilterNodeComponent({ shape, node }: NodeComponentProps<ImageFilte
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
-			<NodeRow>
-				<span className="NodeInputRow-label">Preset</span>
+			<WireField shapeId={shape.id} fieldKey="preset" label="Preset">
 				<NodeSelect
 					className="NodeField-select"
 					value={matchPreset(node)}
@@ -505,32 +553,37 @@ function ImageFilterNodeComponent({ shape, node }: NodeComponentProps<ImageFilte
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			<div className="NodeField-block" style={{ height: SLIDERS.length * 26 }}>
 				{SLIDERS.map((s) => (
-					<label key={s.key} className="NodeSlider" onPointerDown={stopEvent}>
-						<span>{s.label}</span>
-						<UiSlider
-							label={s.label}
-							min={s.min}
-							max={s.max}
-							value={node[s.key] as number}
-							onChange={(next) => set({ [s.key]: next })}
-						/>
-						<span className="NodeSlider-value">{node[s.key] as number}</span>
-					</label>
+					<WireSlider
+						key={s.key}
+						shapeId={shape.id}
+						fieldKey={s.key}
+						label={s.label}
+						min={s.min}
+						max={s.max}
+						value={node[s.key] as number}
+						onChange={(next) => set({ [s.key]: next })}
+					/>
 				))}
 			</div>
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="rotate" label="Rotate" dataType="number">
 				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ rotate: (node.rotate + 90) % 360 })}>
 					⟳ {node.rotate}°
 				</TldrawUiButton>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="flipX" label="Flip X">
 				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ flipX: !node.flipX })}>
 					{node.flipX ? '⇋ on' : '⇋'}
 				</TldrawUiButton>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="flipY" label="Flip Y">
 				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ flipY: !node.flipY })}>
 					{node.flipY ? '⇵ on' : '⇵'}
 				</TldrawUiButton>
+			</WireField>
+			<NodeRow>
 				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ ...NO_FILTER })}>
 					Restore default
 				</TldrawUiButton>
@@ -567,8 +620,11 @@ export class ImageToolNodeDefinition extends NodeDefinition<ImageToolNode> {
 	getDefault(): ImageToolNode {
 		return { type: 'image_tool', tool: 'info', a: '', b: '', lastResultUrl: null, lastText: null, error: null }
 	}
-	getBodyHeightPx(shape: NodeShape) {
-		return getNodeRowHeightPx(shape.props.fontSize) * 3 + NODE_IMAGE_PREVIEW_HEIGHT_PX
+	getBodyHeightPx(shape: NodeShape, node: ImageToolNode) {
+		// WP17: a/b each get their own row instead of sharing one.
+		const tool = IMAGE_TOOLS.find((t) => t.id === node.tool) ?? IMAGE_TOOLS[0]
+		const needsB = node.tool !== 'look' && 'b' in tool
+		return getNodeRowHeightPx(shape.props.fontSize) * (needsB ? 4 : 3) + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return { image: imageIn(getNodeRowHeightPx(shape.props.fontSize)), output: { ...imageOut(), dataType: 'any' } }
@@ -608,24 +664,26 @@ function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNod
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="image" label="Image" dataType="image" />
-			<NodeRow>
-				<NodeSelect
-					className="NodeField-select"
-					value={node.tool}
-					onPointerDown={stopEvent}
-					onChange={(e) => set({ tool: e.target.value, a: e.target.value === 'look' ? 'JP 90s' : '', b: '' })}
-				>
-					{IMAGE_TOOLS.map((t) => (
-						<option key={t.id} value={t.id}>
-							{t.label}
-						</option>
-					))}
-				</NodeSelect>
-				<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ tool: 'info', a: '', b: '' })}>
-					Restore default
-				</TldrawUiButton>
-			</NodeRow>
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="tool" label="Tool">
+				<>
+					<NodeSelect
+						className="NodeField-select"
+						value={node.tool}
+						onPointerDown={stopEvent}
+						onChange={(e) => set({ tool: e.target.value, a: e.target.value === 'look' ? 'JP 90s' : '', b: '' })}
+					>
+						{IMAGE_TOOLS.map((t) => (
+							<option key={t.id} value={t.id}>
+								{t.label}
+							</option>
+						))}
+					</NodeSelect>
+					<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ tool: 'info', a: '', b: '' })}>
+						Restore default
+					</TldrawUiButton>
+				</>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="a" label="Param A">
 				{node.tool === 'look' ? (
 					<NodeSelect
 						className="NodeField-select"
@@ -641,18 +699,17 @@ function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNod
 								</option>
 							))}
 					</NodeSelect>
+				) : 'a' in tool ? (
+					<UiTextInput placeholder={tool.a} value={node.a} onChange={(a) => set({ a })} />
 				) : (
-					<>
-						{'a' in tool && (
-							<UiTextInput placeholder={tool.a} value={node.a} onChange={(a) => set({ a })} />
-						)}
-						{'b' in tool && (
-							<UiTextInput placeholder={tool.b} value={node.b} onChange={(b) => set({ b })} />
-						)}
-						{!('a' in tool) && !('b' in tool) && <span className="NodeRow-disconnected">no options</span>}
-					</>
+					<span className="NodeRow-disconnected">no options</span>
 				)}
-			</NodeRow>
+			</WireField>
+			{node.tool !== 'look' && 'b' in tool && (
+				<WireField shapeId={shape.id} fieldKey="b" label="Param B">
+					<UiTextInput placeholder={tool.b} value={node.b} onChange={(b) => set({ b })} />
+				</WireField>
+			)}
 			{node.lastText && !node.error ? (
 				<div className="NodeOutputView NodeGrow" style={{ height: NODE_IMAGE_PREVIEW_HEIGHT_PX - 8 }}>
 					<pre className="ValuePreview-text is-mono">{node.lastText.length > 2000 ? node.lastText.slice(0, 2000) + '…' : node.lastText}</pre>

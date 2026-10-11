@@ -9,7 +9,7 @@ import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
 import { IconPlay, UiIconButton, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect } from './fields'
+import { PortRow, stopEvent, NodeSelect, WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -35,12 +35,23 @@ function info(shape: NodeShape, value: string | null, inputs: InfoValues, dataTy
 	return { output: { value, isOutOfDate: areAnyInputsOutOfDate(inputs) || shape.props.isOutOfDate, dataType } }
 }
 
-function Line({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function Line({
+	shapeId,
+	fieldKey,
+	label,
+	value,
+	onChange,
+}: {
+	shapeId: NodeShape['id']
+	fieldKey: string
+	label: string
+	value: string
+	onChange: (value: string) => void
+}) {
 	return (
-		<NodeRow>
-			<span className="NodeInputRow-label">{label}</span>
+		<WireField shapeId={shapeId} fieldKey={fieldKey} label={label} dataType="number">
 			<UiTextInput value={value} onChange={onChange} />
-		</NodeRow>
+		</WireField>
 	)
 }
 
@@ -63,8 +74,8 @@ export class VideoNodeDefinition extends NodeDefinition<VideoNode> {
 		return { type: 'video', url: '', autoplay: false }
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		// Row for the link, then a 16:9 frame at the card width (260 - 16 margin).
-		return getNodeRowHeightPx(shape.props.fontSize) * 2 + Math.ceil(((NODE_WIDTH_PX - 16) * 9) / 16) + 12
+		// Link row + autoplay row (WP17: its own row), then a 16:9 frame at the card width.
+		return getNodeRowHeightPx(shape.props.fontSize) * 3 + Math.ceil(((NODE_WIDTH_PX - 16) * 9) / 16) + 12
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -98,8 +109,10 @@ function VideoComponent({ shape, node }: NodeComponentProps<VideoNode>) {
 			<PortRow shapeId={shape.id} portId="url" label="Link" dataType="text" />
 			<NodeRow>
 				<UiTextInput placeholder="https://…/clip.mp4 or a YouTube link" value={node.url} onChange={(url) => set({ url })} />
-				<UiIconButton icon={<IconPlay />} title="Autoplay (muted)" active={node.autoplay} onClick={() => set({ autoplay: !node.autoplay })} />
 			</NodeRow>
+			<WireField shapeId={shape.id} fieldKey="autoplay" label="Autoplay">
+				<UiIconButton icon={<IconPlay />} title="Autoplay (muted)" active={node.autoplay} onClick={() => set({ autoplay: !node.autoplay })} />
+			</WireField>
 			{embed ? (
 				<iframe
 					key={`${embed}-${node.autoplay}`}
@@ -153,7 +166,13 @@ function SleepComponent({ shape, node }: NodeComponentProps<SleepNode>) {
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="In" dataType="any" />
-			<Line label="ms" value={String(node.ms)} onChange={(value) => updateNode<SleepNode>(editor, shape, (n) => ({ ...n, ms: Number(value) || 0 }), false)} />
+			<Line
+				shapeId={shape.id}
+				fieldKey="ms"
+				label="ms"
+				value={String(node.ms)}
+				onChange={(value) => updateNode<SleepNode>(editor, shape, (n) => ({ ...n, ms: Number(value) || 0 }), false)}
+			/>
 		</>
 	)
 }
@@ -219,14 +238,14 @@ function OpenRouterComponent({ shape, node }: NodeComponentProps<OpenRouterNode>
 	const editor = useEditor()
 	const { models, error } = useHub('/api/hub/openrouter')
 	return (
-		<NodeRow>
+		<WireField shapeId={shape.id} fieldKey="model" label="Model" dataType="model">
 			<NodeSelect className="NodeField-select" value={node.model} onPointerDown={stopEvent} onChange={(e) => updateNode<OpenRouterNode>(editor, shape, (n) => ({ ...n, model: e.target.value }), false)}>
 				<option value="">{error || (models.length ? 'Free models' : 'Loading free models…')}</option>
 				{models.map((model) => (
 					<option key={model.id} value={model.id}>{model.name}</option>
 				))}
 			</NodeSelect>
-		</NodeRow>
+		</WireField>
 	)
 }
 

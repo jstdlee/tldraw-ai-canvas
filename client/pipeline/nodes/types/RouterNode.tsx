@@ -9,6 +9,7 @@ import {
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
+import { WireField } from './fields'
 import {
 	ExecutionResult,
 	InfoValues,
@@ -40,8 +41,8 @@ export class RouterNodeDefinition extends NodeDefinition<RouterNode> {
 		}
 	}
 	getBodyHeightPx(shape: NodeShape, node: RouterNode) {
-		// 1 input row + N output rows
-		return getNodeRowHeightPx(shape.props.fontSize) * (1 + node.outputCount)
+		// 1 input row + outputCount row (WP17) + N output rows
+		return getNodeRowHeightPx(shape.props.fontSize) * (2 + node.outputCount)
 	}
 	getPorts(shape: NodeShape, node: RouterNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -58,8 +59,9 @@ export class RouterNodeDefinition extends NodeDefinition<RouterNode> {
 		for (let i = 0; i < node.outputCount; i++) {
 			ports[`out_${i}`] = {
 				id: `out_${i}`,
+				// +1 row (WP17): outputCount got its own row between input and the outputs.
 				x: NODE_WIDTH_PX,
-				y: baseY + rowPx * (1.5 + i),
+				y: baseY + rowPx * (2.5 + i),
 				terminal: 'start',
 				dataType: 'any',
 			}
@@ -103,7 +105,7 @@ export class RouterNodeDefinition extends NodeDefinition<RouterNode> {
 	Component = RouterNodeComponent
 }
 
-function RouterNodeComponent({ node }: NodeComponentProps<RouterNode>) {
+function RouterNodeComponent({ shape, node }: NodeComponentProps<RouterNode>) {
 	return (
 		<>
 			<NodeRow>
@@ -114,6 +116,9 @@ function RouterNodeComponent({ node }: NodeComponentProps<RouterNode>) {
 				<NodePortLabel dataType="any">Input</NodePortLabel>
 				<span className="NodeRow-connected-value">{node.outputCount} outputs</span>
 			</NodeRow>
+			<WireField shapeId={shape.id} fieldKey="outputCount" label="Outputs" dataType="number">
+				<span className="NodeRow-disconnected">{node.outputCount} output ports</span>
+			</WireField>
 			{Array.from({ length: node.outputCount }, (_, i) => (
 				<NodeRow key={i}>
 					<NodePortLabel dataType="any">Out {i + 1}</NodePortLabel>

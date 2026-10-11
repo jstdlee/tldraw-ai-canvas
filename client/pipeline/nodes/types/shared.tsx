@@ -1,5 +1,5 @@
 import classNames from 'classnames'
-import { PointerEvent, SyntheticEvent, useCallback, useRef, useState } from 'react'
+import { forwardRef, PointerEvent, SyntheticEvent, useCallback, useRef, useState } from 'react'
 import {
 	Editor,
 	T,
@@ -14,6 +14,7 @@ import { AddIcon } from '../../components/icons/AddIcon'
 import { SubtractIcon } from '../../components/icons/SubtractIcon'
 import { NODE_WIDTH_PX, PORT_TYPE_COLORS, PortDataType } from '../../constants'
 import { Port, PortId, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { getNodeInputPortValues } from '../nodePorts'
 import type { NodeShape } from '../NodeShapeUtil'
 import type { NodeType } from '../nodeTypes'
@@ -130,20 +131,19 @@ export function updateNode<T extends NodeType>(
 /**
  * A row in a node. This component just applies some styling.
  */
-export function NodeRow({
-	children,
-	className,
-	...props
-}: {
-	children: React.ReactNode
-	className?: string
-} & React.HTMLAttributes<HTMLDivElement>) {
+export const NodeRow = forwardRef<
+	HTMLDivElement,
+	{
+		children: React.ReactNode
+		className?: string
+	} & React.HTMLAttributes<HTMLDivElement>
+>(function NodeRow({ children, className, ...props }, ref) {
 	return (
-		<div {...props} className={classNames('NodeRow', className)}>
+		<div ref={ref} {...props} className={classNames('NodeRow', className)}>
 			{children}
 		</div>
 	)
-}
+})
 
 /**
  * A label for a port row, displayed next to the port.
@@ -213,8 +213,9 @@ export function NodeInputRow({
 				? String(valueFromPort)
 				: (pendingValue ?? value)
 
+	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, portId)
 	return (
-		<NodeRow className="NodeInputRow">
+		<NodeRow className="NodeInputRow" ref={ref}>
 			<Port shapeId={shapeId} portId={portId} />
 			{label && <span className="NodeInputRow-label">{label}</span>}
 			{isOutOfDate || valueFromPort === STOP_EXECUTION ? (

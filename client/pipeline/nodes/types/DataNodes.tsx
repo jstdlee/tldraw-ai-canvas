@@ -16,7 +16,7 @@ import { getNodeInputPortValues, isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiCheckbox, UiEmpty, UiField, UiSegmented, UiSelect, UiTable, UiTextArea, UiTextInput } from '../../../ui'
 import { IconPlus, IconTable, IconUpload } from '../../../ui/icons'
-import { NodeMultiSelect, PortRow, stopEvent, NodeSelect, useInputConnected } from './fields'
+import { NodeMultiSelect, PortRow, stopEvent, NodeSelect, useInputConnected, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -179,13 +179,18 @@ const OP_OPTIONS = TABLE_OPS.filter((spec) => !spec.hidden).map((spec) => ({
 	group: spec.group,
 }))
 
-/** A column picker backed by the input table's real headers, falling back to free text. */
+/** A column picker backed by the input table's real headers, falling back to free text. Every
+ * DataPipe param is wirable (WP17): `fieldKey` is its op param field, e.g. "column", "with". */
 function ColumnField({
+	shapeId,
+	fieldKey,
 	label,
 	value,
 	headers,
 	onChange,
 }: {
+	shapeId: TLShapeId
+	fieldKey: string
 	label: string
 	value: string
 	headers: string[]
@@ -193,29 +198,33 @@ function ColumnField({
 }) {
 	if (!headers.length) {
 		return (
-			<UiField label={label}>
+			<WireField shapeId={shapeId} fieldKey={fieldKey} label={label}>
 				<UiTextInput value={value} onChange={onChange} placeholder="column name" />
-			</UiField>
+			</WireField>
 		)
 	}
 	return (
-		<UiField label={label}>
+		<WireField shapeId={shapeId} fieldKey={fieldKey} label={label}>
 			<UiSelect
 				value={value}
 				placeholder="Choose a column"
 				options={headers.map((h) => ({ value: h, label: h }))}
 				onChange={onChange}
 			/>
-		</UiField>
+		</WireField>
 	)
 }
 
 function ColumnsField({
+	shapeId,
+	fieldKey,
 	label,
 	value,
 	headers,
 	onChange,
 }: {
+	shapeId: TLShapeId
+	fieldKey: string
 	label: string
 	value: string
 	headers: string[]
@@ -223,29 +232,31 @@ function ColumnsField({
 }) {
 	if (!headers.length) {
 		return (
-			<UiField label={label}>
+			<WireField shapeId={shapeId} fieldKey={fieldKey} label={label}>
 				<UiTextInput value={value} onChange={onChange} placeholder="a, b, c" />
-			</UiField>
+			</WireField>
 		)
 	}
 	return (
-		<UiField label={label}>
+		<WireField shapeId={shapeId} fieldKey={fieldKey} label={label}>
 			<NodeMultiSelect
 				emptyLabel="Choose columns"
 				values={splitList(value).filter((v) => headers.includes(v))}
 				options={headers.map((h) => ({ value: h, label: h }))}
 				onChange={(next) => onChange(next.join(','))}
 			/>
-		</UiField>
+		</WireField>
 	)
 }
 
 function ParamField({
+	shapeId,
 	param,
 	node,
 	headers,
 	set,
 }: {
+	shapeId: TLShapeId
 	param: ReturnType<typeof layout>['params'][number]
 	node: TableNode
 	headers: string[]
@@ -253,27 +264,33 @@ function ParamField({
 }) {
 	const value = (node as unknown as Record<string, string>)[param.field] ?? ''
 	const onChange = (next: string) => set({ [param.field]: next } as Partial<TableNode>)
-	if (param.kind === 'column') return <ColumnField label={param.label} value={value} headers={headers} onChange={onChange} />
-	if (param.kind === 'columns') return <ColumnsField label={param.label} value={value} headers={headers} onChange={onChange} />
+	if (param.kind === 'column') {
+		return <ColumnField shapeId={shapeId} fieldKey={param.field} label={param.label} value={value} headers={headers} onChange={onChange} />
+	}
+	if (param.kind === 'columns') {
+		return <ColumnsField shapeId={shapeId} fieldKey={param.field} label={param.label} value={value} headers={headers} onChange={onChange} />
+	}
 	if (param.kind === 'enum') {
 		return (
-			<UiField label={param.label} hint={param.hint}>
+			<WireField shapeId={shapeId} fieldKey={param.field} label={param.label} hint={param.hint}>
 				<UiSelect value={value || param.options?.[0]?.value || ''} options={param.options ?? []} onChange={onChange} />
-			</UiField>
+			</WireField>
 		)
 	}
 	if (param.kind === 'number') {
+		// The field is stored as text either way (DataPipe's own fields are all plain strings;
+		// the table engine parses them), so the wirable port stays "text" too, matching nodeSpecs.
 		return (
-			<UiField label={param.label} hint={param.hint}>
+			<WireField shapeId={shapeId} fieldKey={param.field} label={param.label} hint={param.hint}>
 				<UiTextInput value={value} onChange={onChange} inputMode="decimal" placeholder={param.placeholder} />
-			</UiField>
+			</WireField>
 		)
 	}
 	// 'formula' and 'regex' both render as a mono text input.
 	return (
-		<UiField label={param.label} hint={param.hint}>
+		<WireField shapeId={shapeId} fieldKey={param.field} label={param.label} hint={param.hint}>
 			<UiTextInput mono value={value} onChange={onChange} placeholder={param.placeholder} />
-		</UiField>
+		</WireField>
 	)
 }
 
@@ -441,7 +458,7 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 			</UiField>
 			<div className="NodeHint">{spec.description}</div>
 			{spec.params.map((param) => (
-				<ParamField key={param.field} param={param} node={node} headers={headers} set={set} />
+				<ParamField key={param.field} shapeId={shape.id} param={param} node={node} headers={headers} set={set} />
 			))}
 			{spec.second && (
 				<PortRow shapeId={shape.id} portId="extra" label={spec.second.label} dataType="text" hint={spec.second.hint} />
@@ -517,8 +534,9 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 		return { type: 'chart', text: SAMPLE, format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score', dualScale: false, error: null }
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		// Rows: data port, kind/x column, y columns, dual-axes = 4, then the chart area.
-		return getNodeRowHeightPx(shape.props.fontSize) * 4 + 264
+		// Rows: data port, text label (WP17), kind, x column, y columns, dual-axes = 6
+		// (kind/x column split onto their own rows), then the chart area.
+		return getNodeRowHeightPx(shape.props.fontSize) * 6 + 264
 	}
 	getPorts(shape: NodeShape, node: ChartNode): Record<string, ShapePort> {
 		return { data: end('data', 0, getNodeRowHeightPx(shape.props.fontSize)), output: out(this.getWidthPx(shape, node)) }
@@ -597,12 +615,15 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	return (
 		<div className="ChartNode">
 			<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
-			<NodeRow>
+			<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Text" />
+			<WireField shapeId={shape.id} fieldKey="kind" label="Kind">
 				<NodeSelect className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
 					<option value="bar">Bar</option>
 					<option value="line">Line</option>
 					<option value="pie">Pie</option>
 				</NodeSelect>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="xCol" label="X column">
 				<NodeSelect
 					className="NodeField-select"
 					value={columns.xCol}
@@ -617,8 +638,8 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
-			<NodeRow>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="yCol" label="Y columns">
 				<NodeMultiSelect
 					title="Y columns. Pick more than one."
 					emptyLabel={table.headers.length ? 'Y columns' : 'No columns'}
@@ -631,15 +652,15 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 					}))}
 					onChange={(next) => set({ yCol: next.filter((col) => col !== columns.xCol).join(',') })}
 				/>
-			</NodeRow>
-			<NodeRow>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="dualScale" label="Dual axis">
 				<UiCheckbox
 					checked={!!node.dualScale}
 					title="First y column on the left axis, the rest on the right"
 					label="Dual y-axes"
 					onChange={(dualScale) => set({ dualScale })}
 				/>
-			</NodeRow>
+			</WireField>
 			<div ref={ref} className="ChartNode-view" />
 		</div>
 	)

@@ -22,6 +22,9 @@ export interface FieldSpec {
 	description: string
 	options?: string[]
 	default?: unknown
+	/** WP17: every field can be wired (an input port overrides it) unless this is false.
+	 * Secrets (keyRef, apiKey, passwords) are never wirable. */
+	wire?: boolean
 }
 
 export interface PortSpec {
@@ -52,8 +55,16 @@ function port(id: string, dataType: string, description: string): PortSpec {
 	return { id, dataType, description }
 }
 
-function field(key: string, kind: FieldKind, label: string, description: string, options?: string[], def?: unknown): FieldSpec {
-	return { key, kind, label, description, options, default: def }
+function field(
+	key: string,
+	kind: FieldKind,
+	label: string,
+	description: string,
+	options?: string[],
+	def?: unknown,
+	wire: boolean = true
+): FieldSpec {
+	return { key, kind, label, description, options, default: def, wire }
 }
 
 const TEXT_AI_OP_IDS = TEXT_AI_OPERATIONS.map((o) => o.id)
@@ -155,7 +166,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			field('headers', 'longtext', 'Headers', 'One "Name: value" header per line.'),
 			field('body', 'longtext', 'Body', 'Request body, sent for POST/PUT/PATCH.'),
 			field('auth', 'enum', 'Auth', 'Authorization style.', ['', 'bearer', 'basic']),
-			field('authValue', 'text', 'Auth value', 'The token or user:password for the chosen auth style. Secret — never set or shown by AI.'),
+			field('authValue', 'text', 'Auth value', 'The token or user:password for the chosen auth style. Secret — never set or shown by AI.', undefined, undefined, false),
 			field('extractText', 'boolean', 'Extract text', 'Read the readable text out of an HTML response instead of raw HTML.'),
 		],
 		assistant: {
@@ -297,7 +308,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			field('model', 'text', 'Model', 'The model id to output, chosen from the fetched list.'),
 			field('filter', 'text', 'Filter', 'Only show fetched models whose id contains this text.'),
 			field('kind', 'enum', 'For', 'What the chosen model is used for (informational only).', ['chat', 'image']),
-			field('keyRef', 'text', 'Key', 'API key for the endpoint. Secret — never set or shown by AI.'),
+			field('keyRef', 'text', 'Key', 'API key for the endpoint. Secret — never set or shown by AI.', undefined, undefined, false),
 		],
 		assistant: {
 			role: 'You set the base URL and filter to find the right model for the user’s goal. You cannot fetch models yourself; say what to click.',
@@ -632,8 +643,12 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			field('code', 'code', 'Code', 'The function body: read the named inputs, return the named outputs.'),
 			field('inputCount', 'number', 'Input count', 'How many input ports this node has (1-4).'),
 			field('outputCount', 'number', 'Output count', 'How many output ports this node has (1-3).'),
-			field('inputNames', 'text', 'Input names', 'Comma-separated names for the input ports, read as arguments in code.'),
-			field('outputNames', 'text', 'Output names', 'Comma-separated names for the output ports, returned from code.'),
+			// wire: false — the card stores these as a `string[]` (one name per port), not the
+			// comma-separated string this spec describes for the AI; wiring a plain text value in
+			// would corrupt that array. Revisit if/when the AI-facing shape and the stored shape
+			// are unified.
+			field('inputNames', 'text', 'Input names', 'Comma-separated names for the input ports, read as arguments in code.', undefined, undefined, false),
+			field('outputNames', 'text', 'Output names', 'Comma-separated names for the output ports, returned from code.', undefined, undefined, false),
 		],
 		assistant: {
 			role: 'You write the code for this node: a small TypeScript/JavaScript/Python function matching the input/output count.',
@@ -649,7 +664,10 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		useWhen: 'Not addable directly: created by packing a group of nodes into a box. The AI should never add one.',
 		inputs: [],
 		outputs: [],
-		fields: [field('title', 'text', 'Title', 'Label shown on the box.')],
+		// wire: false — the box title is only read for display (the heading rename control
+		// edits it directly); execute()/getOutputInfo() never read it, so a wired override
+		// would have no visible effect.
+		fields: [field('title', 'text', 'Title', 'Label shown on the box.', undefined, undefined, false)],
 		assistant: {
 			role: 'This node is a packed group; its contents are the nodes it wraps, not fields to fill here.',
 			chips: [],
@@ -780,7 +798,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			field('temperature', 'text', 'Temperature', 'Empty uses the model’s default.'),
 			field('thinking', 'enum', 'Thinking', 'Reasoning effort.', ['', 'none', 'low', 'medium', 'high']),
 			field('maxTokens', 'text', 'Max tokens', 'Output token limit; empty uses the model’s default.'),
-			field('keyRef', 'text', 'Key', 'API key for the endpoint. Secret — never set or shown by AI.'),
+			field('keyRef', 'text', 'Key', 'API key for the endpoint. Secret — never set or shown by AI.', undefined, undefined, false),
 		],
 		assistant: {
 			role: 'You set the endpoint, model and call settings; never write a real API key.',

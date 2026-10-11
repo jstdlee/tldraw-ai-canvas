@@ -13,7 +13,7 @@ import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiCheckbox, UiEmpty, UiSegmented, UiTable, UiTextInput } from '../../../ui'
 import { FieldMax, ImageZoom } from '../../editors/LargeEditor'
-import { isImageValue, PortRow, stopEvent, NodeSelect, useInputConnected } from './fields'
+import { isImageValue, PortRow, stopEvent, NodeSelect, useInputConnected, WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -266,7 +266,7 @@ function FileInComponent({ shape, node }: NodeComponentProps<FileInNode>) {
 
 	return (
 		<>
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="source" label="Source">
 				<UiSegmented
 					value={source}
 					options={[
@@ -275,7 +275,7 @@ function FileInComponent({ shape, node }: NodeComponentProps<FileInNode>) {
 					]}
 					onChange={(next) => set({ source: next })}
 				/>
-			</NodeRow>
+			</WireField>
 			{source === 'upload' ? (
 				<>
 					<NodeRow>
@@ -317,9 +317,9 @@ function FileInComponent({ shape, node }: NodeComponentProps<FileInNode>) {
 							</NodeSelect>
 						</NodeRow>
 					)}
-					<NodeRow>
+					<WireField shapeId={shape.id} fieldKey="action" label="Action">
 						<UiCheckbox checked={hashOutput} label="Output SHA-256 instead" onChange={(on) => set({ action: on ? 'sha256' : 'text' })} />
-					</NodeRow>
+					</WireField>
 				</>
 			) : (
 				<>
@@ -329,14 +329,13 @@ function FileInComponent({ shape, node }: NodeComponentProps<FileInNode>) {
 							<UiTextInput placeholder="www.wikipedia.org" value={node.url ?? ''} onChange={(url) => set({ url })} />
 						</NodeRow>
 					)}
-					<NodeRow>
-						<span className="NodeInputRow-label">Read as</span>
+					<WireField shapeId={shape.id} fieldKey="asText" label="Read as">
 						<NodeSelect className="NodeField-select" value={node.asText ?? 'auto'} onPointerDown={stopEvent} onChange={(e) => set({ asText: e.target.value })}>
 							<option value="auto">Auto (page text, or raw)</option>
 							<option value="text">Raw text</option>
 							<option value="pagetext">Page text</option>
 						</NodeSelect>
-					</NodeRow>
+					</WireField>
 				</>
 			)}
 			<FileInPreview node={node} shape={shape} />
@@ -481,12 +480,12 @@ function UrlInComponent({ shape, node }: NodeComponentProps<UrlInNode>) {
 				<span className="NodeHint">Replaced by Read from.</span>
 				<UiButton size="sm" variant="low" label="Convert" onClick={convert} />
 			</NodeRow>
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="url" label="URL">
 				<UiTextInput placeholder="www.wikipedia.org" value={node.url} onChange={(url) => set({ url })} />
-			</NodeRow>
-			<NodeRow>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="fetchBody" label="Fetch">
 				<UiCheckbox checked={node.fetchBody} label="Fetch page text" onChange={(fetchBody) => set({ fetchBody })} />
-			</NodeRow>
+			</WireField>
 		</>
 	)
 }

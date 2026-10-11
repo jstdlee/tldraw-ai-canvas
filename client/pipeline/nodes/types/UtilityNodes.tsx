@@ -10,15 +10,14 @@ import { NumberIcon } from '../../components/icons/NumberIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
+import { isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiTextArea, UiTextInput } from '../../../ui'
-import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult } from './fields'
+import { UiNumberInput, UiSlider, UiTextArea, UiTextInput } from '../../../ui'
+import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult, WireField, WireFieldHeader } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	LlmSettingsFields,
-	LlmSettingsPanel,
 	llmRequestSettings,
-	llmSettingsHeight,
 } from './llmSettings'
 import {
 	areAnyInputsOutOfDate,
@@ -127,7 +126,7 @@ function RandomNodeComponent({ shape, node }: NodeComponentProps<RandomNode>) {
 			<PortRow shapeId={shape.id} portId="list" label="List" dataType="any" hint={needsList ? 'or type below' : 'not used'} />
 			<PortRow shapeId={shape.id} portId="a" label={f?.[0] ?? 'A'} dataType="any" hint={f ? f[0] : 'not used'} />
 			<PortRow shapeId={shape.id} portId="b" label={f?.[1] ?? 'B'} dataType="any" hint={f?.[1] ?? 'not used'} />
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="mode" label="Mode">
 				<NodeSelect className="NodeField-select" value={node.mode} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>
 					{RANDOM_MODES.map((m) => (
 						<option key={m.id} value={m.id}>
@@ -135,7 +134,7 @@ function RandomNodeComponent({ shape, node }: NodeComponentProps<RandomNode>) {
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			<NodeRow>
 				{f ? (
 					f.map((label, i) => {
@@ -250,7 +249,7 @@ function NetToolNodeComponent({ shape, node }: NodeComponentProps<NetToolNode>) 
 			) : (
 				<PortRow shapeId={shape.id} portId="target" label="Target" dataType="text" hint="or type below" />
 			)}
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="tool" label="Tool">
 				<NodeSelect className="NodeField-select" value={node.tool} onPointerDown={stopEvent} onChange={(e) => set({ tool: e.target.value, option: '' })}>
 					{NET_TOOL_OPTIONS.map((t) => (
 						<option key={t.id} value={t.id}>
@@ -258,7 +257,7 @@ function NetToolNodeComponent({ shape, node }: NodeComponentProps<NetToolNode>) 
 						</option>
 					))}
 				</NodeSelect>
-			</NodeRow>
+			</WireField>
 			<NodeRow>
 				{'target' in tool && !targetWired ? (
 					<UiTextInput placeholder={tool.target} value={node.target} onChange={(target) => set({ target })} />
@@ -266,13 +265,13 @@ function NetToolNodeComponent({ shape, node }: NodeComponentProps<NetToolNode>) 
 					<span className="NodeRow-disconnected">{targetWired ? 'target from input' : 'no target needed'}</span>
 				)}
 			</NodeRow>
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="option" label="Option">
 				{'option' in tool ? (
 					<UiTextInput placeholder={tool.option} value={node.option} onChange={(option) => set({ option })} />
 				) : (
 					<span className="NodeStatus">{node.lastMs != null ? `took ${node.lastMs} ms` : 'Runs on this machine'}</span>
 				)}
-			</NodeRow>
+			</WireField>
 		</>
 	)
 }
@@ -296,6 +295,7 @@ export const SummarizeNode = T.object({
 })
 
 const SUM_RESULT_PX = 150
+const SUM_SYSTEM_BOX_PX = 70
 
 function isVideoValue(v: string) {
 	// blob: URLs come from video shapes on the canvas (images arrive as data URLs).
@@ -353,9 +353,12 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 			...DEFAULT_LLM_SETTINGS,
 		}
 	}
-	getBodyHeightPx(shape: NodeShape, node: SummarizeNode) {
+	getBodyHeightPx(shape: NodeShape, _node: SummarizeNode) {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
-		return rowPx * 5 + llmSettingsHeight(node, rowPx) + SUM_RESULT_PX
+		// Rows: input, length, format, language, focus, model, system label, temperature,
+		// thinking, max tokens, status = 11 (WP17: each wirable field got its own row).
+		const systemWired = isInputWired(this.editor, shape.id, 'field:system')
+		return rowPx * 11 + (systemWired ? 0 : SUM_SYSTEM_BOX_PX) + SUM_RESULT_PX
 	}
 	getPorts(shape: NodeShape, node: SummarizeNode): Record<string, ShapePort> {
 		return {
@@ -416,34 +419,79 @@ function SummarizeNodeComponent({ shape, node }: NodeComponentProps<SummarizeNod
 	const editor = useEditor()
 	const set = (patch: Partial<SummarizeNode>, outOfDate = true) =>
 		updateNode<SummarizeNode>(editor, shape, (n) => ({ ...n, ...patch }), outOfDate)
+	const systemWired = useInputConnected(shape.id, 'field:system')
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="Input" dataType="any" hint="text, URL, image, video" />
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="length" label="Length">
 				<NodeSelect className="NodeField-select" value={node.length} onPointerDown={stopEvent} onChange={(e) => set({ length: e.target.value })}>
 					<option value="short">Short</option>
 					<option value="medium">Medium</option>
 					<option value="long">Long</option>
 				</NodeSelect>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="format" label="Format">
 				<NodeSelect className="NodeField-select" value={node.format} onPointerDown={stopEvent} onChange={(e) => set({ format: e.target.value })}>
 					<option value="bullets">Bullets</option>
 					<option value="paragraph">Paragraph</option>
 					<option value="tldr">TL;DR + points</option>
 					<option value="outline">Outline</option>
 				</NodeSelect>
-			</NodeRow>
-			<NodeRow>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="focus" label="Focus">
 				<UiTextInput placeholder="Focus (optional)" value={node.focus} onChange={(focus) => set({ focus })} />
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="language" label="Language">
 				<UiTextInput placeholder="Language" value={node.language} onChange={(language) => set({ language })} />
-			</NodeRow>
-			<NodeRow>
-				<span className="NodeInputRow-label">Model</span>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="model" label="Model" dataType="model">
 				<ModelSelect className="node-model-select" capability="vision" value={node.model} onChange={(model) => set({ model }, false)} />
-			</NodeRow>
+			</WireField>
+			<WireFieldHeader shapeId={shape.id} fieldKey="system" label="System" />
+			{!systemWired && (
+				<div className="NodeField-block" style={{ height: SUM_SYSTEM_BOX_PX }}>
+					<UiTextArea
+						className="NodeField-textarea"
+						placeholder="System prompt (optional): role, tone, rules…"
+						value={node.system ?? ''}
+						onChange={(system) => set({ system }, false)}
+					/>
+				</div>
+			)}
+			<label className="LlmSettings-row">
+				<span>Temperature</span>
+				<UiSlider
+					label="Temperature"
+					min={0}
+					max={2}
+					step={0.1}
+					value={node.temperature ?? 0.7}
+					onChange={(temperature) => set({ temperature }, false)}
+				/>
+				<span className="LlmSettings-value">{node.temperature == null ? 'auto' : node.temperature.toFixed(1)}</span>
+			</label>
+			<label className="LlmSettings-row">
+				<span>Thinking</span>
+				<NodeSelect className="NodeField-select" value={node.thinking ?? ''} onPointerDown={stopEvent} onChange={(e) => set({ thinking: e.target.value }, false)}>
+					<option value="">model default</option>
+					<option value="none">off (fast)</option>
+					<option value="low">low</option>
+					<option value="medium">medium</option>
+					<option value="high">high (slow, careful)</option>
+				</NodeSelect>
+			</label>
+			<label className="LlmSettings-row">
+				<span>Max tokens</span>
+				<UiNumberInput
+					min={1}
+					placeholder="auto"
+					value={node.maxTokens ?? null}
+					onChange={(maxTokens) => set({ maxTokens: maxTokens == null ? null : Math.max(1, maxTokens) }, false)}
+				/>
+			</label>
 			<NodeRow>
 				<span className="NodeStatus">{node.lastKind ? `Last input: ${node.lastKind}` : 'Videos: 6 frames are read'}</span>
 			</NodeRow>
-			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
 			<NodeTextResult text={node.lastResultText} error={node.error} empty="Output appears here" height={SUM_RESULT_PX} />
 		</>
 	)
