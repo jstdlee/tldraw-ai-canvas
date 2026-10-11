@@ -98,6 +98,58 @@ function summarizeUpdateDiff(editor: Editor, update: AiPlan['update'][number]): 
 		.join(', ')
 }
 
+/**
+ * A plan's rows (summary, add/update/unwire/wire/notes, warnings) — the same rendering the
+ * Build panel uses, reused as-is inside an agent-chat plan message (WP23 Part F).
+ */
+export function AiPlanRows({ editor, plan, warnings }: { editor: Editor; plan: AiPlan; warnings: string[] }) {
+	return (
+		<>
+			<p className="BuildPanel-summary">{plan.summary}</p>
+			{plan.add.map((node) => (
+				<div key={node.ref} className="BuildPanel-planRow">
+					<UiChip label="Add" />
+					<span>{planNodeLine(`${NODE_SPECS[node.type]?.title ?? node.type}${node.label ? ` "${node.label}"` : ''}`, summarizeProps(node.props))}</span>
+				</div>
+			))}
+			{plan.update.map((update) => (
+				<div key={update.id} className="BuildPanel-planRow">
+					<UiChip label="Update" />
+					<span>{planNodeLine(refName(editor, plan, update.id), summarizeUpdateDiff(editor, update))}</span>
+				</div>
+			))}
+			{plan.unwire.map((item, index) => (
+				<div key={index} className="BuildPanel-planRow">
+					<UiChip label="Unwire" />
+					<span>
+						{refName(editor, plan, item.to)}.{item.toPort}
+					</span>
+				</div>
+			))}
+			{plan.wires.map((wire, index) => (
+				<div key={index} className="BuildPanel-planRow">
+					<UiChip label="Wire" />
+					<span>
+						{refName(editor, plan, wire.from)}.{wire.fromPort} → {refName(editor, plan, wire.to)}.{wire.toPort}
+					</span>
+				</div>
+			))}
+			{plan.notes.map((note, index) => (
+				<div key={index} className="BuildPanel-planRow BuildPanel-note">
+					<UiChip label="Note" />
+					<span>{note}</span>
+				</div>
+			))}
+			{warnings.map((warning, index) => (
+				<div key={index} className="BuildPanel-planRow BuildPanel-warning">
+					<UiChip label="Warning" />
+					<span>{warning}</span>
+				</div>
+			))}
+		</>
+	)
+}
+
 export function BuildPanel() {
 	const open = useValue('build open', () => $buildOpen.get(), [])
 	if (!open) return null
@@ -260,47 +312,7 @@ function BuildPanelBody() {
 			{plan && (
 				<div className="BuildPanel-plan">
 					<div className="BuildPanel-divider">Plan</div>
-					<p className="BuildPanel-summary">{plan.summary}</p>
-					{plan.add.map((node) => (
-						<div key={node.ref} className="BuildPanel-planRow">
-							<UiChip label="Add" />
-							<span>{planNodeLine(`${NODE_SPECS[node.type]?.title ?? node.type}${node.label ? ` "${node.label}"` : ''}`, summarizeProps(node.props))}</span>
-						</div>
-					))}
-					{plan.update.map((update) => (
-						<div key={update.id} className="BuildPanel-planRow">
-							<UiChip label="Update" />
-							<span>{planNodeLine(refName(editor, plan, update.id), summarizeUpdateDiff(editor, update))}</span>
-						</div>
-					))}
-					{plan.unwire.map((item, index) => (
-						<div key={index} className="BuildPanel-planRow">
-							<UiChip label="Unwire" />
-							<span>
-								{refName(editor, plan, item.to)}.{item.toPort}
-							</span>
-						</div>
-					))}
-					{plan.wires.map((wire, index) => (
-						<div key={index} className="BuildPanel-planRow">
-							<UiChip label="Wire" />
-							<span>
-								{refName(editor, plan, wire.from)}.{wire.fromPort} → {refName(editor, plan, wire.to)}.{wire.toPort}
-							</span>
-						</div>
-					))}
-					{plan.notes.map((note, index) => (
-						<div key={index} className="BuildPanel-planRow BuildPanel-note">
-							<UiChip label="Note" />
-							<span>{note}</span>
-						</div>
-					))}
-					{warnings.map((warning, index) => (
-						<div key={index} className="BuildPanel-planRow BuildPanel-warning">
-							<UiChip label="Warning" />
-							<span>{warning}</span>
-						</div>
-					))}
+					<AiPlanRows editor={editor} plan={plan} warnings={warnings} />
 					<div className="BuildPanel-revise">
 						<UiTextInput value={revise} onChange={setRevise} placeholder="Revise: tell it what to change" />
 						<UiButton

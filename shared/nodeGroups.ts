@@ -65,6 +65,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	download: 'web',
 	net_tool: 'web',
 	video: 'web',
+	web_search: 'web',
 	// Image
 	crop: 'image',
 	image_resize: 'image',

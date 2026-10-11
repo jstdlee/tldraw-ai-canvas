@@ -11,8 +11,8 @@ import { storeBlob } from '../../imageOps'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_IMAGE_PREVIEW_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiButton, UiCheckbox, UiEmpty, UiSegmented, UiTable, UiTextInput } from '../../../ui'
-import { FieldMax, ImageZoom } from '../../editors/LargeEditor'
+import { UiButton, UiCheckbox, UiEmpty, UiSegmented, UiTextInput } from '../../../ui'
+import { ExpandableTable, FieldMax, ImageZoom } from '../../editors/LargeEditor'
 import { isImageValue, PortRow, stopEvent, NodeSelect, useInputConnected, WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -374,7 +374,7 @@ function FileInPreview({ node, shape }: { node: FileInNode; shape: NodeShape }) 
 	return (
 		<div className="NodeOutputView NodeGrow" style={{ height: NODE_IMAGE_PREVIEW_HEIGHT_PX - 8 }} onPointerDown={stopEvent}>
 			{table ? (
-				<UiTable columns={table.headers} rows={table.rows} maxRows={50} />
+				<ExpandableTable title="File" columns={table.headers} rows={table.rows} maxRows={50} />
 			) : text ? (
 				<pre className="ValuePreview-text is-mono">{text.length > 2000 ? text.slice(0, 2000) + '…' : text}</pre>
 			) : (

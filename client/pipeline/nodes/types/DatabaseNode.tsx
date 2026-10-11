@@ -16,8 +16,9 @@ import { runSql as runPgliteSql } from '../../pg'
 import { hiddenDedicatedPortIds, hiddenFieldKeys } from '../fieldVisibility'
 import { NodeShape } from '../NodeShapeUtil'
 import { isInputWired } from '../nodePorts'
-import { UiButton, UiCheckbox, UiEmpty, UiSecretInput, UiSegmented, UiTable, UiTextArea, UiTextInput } from '../../../ui'
+import { UiButton, UiCheckbox, UiEmpty, UiSecretInput, UiSegmented, UiTextArea, UiTextInput } from '../../../ui'
 import { IconAlert, IconDatabase, IconTable, IconUpload } from '../../../ui/icons'
+import { ExpandableTable } from '../../editors/LargeEditor'
 import { NodeSelect, OutputPortRow, PgliteMemoryWarning, PortRow, stopEvent, useInputConnected, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -696,7 +697,7 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 					<ExtResultsView result={extResults} />
 				) : preview ? (
 					<>
-						<UiTable columns={preview.headers} rows={preview.rows} maxRows={50} />
+						<ExpandableTable title="Database" columns={preview.headers} rows={preview.rows} maxRows={50} />
 						<div className="NodeHint">{node.lastInfo}</div>
 					</>
 				) : node.lastOutput ? (
@@ -723,7 +724,12 @@ function ExtResultsView({ result }: { result: { results: ExtQueryResultRow[]; ms
 			))}
 			<div className="NodeHint">{result.ms.toFixed(1)} ms</div>
 			{last && last.columns.length > 0 ? (
-				<UiTable columns={last.columns} rows={last.rows.map((row) => row.map((v) => String(v ?? '')))} maxRows={50} />
+				<ExpandableTable
+				title="Database"
+				columns={last.columns}
+				rows={last.rows.map((row) => row.map((v) => String(v ?? '')))}
+				maxRows={50}
+			/>
 			) : (
 				<UiEmpty text="No rows to show (the script only wrote data)" />
 			)}

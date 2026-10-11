@@ -195,11 +195,45 @@ textarea.UiTextArea.UiTextArea_grow {
 	font-size: var(--fs-meta, 0.8em);
 }
 
+/* WP23 Part C: the search box a long menu (>10 options) gets, above its scrolling list. */
+.UiSelect-search {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	flex: 0 0 auto;
+	padding: 0.35em 0.6em;
+	margin-bottom: 0.2em;
+	border-bottom: 1px solid var(--tl-color-divider);
+	color: var(--tl-color-text-3);
+}
+
+.UiSelect-searchInput {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--tl-color-text-1);
+	font: inherit;
+	font-family: var(--tl-font-sans);
+	font-size: var(--fs-body, 0.8em);
+}
+
+/* Tldraw's own dropdown/context menus (incl. the right-click "Insert" card-group submenus):
+   always cap and scroll instead of only doing so under 600px of viewport height. */
+.tlui-menu {
+	max-height: min(60vh, 420px);
+}
+
 .UiMenu {
 	position: fixed;
 	z-index: 2000;
-	max-height: 18em;
-	overflow: auto;
+	/* WP23 Part C: a long menu (30+ entries) scrolls within this cap instead of running off
+	   the viewport. */
+	max-height: min(60vh, 420px);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 	padding: 0.25em;
 	border: 1px solid var(--tl-color-divider);
 	border-radius: var(--tl-radius-2);
@@ -208,6 +242,11 @@ textarea.UiTextArea.UiTextArea_grow {
 	box-shadow: var(--tl-shadow-2);
 	pointer-events: all;
 	font-family: var(--tl-font-sans);
+}
+
+.UiMenu-list {
+	overflow: auto;
+	min-height: 0;
 }
 
 .UiMenu-item {
@@ -528,7 +567,23 @@ button.UiChip {
 }
 
 .UiErrorBanner-title {
+	display: flex;
+	align-items: center;
+	gap: 0.3em;
+	width: 100%;
+	padding: 0;
+	border: none;
+	background: none;
+	color: inherit;
+	font: inherit;
 	font-weight: 500;
+	text-align: left;
+	cursor: pointer;
+}
+
+.UiErrorBanner-title svg {
+	flex: 0 0 auto;
+	color: var(--tl-color-text-3);
 }
 
 .UiErrorBanner-message {
@@ -536,6 +591,11 @@ button.UiChip {
 	max-height: 8em;
 	overflow: auto;
 	user-select: text;
+}
+
+.UiErrorBanner_collapsed .UiErrorBanner-body {
+	display: flex;
+	align-items: center;
 }
 
 .UiErrorBanner-actions {

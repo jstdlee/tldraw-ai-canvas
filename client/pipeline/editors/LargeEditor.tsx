@@ -1,10 +1,14 @@
 import { forwardRef, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCode, highlightCode } from '../../../shared/codeFormat'
-import { IconClose, IconExpand, UiButton, UiIconButton } from '../../ui'
+import { formatTable } from '../../../shared/tableOps'
+import { IconClose, IconExpand, UiButton, UiIconButton, UiTable } from '../../ui'
 import { placeImageOnCanvas } from '../placeOnCanvas'
 import { NodeShape } from '../nodes/NodeShapeUtil'
 import type { Editor } from 'tldraw'
+
+/** Keep pointer/wheel events inside a field's own preview (not the canvas). */
+const stop = (e: React.SyntheticEvent) => e.stopPropagation()
 
 /**
  * Where the dialogs mount: inside tldraw's container, so its colour variables (and the
@@ -192,6 +196,100 @@ export function ImageZoom({
 				</div>
 				<div className="LargeEditor-image-body">
 					<img src={src} alt="" />
+				</div>
+			</div>
+		</div>,
+		modalRoot()
+	)
+}
+
+/** A tabular output (`UiTable`, the Profile table, a Database result, …) with the same hover
+ * FieldMax as every other output, opening a full-size scrollable table (WP23 Part D). */
+export function ExpandableTable({
+	title = 'Table',
+	columns,
+	rows,
+	maxRows = 50,
+}: {
+	title?: string
+	columns: string[]
+	rows: string[][]
+	maxRows?: number
+}) {
+	const [open, setOpen] = useState(false)
+	return (
+		<div className="NodeTablePreview" onPointerDown={stop} onWheel={stop}>
+			<UiTable columns={columns} rows={rows} maxRows={maxRows} />
+			<FieldMax title="Open full table" onClick={() => setOpen(true)} />
+			{open && <TableZoom title={title} columns={columns} rows={rows} onClose={() => setOpen(false)} />}
+		</div>
+	)
+}
+
+/** How many rows the full-size table viewer shows before it says "+N more". */
+const TABLE_ZOOM_MAX_ROWS = 5000
+
+/** Full-size, sticky-header table view: up to 5,000 rows, with "Copy as CSV" (WP23 Part D). */
+export function TableZoom({
+	title,
+	columns,
+	rows,
+	onClose,
+}: {
+	title: string
+	columns: string[]
+	rows: string[][]
+	onClose: () => void
+}) {
+	const [copied, setCopied] = useState(false)
+	const shown = rows.slice(0, TABLE_ZOOM_MAX_ROWS)
+	const more = rows.length - shown.length
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') onClose()
+		}
+		window.addEventListener('keydown', onKey)
+		return () => window.removeEventListener('keydown', onKey)
+	}, [onClose])
+	const drag = useDragOffset()
+	const copyCsv = () => {
+		const csv = formatTable({ headers: columns, rows: shown }, 'csv')
+		void navigator.clipboard.writeText(csv)
+		setCopied(true)
+		window.setTimeout(() => setCopied(false), 900)
+	}
+	return createPortal(
+		<div className="LargeEditor-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+			<div className="LargeEditor LargeEditor-table" role="dialog" aria-label={title} style={drag.style}>
+				<div className="LargeEditor-bar" onPointerDown={drag.onPointerDown} title="Drag to move">
+					<strong>{title}</strong>
+					<div className="LargeEditor-actions">
+						<UiButton size="sm" variant="low" label={copied ? 'Copied' : 'Copy as CSV'} onClick={copyCsv} />
+						<UiIconButton icon={<IconClose />} title="Close" onClick={onClose} />
+					</div>
+				</div>
+				<div className="LargeEditor-table-body">
+					<table className="LargeEditor-table-el">
+						<thead>
+							<tr>
+								{columns.map((column, index) => (
+									<th key={`${column}:${index}`}>{column}</th>
+								))}
+							</tr>
+						</thead>
+						<tbody>
+							{shown.map((row, rowIndex) => (
+								<tr key={rowIndex}>
+									{columns.map((_, columnIndex) => (
+										<td key={columnIndex} title={row[columnIndex] ?? ''}>
+											{row[columnIndex] ?? ''}
+										</td>
+									))}
+								</tr>
+							))}
+						</tbody>
+					</table>
+					{more > 0 && <div className="LargeEditor-table-more">+{more} more rows (showing the first {TABLE_ZOOM_MAX_ROWS.toLocaleString()})</div>}
 				</div>
 			</div>
 		</div>,

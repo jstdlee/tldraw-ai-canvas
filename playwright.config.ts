@@ -4,10 +4,11 @@ import { join } from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
 // Local-only E2E suite (WP20). Never added to .github/ — run by hand with `npm run test:e2e`.
-// Own ports (5185 web, 8795 API), never 5173/5174/8790 (the owner's dev session), and a fresh
-// temp DATA_DIR so these tests never touch real saved canvases or config.
-const WEB_PORT = 5185
-const API_PORT = 8795
+// Own ports (5185 web, 8795 API by default), never 5173/5174/8790 (the owner's dev session), and
+// a fresh temp DATA_DIR so these tests never touch real saved canvases or config. E2E_WEB_PORT /
+// E2E_API_PORT let a second agent run this suite on its own ports at the same time (WP24).
+const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5185)
+const API_PORT = Number(process.env.E2E_API_PORT ?? 8795)
 const DATA_DIR = mkdtempSync(join(tmpdir(), 'tldraw-e2e-'))
 
 export default defineConfig({

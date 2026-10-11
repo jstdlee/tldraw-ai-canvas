@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { ReactNode, useEffect, useRef } from 'react'
 import { useValue } from 'tldraw'
 import { TldrawAgent } from '../../agent/TldrawAgent'
 import { ChatHistorySection, getAgentHistorySections } from './ChatHistorySection'
@@ -30,7 +30,15 @@ Here's an example of how the UI might look:
 
 */
 
-export function ChatHistory({ agent }: { agent: TldrawAgent }) {
+export function ChatHistory({
+	agent,
+	trailing,
+}: {
+	agent: TldrawAgent
+	/** WP23 Part F: Build-with-AI plan messages, rendered after the agent's own history so
+	 * they scroll with it, inside the same chat thread. */
+	trailing?: ReactNode
+}) {
 	const historyItems = useValue('chatHistory', () => agent.chat.getHistory(), [agent])
 	const sections = getAgentHistorySections(historyItems)
 	const historyRef = useRef<HTMLDivElement>(null)
@@ -85,6 +93,7 @@ export function ChatHistory({ agent }: { agent: TldrawAgent }) {
 					/>
 				)
 			})}
+			{trailing}
 		</div>
 	)
 }

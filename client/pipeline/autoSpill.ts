@@ -6,59 +6,16 @@ import { shouldSpillOutput } from './nodes/nodeTypes'
 import { NodeShape } from './nodes/NodeShapeUtil'
 import { placeImageOnCanvas } from './placeOnCanvas'
 
-/** Horizontal gap between the node and the newest output, and between history shapes. */
+/** Horizontal gap between the node and its output label. */
 const GAP = 48
-/** How many past outputs to keep on the canvas before the oldest is dropped. */
-const MAX_HISTORY = 12
 const TEXT_W = 320
 
 /**
- * Lay the output history out in a row to the right of the node: the newest
- * shape sits right beside it, each older one shifts one slot to the right, so
- * every past response stays visible. `ids` is newest-first.
- */
-/** Width to reserve. Prefer the shape's own `w` so a new shape does not stack on the last one. */
-function shapeWidth(editor: Editor, id: TLShapeId): number {
-	const spill = editor.getShape(id)
-	const width = spill && typeof (spill.props as { w?: number }).w === 'number' ? (spill.props as { w: number }).w : 0
-	if (width > 0) return width
-	return editor.getShapePageBounds(id)?.width || TEXT_W
-}
-
-/**
- * Move a shape so its page origin is `pageX, pageY`.
- * Shape x/y are parent-local; page bounds are not, so a frame would otherwise shift the row.
- */
-function placeAtPage(editor: Editor, id: TLShapeId, pageX: number, pageY: number) {
-	const spill = editor.getShape(id)
-	const bounds = editor.getShapePageBounds(id)
-	if (!spill || !bounds) return
-	editor.updateShape({
-		id,
-		type: spill.type,
-		x: spill.x + (pageX - bounds.minX),
-		y: spill.y + (pageY - bounds.minY),
-	})
-}
-
-function layoutHistory(editor: Editor, shape: NodeShape, ids: TLShapeId[]) {
-	const bounds = editor.getShapePageBounds(shape.id)
-	if (!bounds) return
-	let x = bounds.maxX + GAP
-	// Newest id is first, so it sits beside the node. Each older one moves one slot right.
-	editor.run(() => {
-		for (const id of ids) {
-			if (!editor.getShape(id)) continue
-			placeAtPage(editor, id, x, bounds.minY)
-			x += shapeWidth(editor, id) + GAP
-		}
-	})
-}
-
-/**
- * When the main output port has no wire, put the value on a text or image
- * shape beside the node. Each run inserts the newest response next to the node
- * and pushes the previous ones further right, so the whole history is visible.
+ * When the main output port has no wire, put the value on a single text or image shape
+ * beside the node (WP23 Part A: at most one output label on the canvas). Each run replaces
+ * that one shape's content — reusing the same text shape in place, or recreating the image
+ * shape since a fresh asset is unavoidable — instead of adding another shape beside it. Any
+ * extra shapes left over from an older build (back when every run added one) are removed too.
  */
 export async function spillUnconnectedOutput(editor: Editor, shape: NodeShape, outputs: ExecutionResult) {
 	const ports = getNodePorts(editor, shape)
@@ -75,46 +32,53 @@ export async function spillUnconnectedOutput(editor: Editor, shape: NodeShape, o
 	if (value == null || value === STOP_EXECUTION || value === '') return
 	const raw = String(value)
 
-	// Migrate a legacy single spillId into the history list.
-	const prior: TLShapeId[] = (
+	// Every spill shape from a past run (the current single one, or — migrating an older
+	// canvas — the legacy single spillId, or the WP14-era spillIds history list).
+	const priorIds: TLShapeId[] = (
 		(shape.props.spillIds as string[] | undefined) ??
 		(shape.props.spillId ? [shape.props.spillId as string] : [])
 	).filter((id) => !!editor.getShape(id as TLShapeId)) as TLShapeId[]
 
+	const isImage = /^(data:image\/|\/api\/images\/|\/examples\/)/.test(raw) || out.dataType === 'image'
+
 	let freshId: TLShapeId
-	if (/^(data:image\/|\/api\/images\/|\/examples\/)/.test(raw) || out.dataType === 'image') {
+	if (isImage) {
+		// A fresh asset is unavoidable for an image; drop whatever was there before placing it.
+		if (priorIds.length) editor.deleteShapes(priorIds)
 		freshId = await placeImageOnCanvas(editor, shape, raw, { maxSize: 360, name: 'node-output' })
 	} else {
-		// Text over the cap is spilled to a file; the shape shows a preview.
 		const label: unknown = shape.props.label
 		const name = typeof label === 'string' && label.trim() ? label : shape.props.node.type
 		const { text } = await capTextForCanvas(name, raw)
-		freshId = createShapeId()
-		const bounds = editor.getShapePageBounds(shape.id)
-		editor.createShape({
-			id: freshId,
-			type: 'text',
-			x: (bounds?.maxX ?? shape.x) + GAP,
-			y: bounds?.minY ?? shape.y,
-			props: {
-				richText: toRichText(text),
-				autoSize: false,
-				w: TEXT_W,
-				size: 'm',
-			},
-		})
+		// Reuse the first prior shape that is still a text shape; drop every other leftover.
+		const existingText = priorIds.map((id) => editor.getShape(id)).find((s) => s?.type === 'text')
+		const toDrop = priorIds.filter((id) => id !== existingText?.id)
+		if (toDrop.length) editor.deleteShapes(toDrop)
+		if (existingText) {
+			freshId = existingText.id as TLShapeId
+			editor.updateShape({ id: freshId, type: 'text', props: { richText: toRichText(text) } })
+		} else {
+			freshId = createShapeId()
+			const bounds = editor.getShapePageBounds(shape.id)
+			editor.createShape({
+				id: freshId,
+				type: 'text',
+				x: (bounds?.maxX ?? shape.x) + GAP,
+				y: bounds?.minY ?? shape.y,
+				props: {
+					richText: toRichText(text),
+					autoSize: false,
+					w: TEXT_W,
+					size: 'm',
+				},
+			})
+		}
 	}
 
-	// Newest first; drop the oldest past the cap.
-	const ids = [freshId, ...prior].slice(0, MAX_HISTORY)
-	const dropped = [freshId, ...prior].slice(MAX_HISTORY)
-	if (dropped.length) editor.deleteShapes(dropped)
-
-	layoutHistory(editor, shape, ids)
 	editor.select(shape.id)
 	editor.updateShape<NodeShape>({
 		id: shape.id,
 		type: 'node',
-		props: { spillIds: ids, spillId: undefined },
+		props: { spillIds: [freshId], spillId: undefined },
 	})
 }

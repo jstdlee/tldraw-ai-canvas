@@ -13,8 +13,9 @@ import {
 	PublicProviderConfig,
 	ReasoningEffort,
 } from '../../shared/aiConfig'
-import { UiField, UiTextInput } from '../ui'
-import { $aiConfig, fetchProviderModels, saveAIConfig } from './aiConfig'
+import { SEARCH_PROVIDER_IDS, SEARCH_PROVIDER_LABELS } from '../../shared/search'
+import { UiField, UiSecretInput, UiTextInput } from '../ui'
+import { $aiConfig, fetchProviderModels, fetchSearchConfig, saveAIConfig, saveSearchConfig, type SearchConfig } from './aiConfig'
 import { $modelHealth, refreshModelHealth } from './modelHealth'
 
 type DraftProvider = PublicProviderConfig & { apiKey?: string }
@@ -44,6 +45,10 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 	const [status, setStatus] = useState<{ kind: 'info' | 'error'; text: string } | null>(null)
 	const [busy, setBusy] = useState(false)
 	const [manualModel, setManualModel] = useState('')
+	// WP24: Search providers (Exa/Tavily/Brave), a small config of its own saved as it changes,
+	// not gated behind this dialog's "Save" (which only covers AI providers/models).
+	const [searchKeys, setSearchKeys] = useState<SearchConfig>({})
+	const [searchStatus, setSearchStatus] = useState<string | null>(null)
 
 	const provider = providers.find((p) => p.id === selectedId) ?? null
 	const providerModels = models.filter((m) => m.providerId === selectedId)
@@ -141,6 +146,21 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 	useEffect(() => {
 		refreshModelHealth(true)
 	}, [])
+
+	useEffect(() => {
+		fetchSearchConfig()
+			.then(setSearchKeys)
+			.catch(() => {})
+	}, [])
+
+	const setSearchKey = (id: (typeof SEARCH_PROVIDER_IDS)[number], keyRef: string | undefined) => {
+		const next = { ...searchKeys, [id]: keyRef ? { keyRef } : undefined }
+		setSearchKeys(next)
+		setSearchStatus(null)
+		saveSearchConfig(next)
+			.then(() => setSearchStatus('Saved.'))
+			.catch((e) => setSearchStatus(`Save failed: ${(e as Error).message}`))
+	}
 
 	const modelHealth = useValue('model health', () => $modelHealth.get(), [])
 
@@ -434,6 +454,24 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 							)
 						})}
 					</div>
+				</div>
+
+				<div className="ai-defaults">
+					<div className="ai-defaults__title">Search providers</div>
+					<div className="ai-grid">
+						{SEARCH_PROVIDER_IDS.map((id) => (
+							<UiField key={id} label={SEARCH_PROVIDER_LABELS[id]} inline>
+								<UiSecretInput
+									value={searchKeys[id]?.keyRef}
+									onChange={(keyRef) => setSearchKey(id, keyRef)}
+									placeholder="API key (optional)"
+								/>
+							</UiField>
+						))}
+					</div>
+					<span className="ai-muted">
+						Used by the Web search card unless the card has its own key. {searchStatus}
+					</span>
 				</div>
 			</div>
 			<div className="ai-dialog__footer">

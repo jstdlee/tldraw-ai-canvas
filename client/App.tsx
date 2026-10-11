@@ -66,7 +66,7 @@ import { FindBar } from './clips/FindBar'
 import { installKeepGroup } from './pipeline/groups/KeepGroupShapeUtil'
 import { ShellChrome } from './shell/ShellChrome'
 import { $featuresOpen, $libraryRail, $mapOpen, saveBackup, writeLibraryRail } from './shell/shellState'
-import { IconSparkle } from './ui'
+import { FloatingPanel, IconClose, IconSparkle, UiIconButton } from './ui'
 import { ImageEditorModal } from './clips/ImageEditor'
 import { RatioImageShapeUtil } from './clips/shapeOptions'
 
@@ -327,16 +327,29 @@ function App() {
 				<ImageEditorModal editor={editor} />
 				<ModelHealthToasts />
 				{panels.chat && app && (
-					<div className="chat-float-modal" role="dialog" aria-label="Agent chat">
-						<button className="chat-float-close" type="button" title="Close" onClick={() => togglePanel('chat')}>
-							×
-						</button>
+					<FloatingPanel
+						storageKey="chat"
+						ariaLabel="Agent chat"
+						className="chat-float-panel"
+						defaultRect={{ w: 380, h: Math.min(640, (typeof window !== 'undefined' ? window.innerHeight : 800) - 32) }}
+						minWidth={300}
+						minHeight={260}
+						onClose={() => togglePanel('chat')}
+						header={
+							<div className="chat-float-bar">
+								<strong>
+									<IconSparkle size={16} /> Agent chat
+								</strong>
+								<UiIconButton icon={<IconClose />} title="Close" onClick={() => togglePanel('chat')} />
+							</div>
+						}
+					>
 						<ErrorBoundary fallback={ChatPanelFallback}>
 							<TldrawAgentAppContextProvider app={app}>
 								<ChatPanel />
 							</TldrawAgentAppContextProvider>
 						</ErrorBoundary>
-					</div>
+					</FloatingPanel>
 				)}
 				{!panels.chat && (
 					<button

@@ -227,4 +227,9 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'Waits a number of milliseconds before passing its input on.',
 		keywords: ['delay', 'wait', 'pause', 'timer'],
 	},
+	web_search: {
+		title: 'Web search',
+		description: 'Searches the web with Exa, Tavily, or Brave and returns a list of results.',
+		keywords: ['web', 'search', 'exa', 'tavily', 'brave', 'google', 'results', 'find'],
+	},
 }

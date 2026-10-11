@@ -43,7 +43,9 @@ body {
 .chat-panel {
 	display: flex;
 	flex-direction: column;
-	height: 100vh;
+	/* WP23 Part E: lives inside a FloatingPanel now (own fixed size), not the page column that
+	   justified 100vh. */
+	height: 100%;
 	font-size: 14px;
 	background-color: var(--tl-color-panel);
 	border-left: 1px solid var(--tl-color-low);
@@ -422,6 +424,74 @@ body {
 	font-style: italic;
 }
 
+/* WP23 Part F: a Build-with-AI plan shown as a message in the chat thread, when the chat is
+ * sent with cards selected. Sits below the chat history, inside the same scroll area. */
+.ChatPlanMessage {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px;
+	border-radius: 8px;
+	background-color: var(--tl-color-muted-1);
+	box-shadow: var(--tl-shadow-1);
+	font-size: 12px;
+}
+
+.ChatPlanMessage-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+	color: var(--tl-color-text-1);
+}
+
+.ChatPlanMessage-plan {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.ChatPlanMessage-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 2px;
+}
+
+/* WP23 Part F: the chip above the chat input showing "Drawing" / "Building with N cards". */
+.chat-mode-chip {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 4px 8px;
+	margin-bottom: 4px;
+	border-radius: 6px;
+	background: var(--tl-color-muted-1);
+	color: var(--tl-color-text-2);
+	font-size: 11px;
+}
+
+.chat-mode-chip button {
+	all: unset;
+	cursor: pointer;
+	color: var(--tl-color-text-2);
+	font-size: 11px;
+	font-weight: 500;
+	padding: 2px 6px;
+	border-radius: 4px;
+}
+
+.chat-mode-chip button:hover {
+	background: var(--tl-color-muted-2);
+	color: var(--tl-color-text-1);
+}
+
+.chat-mode-chip.is-building {
+	background: color-mix(in srgb, var(--tl-color-selected) 16%, var(--tl-color-muted-1));
+	color: var(--tl-color-text-1);
+}
+
 .chat-history-group {
 	display: flex;
 	flex-direction: column;
@@ -573,24 +643,6 @@ body {
 	font-size: 12px;
 	font-family: 'Inter', sans-serif;
 	font-weight: 400;
-}
-
-/* WP22 B5: hint shown in the canvas agent's chat input when the selection has cards. */
-.chat-cards-hint {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 6px 8px;
-	margin-bottom: 4px;
-	border-radius: 6px;
-	background: var(--tl-color-muted-1);
-	color: var(--tl-color-text-2);
-	font-size: 11px;
-}
-
-.chat-cards-hint span {
-	flex: 1;
 }
 
 /* Prompt Tags */

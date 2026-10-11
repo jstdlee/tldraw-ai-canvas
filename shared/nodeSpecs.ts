@@ -956,6 +956,34 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			chips: ['Wait 1 second', 'Wait 500ms'],
 		},
 	},
+	web_search: {
+		type: 'web_search',
+		title: title('web_search'),
+		group: groupOf('web_search'),
+		purpose: purpose('web_search'),
+		useWhen: 'Use to search the live web (Exa, Tavily, or Brave) and get back a ranked list of pages.',
+		inputs: [port('query', 'text', 'Overrides the query field when wired.')],
+		outputs: [
+			port('output', 'text', 'Markdown numbered list: "1. [title](url) — snippet".'),
+			port('results', 'text', 'The raw results as a JSON array.'),
+			port('urls', 'text', 'Just the URLs, one per line.'),
+			port('answer', 'text', "Tavily's short generated answer, when requested and returned; empty otherwise."),
+		],
+		fields: [
+			field('provider', 'enum', 'Provider', 'Which search API to call.', ['exa', 'tavily', 'brave'], 'exa'),
+			field('query', 'longtext', 'Query', 'The search query. Supports {{vars}}.'),
+			field('count', 'number', 'Results', 'How many results to ask for (1–20).', undefined, 5),
+			field('tavilyDepth', 'enum', 'Depth', 'Tavily only: search depth.', ['basic', 'advanced'], 'basic'),
+			field('tavilyIncludeAnswer', 'boolean', 'Include answer', 'Tavily only: also ask for a short generated answer.'),
+			field('exaIncludeText', 'boolean', 'Include page text', "Exa only: fetch each result's extracted page text."),
+			field('keyRef', 'text', 'Key', 'API key for the chosen provider. Secret — never set or shown by AI.', undefined, undefined, false),
+		],
+		assistant: {
+			role: 'You choose the provider, write the search query, and set how many results to ask for.',
+			chips: ['Search the web for…', 'Find recent news about…', 'Use Tavily and include an answer'],
+			rules: ['Never write a real API key; leave the key field for the user to fill in.'],
+		},
+	},
 }
 
 /** Whether every NODE_PORTS type has a spec (used by the coverage test). */

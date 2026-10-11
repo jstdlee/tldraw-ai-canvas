@@ -267,6 +267,10 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'url_in', x: 0, y: 0, props: { url: 'www.wikipedia.org', fetchBody: true } },
 		{ id: 'b', type: 'summarize', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
+	step('web-search', 'Search the web', 'A prompt feeds Web search. Add a key in AI providers → Search providers (or on the card) first.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'latest open source AI model releases' } },
+		{ id: 'b', type: 'web_search', x: 460, y: 0, props: { provider: 'exa', count: 5 } },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'query' }]),
 	step('video-autoplay', 'Video link', 'The prompt is the video URL. Turn on autoplay on the video node. The browser mutes autoplay.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4' } },
 		{ id: 'b', type: 'video', x: 460, y: 0, props: { autoplay: true } },

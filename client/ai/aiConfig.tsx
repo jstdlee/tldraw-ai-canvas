@@ -63,6 +63,23 @@ export async function fetchProviderModels(
 	return (await readJson<{ models: { id: string; label?: string; vision?: boolean }[] }>(res)).models
 }
 
+/** WP24: the "Search providers" section's own small config (Exa/Tavily/Brave key refs). */
+export type SearchConfig = Partial<Record<'exa' | 'tavily' | 'brave', { keyRef?: string }>>
+
+export async function fetchSearchConfig(): Promise<SearchConfig> {
+	return readJson<SearchConfig>(await fetch('/api/search-config'))
+}
+
+export async function saveSearchConfig(config: SearchConfig): Promise<SearchConfig> {
+	return readJson<SearchConfig>(
+		await fetch('/api/search-config', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(config),
+		})
+	)
+}
+
 export function useAIConfig() {
 	return useValue('ai config', () => $aiConfig.get(), [])
 }

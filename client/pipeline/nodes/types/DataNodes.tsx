@@ -31,11 +31,11 @@ import {
 	UiNumberInput,
 	UiSegmented,
 	UiSelect,
-	UiTable,
 	UiTextArea,
 	UiTextInput,
 } from '../../../ui'
 import { IconChevronDown, IconChevronRight, IconClose, IconGroup, IconPlus, IconTable, IconUpload } from '../../../ui/icons'
+import { ExpandableTable, FieldMax, ImageZoom, TableZoom } from '../../editors/LargeEditor'
 import { NodeMultiSelect, PortRow, stopEvent, NodeSelect, useInputConnected, useWireField, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -854,7 +854,7 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 							))}
 						</NodeRow>
 					)}
-					<UiTable columns={preview.headers} rows={preview.rows} maxRows={50} />
+					<ExpandableTable title="DataPipe" columns={preview.headers} rows={preview.rows} maxRows={50} />
 					<div className="NodeHint">{node.lastInfo}</div>
 				</>
 			) : (
@@ -1201,6 +1201,7 @@ function ChartTitlesSection({
 function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	const editor = useEditor()
 	const ref = useRef<HTMLDivElement>(null)
+	const [zoomOpen, setZoomOpen] = useState(false)
 	const set = (patch: Partial<ChartNode>) => updateNode<ChartNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
 	// Prefer the wired table. The sample text on the node is only a fallback.
 	const source = useValue(
@@ -1378,7 +1379,13 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 			) : columns.yCols.length === 0 ? (
 				<UiEmpty text="Pick a number column for Y" />
 			) : (
-				<div ref={ref} className="ChartNode-view" />
+				<div className="ChartNode-viewWrap">
+					<div ref={ref} className="ChartNode-view" />
+					{node.imageUrl && <FieldMax title="Open the chart" onClick={() => setZoomOpen(true)} />}
+				</div>
+			)}
+			{zoomOpen && node.imageUrl && (
+				<ImageZoom src={node.imageUrl} onClose={() => setZoomOpen(false)} editor={editor} nextTo={shape} />
 			)}
 		</div>
 	)
@@ -1401,6 +1408,24 @@ function formatFileSize(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** The Profile card's per-column stats as a table, shared by `execute` (the CSV output) and
+ * the card's own full-size table view (WP23 Part D). */
+function profileTableRows(profiles: ColumnProfile[]): { headers: string[]; rows: string[][] } {
+	const headers = ['column', 'type', 'filled_pct', 'empty_count', 'distinct_count', 'min', 'max', 'mean', 'top']
+	const rows = profiles.map((p) => [
+		p.name,
+		p.type,
+		String(p.filledPct),
+		String(p.emptyCount),
+		String(p.distinctCount),
+		p.min ?? '',
+		p.max ?? '',
+		p.mean != null ? String(p.mean) : '',
+		p.top.map((t) => `${t.value} (${t.count})`).join('; '),
+	])
+	return { headers, rows }
 }
 
 export class ProfileNodeDefinition extends NodeDefinition<ProfileNode> {
@@ -1430,19 +1455,7 @@ export class ProfileNodeDefinition extends NodeDefinition<ProfileNode> {
 		const text = getInputText(inputs, 'data') || node.text
 		try {
 			const table = parseTable(text, detectFormat(text, node.format))
-			const profiles = profileTable(table)
-			const headers = ['column', 'type', 'filled_pct', 'empty_count', 'distinct_count', 'min', 'max', 'mean', 'top']
-			const rows = profiles.map((p) => [
-				p.name,
-				p.type,
-				String(p.filledPct),
-				String(p.emptyCount),
-				String(p.distinctCount),
-				p.min ?? '',
-				p.max ?? '',
-				p.mean != null ? String(p.mean) : '',
-				p.top.map((t) => `${t.value} (${t.count})`).join('; '),
-			])
+			const { headers, rows } = profileTableRows(profileTable(table))
 			const output = formatTable({ headers, rows }, 'csv')
 			updateNode<ProfileNode>(this.editor, shape, (n) => ({ ...n, error: null, lastOutput: output }), false)
 			return { output }
@@ -1555,6 +1568,8 @@ function ProfileComponent({ shape, node }: NodeComponentProps<ProfileNode>) {
 	}, [effectiveText, node.format])
 	const columns = useMemo(() => (table ? profileTable(table) : []), [table])
 	const fileSize = useMemo(() => formatFileSize(new TextEncoder().encode(effectiveText).length), [effectiveText])
+	const [tableOpen, setTableOpen] = useState(false)
+	const profileAsTable = useMemo(() => profileTableRows(columns), [columns])
 	return (
 		<>
 			{/* WP21 follow-up: "data" is a dedicated port, separate from the wirable "text"
@@ -1581,15 +1596,26 @@ function ProfileComponent({ shape, node }: NodeComponentProps<ProfileNode>) {
 			</WireField>
 			{table ? (
 				<>
-					<div className="NodeHint">
-						{table.rows.length} row{table.rows.length === 1 ? '' : 's'} × {table.headers.length} column
-						{table.headers.length === 1 ? '' : 's'} · {fileSize}
+					<div className="NodeHint Profile-hint">
+						<span>
+							{table.rows.length} row{table.rows.length === 1 ? '' : 's'} × {table.headers.length} column
+							{table.headers.length === 1 ? '' : 's'} · {fileSize}
+						</span>
+						<FieldMax title="Open the full profile table" onClick={() => setTableOpen(true)} />
 					</div>
 					<div className="Profile-list NodeScroll" onPointerDown={stopEvent}>
 						{columns.map((column) => (
 							<ProfileColumnRow key={column.name} column={column} table={table} />
 						))}
 					</div>
+					{tableOpen && (
+						<TableZoom
+							title="Profile"
+							columns={profileAsTable.headers}
+							rows={profileAsTable.rows}
+							onClose={() => setTableOpen(false)}
+						/>
+					)}
 				</>
 			) : (
 				<UiEmpty text="Give this card a table to profile" />

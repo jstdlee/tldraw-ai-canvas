@@ -1,14 +1,19 @@
-import { FormEventHandler, useCallback, useRef } from 'react'
+import { FormEventHandler, useCallback, useRef, useState } from 'react'
 import { useValue } from 'tldraw'
 import { openProvidersDialog } from '../ai/aiConfig'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
 import { ChatHistory } from './chat-history/ChatHistory'
 import { ChatInput } from './ChatInput'
+import { ChatPlanMessage } from './ChatPlanMessage'
+import { ChatPlanEntry } from './chatPlan'
 import { TodoList } from './TodoList'
 
 export function ChatPanel() {
 	const agent = useAgent()
 	const inputRef = useRef<HTMLTextAreaElement>(null)
+	// WP23 Part F: Build-with-AI plan messages from sending the chat with cards selected —
+	// shown in the thread instead of going through the drawing agent.
+	const [planEntries, setPlanEntries] = useState<ChatPlanEntry[]>([])
 
 	const handleSubmit = useCallback<FormEventHandler<HTMLFormElement>>(
 		async (e) => {
@@ -56,10 +61,24 @@ export function ChatPanel() {
 					+
 				</button>
 			</div>
-			<ChatHistory agent={agent} />
+			<ChatHistory
+				agent={agent}
+				trailing={planEntries.map((entry) => (
+					<ChatPlanMessage
+						key={entry.id}
+						editor={agent.editor}
+						entry={entry}
+						onRevise={() => inputRef.current?.focus()}
+					/>
+				))}
+			/>
 			<div className="chat-input-container">
 				<TodoList agent={agent} />
-				<ChatInput handleSubmit={handleSubmit} inputRef={inputRef} />
+				<ChatInput
+					handleSubmit={handleSubmit}
+					inputRef={inputRef}
+					onPlan={(entry) => setPlanEntries((entries) => [...entries, entry])}
+				/>
 			</div>
 		</div>
 	)

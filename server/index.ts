@@ -23,6 +23,9 @@ import { createSecret, deleteSecret, getSecretValue } from './secretsStore'
 import { DbError, getSchema, normalizeConn, runQuery, testConnection } from './db'
 import { DbConn } from '../shared/dbConn'
 import { resolveSecret } from '../shared/secrets'
+import { SearchOptions, SearchProviderId } from '../shared/search'
+import { runSearch } from './search'
+import { loadSearchConfig, saveSearchConfig, SearchConfig } from './searchConfig'
 import { importRemoteImage, probeImageUrl, readImage, resolveImage, saveImage, toDataUrl } from './images'
 import { generateImage, ImageGenParams } from './imageGen'
 import { isValidFileId, MAX_FILE_BYTES, readFile, saveFile } from './files'
@@ -191,6 +194,31 @@ app.get('/api/unfurl', async (c) => {
 	const url = c.req.query('url')
 	if (!url) throw new ConfigError('url is required')
 	return c.json(await unfurl(url))
+})
+
+// --- Web search (WP24): Exa, Tavily, Brave ----------------------------------
+
+app.get('/api/search-config', (c) => c.json(loadSearchConfig()))
+
+app.put('/api/search-config', async (c) => {
+	const body = (await c.req.json()) as SearchConfig
+	const next: SearchConfig = {}
+	for (const id of ['exa', 'tavily', 'brave'] as const) {
+		if (body[id]?.keyRef) next[id] = { keyRef: body[id]!.keyRef }
+	}
+	saveSearchConfig(next)
+	return c.json(next)
+})
+
+app.post('/api/search', async (c) => {
+	const body = (await c.req.json()) as {
+		provider: SearchProviderId
+		query: string
+		keyRef?: string
+		count?: number
+		options?: SearchOptions
+	}
+	return c.json(await runSearch({ ...body, signal: c.req.raw.signal }))
 })
 
 // --- Agent (canvas-editing chat) -------------------------------------------

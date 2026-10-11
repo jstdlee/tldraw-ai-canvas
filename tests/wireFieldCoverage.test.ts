@@ -18,6 +18,7 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	text_tool: ['op', 'a', 'b'],
 	http: ['method', 'query', 'headers', 'auth', 'extractText'],
 	download: ['fileName'],
+	web_search: ['provider', 'count', 'tavilyDepth', 'tavilyIncludeAnswer', 'exaIncludeText'],
 	net_tool: ['tool', 'option'],
 	postgres: ['mode', 'sql', 'csv', 'sourceUrl'],
 	database: ['source', 'targetTable', 'loadMode', 'upsertKey'],

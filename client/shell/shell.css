@@ -92,11 +92,20 @@
 	background: var(--tl-color-selected);
 }
 
-/* The chart fills the node body: it grows with the card and the node font does not change it. */
-.ChartNode-view {
+/* The chart fills the node body: it grows with the card and the node font does not change it.
+   WP23 Part D: wrapped in .ChartNode-viewWrap (position: relative) so a hover FieldMax can
+   open the rendered chart image full-size; the sizing that used to live on .ChartNode-view
+   moved up to the wrapper, and the chart div itself just fills it. */
+.ChartNode-viewWrap {
+	position: relative;
 	flex: 1 1 auto;
 	min-height: 140px;
 	margin: 4px 8px 8px;
+}
+
+.ChartNode-view {
+	width: 100%;
+	height: 100%;
 }
 
 .TerminalNode-log {

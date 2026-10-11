@@ -39,14 +39,26 @@ export function wirableFields(spec: NodeSpec | undefined): FieldSpec[] {
 }
 
 /** DataPipe (table): only the current op's own params are wirable (the rest aren't shown or
- * used). Returns undefined (no narrowing) for every other node type. */
+ * used). WP24: Web search only shows (and so only wires) the current provider's own options.
+ * Returns undefined (no narrowing) for every other node type. */
 export function allowedFieldKeysFor(
 	type: string,
 	node: Record<string, unknown>
 ): Set<string> | undefined {
-	if (type !== 'table') return undefined
-	const spec = opSpec(String(node.op ?? ''))
-	return new Set((spec?.params ?? []).map((param) => param.field))
+	if (type === 'table') {
+		const spec = opSpec(String(node.op ?? ''))
+		return new Set((spec?.params ?? []).map((param) => param.field))
+	}
+	if (type === 'web_search') {
+		const provider = String(node.provider ?? '')
+		return new Set([
+			'provider',
+			'count',
+			...(provider === 'tavily' ? ['tavilyDepth', 'tavilyIncludeAnswer'] : []),
+			...(provider === 'exa' ? ['exaIncludeText'] : []),
+		])
+	}
+	return undefined
 }
 
 /** The wirable fields for this exact node (spec fields, narrowed by DataPipe's current op). */

@@ -61,6 +61,11 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	url_in: { in: [], out: ['output'], fields: ['url', 'fetchBody'] },
 	sleep: { in: ['input'], out: ['output'], fields: ['ms'] },
 	image_gen: { in: ['prompt', 'image', 'model', 'system', 'params'], out: ['output', 'images'], fields: ['model', 'prompt', 'n', 'size', 'negative', 'seed'] },
+	web_search: {
+		in: ['query'],
+		out: ['output', 'results', 'urls', 'answer'],
+		fields: ['provider', 'query', 'count', 'tavilyDepth', 'tavilyIncludeAnswer', 'exaIncludeText', 'keyRef'],
+	},
 }
 
 export function catalogPrompt(): string {

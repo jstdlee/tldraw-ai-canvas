@@ -247,3 +247,41 @@ export function apiProviderModels(provider: { kind: string; baseURL?: string; ke
 		{ provider: { id: 'adhoc', name: 'adhoc', enabled: true, ...provider } }
 	)
 }
+
+// --- Web search (WP24): Exa, Tavily, Brave ----------------------------------
+
+export interface SearchResultItem {
+	title: string
+	url: string
+	snippet: string
+	published?: string
+	score?: number
+	content?: string
+}
+
+export interface SearchOptions {
+	tavilyDepth?: 'basic' | 'advanced'
+	tavilyIncludeAnswer?: boolean
+	exaIncludeText?: boolean
+}
+
+export interface SearchParams {
+	provider: 'exa' | 'tavily' | 'brave'
+	query: string
+	/** The card's own saved key; falls back to the provider default from the AI providers dialog. */
+	keyRef?: string
+	count?: number
+	options?: SearchOptions
+}
+
+export interface SearchResult {
+	results: SearchResultItem[]
+	provider: string
+	ms: number
+	answer?: string
+}
+
+/** Web search node: the local server calls Exa/Tavily/Brave (keys never reach the browser). */
+export function apiSearch(params: SearchParams, signal?: AbortSignal) {
+	return postJson<SearchResult>('/api/search', params, signal)
+}

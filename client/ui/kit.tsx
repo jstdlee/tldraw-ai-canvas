@@ -1,5 +1,5 @@
 import classNames from 'classnames'
-import { forwardRef, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode, Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useContainerIfExists } from '@tldraw/editor'
@@ -15,13 +15,16 @@ import {
 	TldrawUiSlider,
 } from 'tldraw'
 import { clipCell, isNumericCell, tableWindow } from '../../shared/clipCell'
+import { filterSelectOptions } from '../../shared/selectFilter'
 import {
 	IconAlert,
 	IconCheck,
 	IconChevronDown,
 	IconChevronRight,
+	IconChevronUp,
 	IconClose,
 	IconCopy,
+	IconSearch,
 	IconSparkle,
 } from './icons'
 
@@ -154,27 +157,87 @@ function optionGroups<T extends string>(options: UiSelectOption<T>[]) {
 	return groups
 }
 
+/** A long menu (WP23 Part C) gets a search box once it has more than this many options. */
+const SELECT_SEARCH_THRESHOLD = 10
+
+/** Group `options` (keeping group headings), filtered by `query` when there's one to filter by. */
+function filteredOptionGroups<T extends string>(options: UiSelectOption<T>[], query: string) {
+	const groups = optionGroups(options)
+	if (!query.trim()) return groups
+	return groups
+		.map((group) => ({ group: group.group, items: filterSelectOptions(group.items, query) }))
+		.filter((group) => group.items.length > 0)
+}
+
+/** Autofocused search box at the top of a long menu: filters by label/hint/group text;
+ * ↓ moves focus into the first visible item, Enter picks it. */
+function SelectSearchBox({
+	query,
+	onQuery,
+	listRef,
+}: {
+	query: string
+	onQuery: (query: string) => void
+	listRef: { current: HTMLElement | null }
+}) {
+	return (
+		<div className="UiSelect-search">
+			<IconSearch size={13} />
+			<input
+				autoFocus
+				type="text"
+				className="UiSelect-searchInput"
+				placeholder="Search…"
+				value={query}
+				onPointerDown={stopPointer}
+				onChange={(event) => onQuery(event.target.value)}
+				onKeyDown={(event) => {
+					stopKey(event)
+					if (event.key === 'ArrowDown') {
+						event.preventDefault()
+						listRef.current?.querySelector<HTMLElement>('.UiSelect-item:not(:disabled)')?.focus()
+					} else if (event.key === 'Enter') {
+						event.preventDefault()
+						listRef.current?.querySelector<HTMLElement>('.UiSelect-item:not(:disabled)')?.click()
+					}
+				}}
+			/>
+		</div>
+	)
+}
+
+/** Scrolls the current (`.is-on`) item into view when the menu holding `containerRef` opens
+ * (`active` becomes true) — or, for the Radix path (always mounted-when-open), on mount. */
+function useScrollSelectedIntoView(containerRef: { current: HTMLElement | null }, active = true) {
+	useEffect(() => {
+		if (!active) return
+		containerRef.current?.querySelector<HTMLElement>('.UiSelect-item.is-on, .UiMenu-item.is-on')?.scrollIntoView({ block: 'nearest' })
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [active])
+}
+
 function SelectItems<T extends string>({
-	options,
+	groups,
 	isOn,
 	onPick,
 	stayOpen,
 }: {
-	options: UiSelectOption<T>[]
+	groups: { group?: string; items: UiSelectOption<T>[] }[]
 	isOn: (option: UiSelectOption<T>) => boolean
 	onPick: (value: T) => void
 	stayOpen?: boolean
 }) {
-	if (options.length === 0) return <div className="UiSelect-empty">No choices</div>
+	if (groups.every((group) => group.items.length === 0)) return <div className="UiSelect-empty">No choices</div>
 	return (
 		<>
-			{optionGroups(options).map((group, index) => (
+			{groups.map((group, index) => (
 				<TldrawUiDropdownMenuGroup key={`${group.group ?? ''}:${index}`}>
 					{group.group && <div className="UiSelect-group">{group.group}</div>}
 					{group.items.map((option) => (
 						<TldrawUiDropdownMenuItem key={option.value} noClose={stayOpen}>
 							<TldrawUiButton
 								type="menu"
+								className={classNames('UiSelect-item', isOn(option) && 'is-on')}
 								disabled={option.disabled}
 								onPointerDown={stopPointer}
 								onClick={() => {
@@ -196,6 +259,39 @@ function SelectItems<T extends string>({
 	)
 }
 
+/** The body of a UiSelect/UiMultiSelect dropdown (Radix path): a search box once there are
+ * more than `SELECT_SEARCH_THRESHOLD` options, the (filtered) grouped items, and keeping the
+ * current item scrolled into view when the menu opens. */
+function SelectDropdownBody<T extends string>({
+	options,
+	isOn,
+	onPick,
+	stayOpen,
+}: {
+	options: UiSelectOption<T>[]
+	isOn: (option: UiSelectOption<T>) => boolean
+	onPick: (value: T) => void
+	stayOpen?: boolean
+}) {
+	const [query, setQuery] = useState('')
+	const listRef = useRef<HTMLDivElement>(null)
+	const showSearch = options.length > SELECT_SEARCH_THRESHOLD
+	const groups = useMemo(() => filteredOptionGroups(options, showSearch ? query : ''), [options, query, showSearch])
+	useScrollSelectedIntoView(listRef)
+	return (
+		<>
+			{showSearch && <SelectSearchBox query={query} onQuery={setQuery} listRef={listRef} />}
+			<div ref={listRef}>
+				<SelectItems groups={groups} isOn={isOn} onPick={onPick} stayOpen={stayOpen} />
+			</div>
+		</>
+	)
+}
+
+/**
+ * The select button. Radix's Trigger (asChild) passes a ref plus its own handlers and
+ * aria/data props; they must reach the <button>, or the menu has no anchor and opens off-screen.
+ */
 function SelectTrigger({
 	shown,
 	title,
@@ -265,21 +361,33 @@ function FallbackMenu({
 	onFocus?: () => void
 }) {
 	const [open, setOpen] = useState(false)
+	const [query, setQuery] = useState('')
 	const buttonRef = useRef<HTMLButtonElement>(null)
 	const menuRef = useRef<HTMLDivElement>(null)
+	const listRef = useRef<HTMLDivElement>(null)
 	const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null)
 	const listId = useId()
+	const showSearch = options.length > SELECT_SEARCH_THRESHOLD
+	const groups = useMemo(() => filteredOptionGroups(options, showSearch ? query : ''), [options, query, showSearch])
 
 	useLayoutEffect(() => {
 		if (!open || !buttonRef.current) return
 		const rect = buttonRef.current.getBoundingClientRect()
 		const width = Math.max(rect.width, 160)
 		const left = Math.min(rect.left, window.innerWidth - width - 8)
-		const menuHeight = Math.min(280, Math.max(1, options.length) * 36 + 8)
+		// Same cap as the kit's own long-menu CSS (min(60vh, 420px)).
+		const menuHeight = Math.min(Math.min(window.innerHeight * 0.6, 420), Math.max(1, options.length) * 36 + 8)
 		const below = rect.bottom + 4
 		const top = below + menuHeight > window.innerHeight - 8 ? Math.max(8, rect.top - menuHeight - 4) : below
 		setBox({ top, left: Math.max(8, left), width })
 	}, [open, options.length])
+
+	useEffect(() => {
+		if (!open) return
+		setQuery('')
+	}, [open])
+
+	useScrollSelectedIntoView(listRef, open)
 
 	useEffect(() => {
 		if (!open) return
@@ -334,32 +442,35 @@ function FallbackMenu({
 						onPointerDown={stopPointer}
 						onWheel={(event) => event.stopPropagation()}
 					>
-						{options.length === 0 && <div className="UiSelect-empty">No choices</div>}
-						{optionGroups(options).map((group, index) => (
-							<div key={`${group.group ?? ''}:${index}`} className="UiMenu-group">
-								{group.group && <div className="UiSelect-group">{group.group}</div>}
-								{group.items.map((option) => {
-									const on = isOn(option)
-									return (
-										<button
-											key={option.value}
-											type="button"
-											className={'UiMenu-item' + (on ? ' is-on' : '')}
-											disabled={option.disabled}
-											onClick={() => {
-												if (option.disabled) return
-												onPick(option.value)
-												if (!stayOpen) setOpen(false)
-											}}
-										>
-											<span className="UiMenu-mark">{on ? <IconCheck size={14} /> : null}</span>
-											<span>{option.label}</span>
-											{option.hint && <span className="UiSelect-hint">{option.hint}</span>}
-										</button>
-									)
-								})}
-							</div>
-						))}
+						{showSearch && <SelectSearchBox query={query} onQuery={setQuery} listRef={listRef} />}
+						<div ref={listRef} className="UiMenu-list">
+							{groups.every((group) => group.items.length === 0) && <div className="UiSelect-empty">No choices</div>}
+							{groups.map((group, index) => (
+								<div key={`${group.group ?? ''}:${index}`} className="UiMenu-group">
+									{group.group && <div className="UiSelect-group">{group.group}</div>}
+									{group.items.map((option) => {
+										const on = isOn(option)
+										return (
+											<button
+												key={option.value}
+												type="button"
+												className={classNames('UiMenu-item UiSelect-item', on && 'is-on')}
+												disabled={option.disabled}
+												onClick={() => {
+													if (option.disabled) return
+													onPick(option.value)
+													if (!stayOpen) setOpen(false)
+												}}
+											>
+												<span className="UiMenu-mark">{on ? <IconCheck size={14} /> : null}</span>
+												<span>{option.label}</span>
+												{option.hint && <span className="UiSelect-hint">{option.hint}</span>}
+											</button>
+										)
+									})}
+								</div>
+							))}
+						</div>
 					</div>,
 					document.body
 				)}
@@ -411,7 +522,7 @@ export function UiSelect<T extends string>({
 				</TldrawUiDropdownMenuTrigger>
 				<TldrawUiDropdownMenuContent side="bottom" align="start" sideOffset={4} alignOffset={0}>
 					<div onPointerDown={stopPointer} onWheel={(event) => event.stopPropagation()}>
-						<SelectItems options={options} isOn={(option) => option.value === value} onPick={onChange} />
+						<SelectDropdownBody options={options} isOn={(option) => option.value === value} onPick={onChange} />
 					</div>
 				</TldrawUiDropdownMenuContent>
 			</TldrawUiDropdownMenuRoot>
@@ -462,7 +573,7 @@ export function UiMultiSelect<T extends string>({
 				</TldrawUiDropdownMenuTrigger>
 				<TldrawUiDropdownMenuContent side="bottom" align="start" sideOffset={4} alignOffset={0}>
 					<div onPointerDown={stopPointer} onWheel={(event) => event.stopPropagation()}>
-						<SelectItems
+						<SelectDropdownBody
 							options={options}
 							isOn={(option) => values.includes(option.value)}
 							onPick={toggle}
@@ -988,18 +1099,33 @@ export function UiErrorBanner({
 	onFix?: () => void
 	onDismiss?: () => void
 }) {
+	// WP23 Part B: expanded by default, with a chevron to fold it to just the title row.
+	const [open, setOpen] = useState(true)
+	const [copyDone, setCopyDone] = useState(false)
 	return (
-		<div className="UiErrorBanner" role="alert" onPointerDown={stopPointer} onKeyDown={stopKey}>
+		<div className={classNames('UiErrorBanner', !open && 'UiErrorBanner_collapsed')} role="alert" onPointerDown={stopPointer} onKeyDown={stopKey}>
 			<IconAlert />
 			<div className="UiErrorBanner-body">
-				<div className="UiErrorBanner-title">{title}</div>
-				<div className="UiErrorBanner-message">{message}</div>
+				<button type="button" className="UiErrorBanner-title" onClick={() => setOpen((was) => !was)}>
+					{open ? <IconChevronUp size={13} /> : <IconChevronDown size={13} />}
+					<span>{title}</span>
+				</button>
+				{open && <div className="UiErrorBanner-message">{message}</div>}
 			</div>
 			<div className="UiErrorBanner-actions">
-				{onCopy && <UiButton size="sm" variant="low" icon={<IconCopy />} label="Copy" title="Copy the error" onClick={onCopy} />}
-				{onFix && (
-					<UiButton size="sm" variant="low" icon={<IconSparkle />} label="Fix with AI" title="Ask AI to fix this error" onClick={onFix} />
+				{onCopy && (
+					<UiIconButton
+						icon={<IconCopy />}
+						title="Copy the error"
+						done={copyDone}
+						onClick={() => {
+							onCopy()
+							setCopyDone(false)
+							window.setTimeout(() => setCopyDone(true), 0)
+						}}
+					/>
 				)}
+				{onFix && <UiIconButton icon={<IconSparkle />} title="Fix with AI" onClick={onFix} />}
 				{onDismiss && <UiIconButton icon={<IconClose />} title="Dismiss" onClick={onDismiss} />}
 			</div>
 		</div>

@@ -7,7 +7,7 @@ import { toImageUrl } from '../../imageOps'
 import { currentRunSignal, startExecution } from '../../execution/executionState'
 import { isAbortError } from '../../../../shared/abort'
 import { placeImageOnCanvas } from '../../placeOnCanvas'
-import { ImageZoom } from '../../editors/LargeEditor'
+import { FieldMax, ImageZoom } from '../../editors/LargeEditor'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor, useFieldPortAnchors } from '../../ports/useFieldPortAnchor'
@@ -329,8 +329,8 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 						{images.map((src, i) => (
 							<div key={src + i} className="ImageGenNode-tile">
 								<NodeImage src={src} alt={`result ${i + 1}`} />
+								<FieldMax title="Open the image" onClick={() => setZoom(src)} />
 								<div className="ImageGenNode-tile-actions">
-									<UiButton size="sm" variant="low" label="Enlarge" onClick={() => setZoom(src)} />
 									<UiButton size="sm" variant="low" label="Place" onClick={() => void placeImageOnCanvas(editor, shape, src)} />
 									<UiButton size="sm" variant="low" label="Use as ref." onClick={() => set({ referenceImage: src })} />
 									<UiButton size="sm" variant="low" label="Download" onClick={() => download(src, `image-${i + 1}.png`)} />
