@@ -58,7 +58,7 @@ import { pastePatch } from '../../../shared/pasteTarget'
 import { openFillAssist } from '../assist'
 import { readClipboard } from '../clipboard'
 import { apiImportImage } from '../api/pipelineApi'
-import { clearNodeRun, nodeRunState } from '../execution/nodeRunState'
+import { clearNodeRun, getNodeRun } from '../execution/nodeRunState'
 import { STOP_EXECUTION } from './types/shared'
 import { $notesAll, $notesOpen, toggleNoteOpen } from '../../shell/shellState'
 
@@ -282,7 +282,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 		[editor]
 	)
 
-	const run = useValue('node run', () => nodeRunState.get(editor)[shape.id], [editor, shape.id])
+	const run = useValue('node run', () => getNodeRun(editor, shape.id), [editor, shape.id])
 
 	// WP17: a wirable field's port only shows on hover, except when the card is selected
 	// (so the ports are easy to find and aim at while wiring).
@@ -298,6 +298,10 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 		() => executionState.get(editor).runningGraph?.size ?? null,
 		[editor]
 	)
+
+	// WP25: tldraw never culls a selected or currently-edited shape, so this only ever hides a
+	// card the user cannot see right now — see `NodeBody`'s own comment.
+	const culled = useValue('culled', () => editor.getCulledShapes().has(shape.id), [editor, shape.id])
 
 	const nodeDefinition = getNodeDefinition(editor, shape.props.node)
 	const [naming, setNaming] = useState(false)
@@ -418,7 +422,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				)}
 				{output !== undefined && shape.props.node.type !== 'subgraph' && <Port shapeId={shape.id} portId="output" />}
 			</div>
-			<NodeBody shape={shape} />
+			<NodeBody shape={shape} culled={culled} />
 			<div className="NodeShape-footer">
 				<UiButton
 					size="sm"

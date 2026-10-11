@@ -1,6 +1,54 @@
 import { useEffect, useRef } from 'react'
-import { TLShapeId, useEditor } from 'tldraw'
-import { clearFieldPortAnchor, setFieldPortAnchor } from './fieldAnchors'
+import { Editor, TLShapeId, useEditor } from 'tldraw'
+import { clearFieldPortAnchor, setFieldPortAnchors } from './fieldAnchors'
+
+/**
+ * WP25: a card can have several wirable fields, each with its own ResizeObserver (one per row —
+ * a row's height follows the card's own font-size setting, not a single card-wide size). Several
+ * can fire in the same frame (a card-wide font change resizes every row at once); writing each
+ * one straight to the anchors atom would invalidate this card's ports/geometry once per field.
+ * This collects a card's pending measurements and flushes them as one `setFieldPortAnchors` call
+ * per rAF, so a multi-field resize costs one write, not N.
+ */
+const pendingByEditor = new WeakMap<Editor, Map<TLShapeId, Map<string, number>>>()
+const rafByEditor = new WeakMap<Editor, Map<TLShapeId, number>>()
+
+function queueAnchorWrite(editor: Editor, shapeId: TLShapeId, key: string, y: number) {
+	let byShape = pendingByEditor.get(editor)
+	if (!byShape) {
+		byShape = new Map()
+		pendingByEditor.set(editor, byShape)
+	}
+	let values = byShape.get(shapeId)
+	if (!values) {
+		values = new Map()
+		byShape.set(shapeId, values)
+	}
+	values.set(key, y)
+
+	let rafIds = rafByEditor.get(editor)
+	if (!rafIds) {
+		rafIds = new Map()
+		rafByEditor.set(editor, rafIds)
+	}
+	if (rafIds.has(shapeId)) return // already scheduled to flush this shape's pending writes
+
+	const id = requestAnimationFrame(() => {
+		rafIds!.delete(shapeId)
+		const pending = byShape!.get(shapeId)
+		byShape!.delete(shapeId)
+		if (pending && pending.size > 0) {
+			setFieldPortAnchors(editor, shapeId, Object.fromEntries(pending))
+		}
+	})
+	rafIds.set(shapeId, id)
+}
+
+/** True when the row unmounts only because its card went off-screen (culled), not because the
+ * field was hidden or the card deleted. */
+function keepWhileCulled(editor: Editor, shapeId: TLShapeId): boolean {
+	return !!editor.getShape(shapeId) && editor.getCulledShapes().has(shapeId)
+}
 
 /**
  * Attach the returned ref to the DOM element of a field's row. While mounted, its vertical
@@ -24,7 +72,7 @@ export function useFieldPortAnchor<T extends HTMLElement>(shapeId: TLShapeId, ke
 			if (!bounds) return
 			// screenToPage already accounts for camera pan/zoom, so the result is in page units.
 			const page = editor.screenToPage({ x: rect.left, y: rect.top + rect.height / 2 })
-			setFieldPortAnchor(editor, shapeId, key, page.y - bounds.y)
+			queueAnchorWrite(editor, shapeId, key, page.y - bounds.y)
 		}
 
 		measure()
@@ -32,6 +80,10 @@ export function useFieldPortAnchor<T extends HTMLElement>(shapeId: TLShapeId, ke
 		observer.observe(el)
 		return () => {
 			observer.disconnect()
+			// WP25: a culled card's body is swapped for a placeholder (NodeBody), which unmounts
+			// this row. Its anchor is relative to the shape, so it stays valid: keep it, so wires
+			// from the off-screen card keep their row, and nothing re-measures on scroll back.
+			if (keepWhileCulled(editor, shapeId)) return
 			clearFieldPortAnchor(editor, shapeId, key)
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,7 +114,7 @@ export function useFieldPortAnchors<T extends HTMLElement>(shapeId: TLShapeId, k
 			const page = editor.screenToPage({ x: rect.left, y: rect.top + rect.height / 2 })
 			const y = page.y - bounds.y
 			// Stacked 8px apart (rule: no two ports sharing a collapsed row's anchor share a point).
-			keys.forEach((key, i) => setFieldPortAnchor(editor, shapeId, key, y + i * 8))
+			keys.forEach((key, i) => queueAnchorWrite(editor, shapeId, key, y + i * 8))
 		}
 
 		measure()
@@ -70,6 +122,7 @@ export function useFieldPortAnchors<T extends HTMLElement>(shapeId: TLShapeId, k
 		observer.observe(el)
 		return () => {
 			observer.disconnect()
+			if (keepWhileCulled(editor, shapeId)) return
 			for (const key of keys) clearFieldPortAnchor(editor, shapeId, key)
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps

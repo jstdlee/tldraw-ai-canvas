@@ -7,7 +7,7 @@ import { Editor } from 'tldraw'
 import { opSpec } from '../../shared/tableOps'
 import { parseTableText } from '../../shared/tableText'
 import { CanvasNodeInfo } from '../../shared/aiPlan'
-import { nodeRunState } from './execution/nodeRunState'
+import { getNodeRun } from './execution/nodeRunState'
 import { NodeShape } from './nodes/NodeShapeUtil'
 import { getNodeInputPortValues, getNodeOutputPortInfo, getNodePortConnections, getNodePorts } from './nodes/nodePorts'
 import { isMultiInfoValue } from './nodes/types/shared'
@@ -53,7 +53,7 @@ export function describeCanvasNode(editor: Editor, shape: NodeShape): CanvasNode
 	const wiredInputs = [...new Set(connections.filter((c) => c.terminal === 'end').map((c) => c.ownPortId))]
 	const label = shape.props.label || node.type
 
-	const run = nodeRunState.get(editor)[shape.id]
+	const run = getNodeRun(editor, shape.id)
 	const ownError = typeof node.error === 'string' ? node.error : undefined
 	const error = ownError ?? (run?.status === 'error' ? run.message : undefined)
 

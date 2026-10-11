@@ -13,6 +13,7 @@
 		"typecheck": "tsc --noEmit -p tsconfig.json",
 		"test": "vitest run",
 		"test:e2e": "playwright test",
+		"test:perf": "playwright test --config=playwright.perf.config.ts",
 		"build:desktop": "vite build && node scripts/build-electron.mjs",
 		"desktop": "npm run build:desktop && electron .",
 		"dist": "npm run build:desktop && electron-builder --publish never",

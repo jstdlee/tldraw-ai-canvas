@@ -1199,9 +1199,13 @@ function ChartTitlesSection({
 	)
 }
 
+type EchartsInstance = { dispose: () => void; setOption: (option: object, notMerge?: boolean) => void; resize: () => void }
+
 function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	const editor = useEditor()
 	const ref = useRef<HTMLDivElement>(null)
+	const chartRef = useRef<EchartsInstance | null>(null)
+	const applyOptionRef = useRef<(() => void) | null>(null)
 	const [zoomOpen, setZoomOpen] = useState(false)
 	const set = (patch: Partial<ChartNode>) => updateNode<ChartNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
 	// Prefer the wired table. The sample text on the node is only a fallback.
@@ -1232,31 +1236,47 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	// display and rendering, so a choice made before the input arrives (or while it is briefly
 	// empty) survives until the real table shows up.
 
+	// WP25: the echarts instance itself is created once per mount, not disposed and
+	// re-`import()`/`init()`-ed on every option-affecting change (every keystroke in a title
+	// field, every column pick). `applyOptionRef` always holds the latest `setOption` call, so
+	// whichever effect finishes last (mount, or a data/option change) can safely invoke it.
 	useEffect(() => {
 		const host = ref.current
 		if (!host) return
 		let dead = false
 		let observer: ResizeObserver | null = null
-		let chart: { dispose: () => void; setOption: (option: object) => void; resize: () => void } | null = null
-		const spec = chartSpecFrom(node, columns.xCol, columns.yCols, seriesCol)
 		void import('echarts').then((mod) => {
 			if (dead) return
-			chart = mod.init(host)
-			try {
-				chart.setOption(buildChart(table, spec, theme))
-			} catch (error) {
-				set({ error: (error as Error).message })
-			}
+			const chart = mod.init(host)
+			chartRef.current = chart
+			applyOptionRef.current?.()
 			chart.resize()
 			// The card can be resized or change its text size. The chart follows the area it has.
-			observer = new ResizeObserver(() => chart?.resize())
+			observer = new ResizeObserver(() => chart.resize())
 			observer.observe(host)
 		})
 		return () => {
 			dead = true
 			observer?.disconnect()
-			chart?.dispose()
+			chartRef.current?.dispose()
+			chartRef.current = null
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [])
+
+	useEffect(() => {
+		const spec = chartSpecFrom(node, columns.xCol, columns.yCols, seriesCol)
+		const apply = () => {
+			const chart = chartRef.current
+			if (!chart) return
+			try {
+				chart.setOption(buildChart(table, spec, theme), true)
+			} catch (error) {
+				set({ error: (error as Error).message })
+			}
+		}
+		applyOptionRef.current = apply
+		apply()
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		table,

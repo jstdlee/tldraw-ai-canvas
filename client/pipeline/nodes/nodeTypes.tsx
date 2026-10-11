@@ -80,7 +80,16 @@ export function getNodeHeightPx(editor: Editor, shape: NodeShape): number {
 // Dev-only: shape:field pairs already warned about missing a field-port anchor (see below).
 const warnedMissingFieldAnchors = new Set<string>()
 
+// WP25: dev-only counter for the perf benchmark (`tests/perf/`), so it can report how many
+// times `getNodeTypePorts` actually re-evaluates per frame — this is the computation the
+// per-shape anchor/run-state atoms exist to stop one card's change from triggering on every
+// other card. Costs one increment; read (and reset) from `window.__wp25PerfCounters`.
+if (import.meta.env?.DEV && typeof window !== 'undefined') {
+	;(window as any).__wp25PerfCounters = { getNodeTypePortsCalls: 0 }
+}
+
 export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<string, ShapePort> {
+	if (import.meta.env?.DEV && typeof window !== 'undefined') (window as any).__wp25PerfCounters.getNodeTypePortsCalls++
 	const node = shape.props.node
 	const dedicated = getNodeDefinition(editor, node).getPorts(shape, node)
 	const anchors = getFieldPortAnchors(editor, shape.id)
@@ -226,13 +235,22 @@ export function onNodePortDisconnect(editor: Editor, shape: NodeShape, port: Por
 	getNodeDefinition(editor, shape.props.node).onPortDisconnect?.(shape, shape.props.node, port)
 }
 
-export function NodeBody({ shape }: { shape: NodeShape }) {
+/**
+ * WP25: tldraw still mounts a culled (off-screen) shape's HTMLContainer in the DOM — it just sets
+ * `display: none` on it — so without this check every card's full body (charts, tables, previews)
+ * keeps rendering while panning across a canvas with many cards. `culled` lets the caller skip
+ * that (tldraw never culls a selected or editing shape, so this never hides a card being used).
+ * The placeholder keeps the same height, so nothing shifts when the card scrolls back into view.
+ */
+export function NodeBody({ shape, culled }: { shape: NodeShape; culled?: boolean }) {
 	const editor = useEditor()
 	const node = shape.props.node
 	if (shape.props.collapsed) return null
+	const height = getNodeBodyHeightPx(editor, shape)
+	if (culled) return <div className="NodeBody" style={{ height }} />
 	const { Component } = getNodeDefinition(editor, node)
 	return (
-		<div className="NodeBody" style={{ height: getNodeBodyHeightPx(editor, shape) }}>
+		<div className="NodeBody" style={{ height }}>
 			<Component shape={shape} node={node} />
 		</div>
 	)
