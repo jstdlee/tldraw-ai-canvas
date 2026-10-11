@@ -15,3 +15,7 @@ mygo/resources/icon.png
 mygo/resources/linux-*/
 mygo/resources/windows-*/
 mygo/resources/darwin-*/
+
+# Playwright run output
+test-results/
+playwright-report/
