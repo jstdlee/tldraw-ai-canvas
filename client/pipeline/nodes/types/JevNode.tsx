@@ -173,8 +173,9 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 
 /** `cloudflare/@cf/cloudflare/clef-flash` → "Clef Flash" (and the same for the plain "clef" model). */
 function formatJevSource(source: string): string {
-	if (source.endsWith('@cf/cloudflare/clef-flash')) return 'Clef Flash'
-	if (source.endsWith('@cf/cloudflare/clef')) return 'Clef'
+	// Cloudflare direct ("cloudflare/@cf/cloudflare/clef-flash") or through Magpie ("clef-flash").
+	if (source === 'clef-flash' || source.endsWith('@cf/cloudflare/clef-flash')) return 'Clef Flash'
+	if (source === 'clef' || source.endsWith('@cf/cloudflare/clef')) return 'Clef'
 	return source
 }
 
