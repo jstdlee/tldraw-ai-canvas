@@ -347,3 +347,13 @@
 .ChartNode-view canvas {
 	max-width: 100%;
 }
+
+/* While "Titles and labels" is closed, its fields stay wirable: dots sit in a row (unlike
+ * LlmSettings-toggle-ports, which is hardcoded for exactly two). */
+.ChartNode-toggle-ports {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 4px;
+	flex: 0 0 auto;
+}

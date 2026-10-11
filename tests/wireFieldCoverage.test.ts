@@ -47,7 +47,10 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	// table: op params only (DataPipe's own design — see RULES/WP17: "only the op's params
 	// are shown and get ports"). "text"/"format"/"op" are never wired: see the note below.
 	table: [...new Set(TABLE_OPS.flatMap((spec) => spec.params.map((p) => p.field)))],
-	chart: ['text', 'kind', 'xCol', 'yCol', 'dualScale'],
+	chart: [
+		'text', 'kind', 'xCol', 'yCol', 'dualScale', 'series', 'aggregate', 'stack', 'sort', 'top', 'otherRow',
+		'bins', 'title', 'xLabel', 'yLabel', 'labels', 'smooth',
+	],
 	profile: ['text', 'format'],
 	openrouter: ['model'],
 	raw_model: ['url', 'system', 'temperature', 'thinking', 'maxTokens'],

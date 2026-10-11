@@ -39,6 +39,33 @@ export function hiddenFieldKeys(node: NodeType): Set<string> {
 			if (source !== 'url') hidden.add('asText')
 			return hidden
 		}
+		case 'chart': {
+			const hidden = new Set<string>()
+			const kind = node.kind
+			// "Split by" makes a long-format table into several series; meaningless for a
+			// single-slice pie/donut, a raw point cloud, or an already-binned histogram.
+			if (kind === 'pie' || kind === 'donut' || kind === 'scatter' || kind === 'histogram') hidden.add('series')
+			// A scatter plots raw points and a histogram bins them: neither combines rows.
+			if (kind === 'scatter' || kind === 'histogram') hidden.add('aggregate')
+			// Stacking only makes sense for bar/hbar/area series sharing a category axis.
+			if (kind !== 'bar' && kind !== 'hbar' && kind !== 'area') hidden.add('stack')
+			// Sort/top-N/Other rank categories; a scatter/histogram/heatmap has none to rank.
+			if (kind === 'scatter' || kind === 'histogram' || kind === 'heatmap') {
+				hidden.add('sort')
+				hidden.add('top')
+				hidden.add('otherRow')
+			}
+			if (kind !== 'histogram') hidden.add('bins')
+			if (kind !== 'bar' && kind !== 'line' && kind !== 'area' && kind !== 'hbar') hidden.add('dualScale')
+			// Pie/donut have no axes to label; every other kind (including histogram and
+			// heatmap) has a real x and y axis.
+			if (kind === 'pie' || kind === 'donut') {
+				hidden.add('xLabel')
+				hidden.add('yLabel')
+			}
+			if (kind !== 'line' && kind !== 'area') hidden.add('smooth')
+			return hidden
+		}
 		default:
 			return new Set()
 	}

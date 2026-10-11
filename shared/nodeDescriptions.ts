@@ -174,8 +174,8 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 	},
 	chart: {
 		title: 'Chart',
-		description: 'Draws a bar, line or pie chart from a table.',
-		keywords: ['chart', 'graph', 'plot', 'visualization', 'bar', 'line', 'pie'],
+		description: 'Draws a bar, line, area, scatter, pie, histogram or heatmap chart from a table.',
+		keywords: ['chart', 'graph', 'plot', 'visualization', 'bar', 'line', 'area', 'scatter', 'pie', 'donut', 'histogram', 'heatmap'],
 	},
 	profile: {
 		title: 'Profile',

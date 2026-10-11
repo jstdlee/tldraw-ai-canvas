@@ -39,7 +39,14 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	output: { in: ['input'], out: ['output'], fields: ['kind'] },
 	save: { in: ['input'], out: ['output'], fields: ['fileName'] },
 	table: { in: ['data', 'extra'], out: ['output'], fields: ['text', 'format', 'op', 'columns', 'columns2', 'column', 'expr', 'pattern', 'name', 'totals'] },
-	chart: { in: ['data'], out: ['output'], fields: ['kind', 'xCol', 'yCol', 'text', 'dualScale'] },
+	chart: {
+		in: ['data'],
+		out: ['output'],
+		fields: [
+			'kind', 'xCol', 'yCol', 'text', 'dualScale', 'series', 'aggregate', 'stack', 'sort', 'top', 'otherRow',
+			'bins', 'title', 'xLabel', 'yLabel', 'labels', 'smooth',
+		],
+	},
 	profile: { in: ['data'], out: ['output'], fields: ['text', 'format'] },
 	database: { in: ['sql'], out: ['output', 'schema'], fields: ['sql'] },
 	openrouter: { in: [], out: ['output'], fields: ['model'] },

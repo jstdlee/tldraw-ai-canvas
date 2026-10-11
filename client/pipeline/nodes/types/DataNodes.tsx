@@ -1,21 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { categoryOf } from '../../../../shared/nodeGroups'
-import { chartOption, resolveColumns } from '../../../../shared/chartOption'
+import { buildChart, CHART_KINDS, columnsNumberFirst, resolveColumns } from '../../../../shared/chartOption'
+import type { ChartSpec, ChartTheme } from '../../../../shared/chartOption'
 import { detectFormat, evalFormula, formatTable, opSpec, parseTable, runTable, splitList, TABLE_OPS } from '../../../../shared/tableOps'
 import type { TableJob } from '../../../../shared/tableOps'
 import { profileTable } from '../../../../shared/profile'
 import type { ColumnProfile } from '../../../../shared/profile'
-import { createShapeId, Editor, TLShapeId, T, useEditor, useValue } from 'tldraw'
+import { createShapeId, Editor, getColorValue, TLShapeId, T, useEditor, useValue } from 'tldraw'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
-import { ShapePort } from '../../ports/Port'
+import { Port, ShapePort } from '../../ports/Port'
+import { useFieldPortAnchors } from '../../ports/useFieldPortAnchor'
 import { createOrUpdateConnectionBinding } from '../../connection/ConnectionBindingUtil'
 import { getNextConnectionIndex } from '../../connection/keepConnectionsAtBottom'
 import { createNodeAt } from '../../placeNode'
 import { readSpreadsheet } from '../../excel'
 import { storeFile, loadFileBytes } from '../../fileStore'
+import { storeBlob } from '../../imageOps'
 import { sleep } from '../../utils/sleep'
 import { getNodeInputPortValues, isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
+import { hiddenFieldKeys } from '../fieldVisibility'
+import { fieldPortId } from '../../../../shared/fieldOverrides'
 import {
 	UiButton,
 	UiCheckbox,
@@ -23,6 +28,7 @@ import {
 	UiEmpty,
 	UiField,
 	UiIconButton,
+	UiNumberInput,
 	UiSegmented,
 	UiSelect,
 	UiTable,
@@ -889,7 +895,8 @@ function TableDefaultForChain(): Omit<TableNode, 'type'> {
 }
 
 // ---------------------------------------------------------------------------
-// Chart (unchanged behaviour; still reads a CSV/TSV table).
+// Chart (WP12: more kinds, series-from-a-column, aggregate, sort/top-N, titles,
+// and a rendered PNG output so it can feed Output / Generate image / "Place on canvas").
 // ---------------------------------------------------------------------------
 
 export type ChartNode = T.TypeOf<typeof ChartNode>
@@ -899,12 +906,134 @@ export const ChartNode = T.object({
 	format: T.string,
 	kind: T.string,
 	xCol: T.string,
-	/** Comma-separated list of y columns; one series per column. */
+	/** Comma-separated list of y columns; one series per column (or per split value — see `series`). */
 	yCol: T.string,
-	/** With 2+ y columns, plot the first on the left axis and the rest on the right. */
+	/** With 2+ series, plot the first on the left axis and the rest on the right. */
 	dualScale: T.boolean,
 	error: T.string.nullable(),
+	// New, optional (WP12). Saved canvases without these keep rendering the same chart: every
+	// default below reproduces the old bar/line/pie passthrough behaviour exactly.
+	/** Split into one series per distinct value of this column ("long" data). */
+	series: T.string.optional(),
+	/** 'none' | 'sum' | 'avg' | 'count' | 'min' | 'max'. */
+	aggregate: T.string.optional(),
+	stack: T.boolean.optional(),
+	/** 'none' | 'x' | 'value-asc' | 'value-desc'. */
+	sort: T.string.optional(),
+	top: T.number.optional(),
+	otherRow: T.boolean.optional(),
+	bins: T.number.optional(),
+	title: T.string.optional(),
+	xLabel: T.string.optional(),
+	yLabel: T.string.optional(),
+	labels: T.boolean.optional(),
+	smooth: T.boolean.optional(),
+	/** "Titles and labels" section open/closed. */
+	titlesOpen: T.boolean.optional(),
+	/** The last rendered chart, as a /api/images/… URL (the output port's value). */
+	imageUrl: T.string.nullable().optional(),
 })
+
+/** Fields shown only for some chart kinds (see `fieldVisibility.ts`'s `chart` case), in the
+ * order they're laid out below "Y columns". Used to keep `getBodyHeightPx` in sync with what
+ * the component actually renders. */
+const CHART_EXTRA_FIELDS = ['series', 'aggregate', 'stack', 'dualScale', 'sort', 'top', 'otherRow', 'bins'] as const
+const CHART_TITLE_FIELDS = ['title', 'xLabel', 'yLabel', 'labels', 'smooth'] as const
+const CHART_AREA_PX = 280
+
+function chartVisibleRows(node: ChartNode) {
+	const hidden = hiddenFieldKeys(node)
+	return {
+		extra: CHART_EXTRA_FIELDS.filter((f) => !hidden.has(f)),
+		titleFields: CHART_TITLE_FIELDS.filter((f) => !hidden.has(f)),
+		hidden,
+	}
+}
+
+function chartSpecFrom(node: ChartNode, xCol: string, yCols: string[], series: string): ChartSpec {
+	return {
+		kind: node.kind,
+		x: xCol,
+		y: yCols,
+		series: series || undefined,
+		aggregate: (node.aggregate as ChartSpec['aggregate']) || 'none',
+		stack: !!node.stack,
+		dual: !!node.dualScale,
+		sort: (node.sort as ChartSpec['sort']) || 'none',
+		top: node.top || 0,
+		otherRow: !!node.otherRow,
+		bins: node.bins || 10,
+		title: node.title || undefined,
+		xLabel: node.xLabel || undefined,
+		yLabel: node.yLabel || undefined,
+		labels: !!node.labels,
+		smooth: !!node.smooth,
+	}
+}
+
+/** The palette + axis/text colours from tldraw's current theme (see `NodeShapeUtil.tsx`'s
+ * `getColorValue(editor.getCurrentTheme().colors[editor.getColorMode()], …)` for the pattern),
+ * so the chart looks right in both light and dark mode. */
+const CHART_PALETTE_IDS = ['blue', 'orange', 'green', 'violet', 'red', 'light-blue', 'yellow', 'grey'] as const
+
+function getChartTheme(editor: Editor): ChartTheme {
+	const colors = editor.getCurrentTheme().colors[editor.getColorMode()]
+	return {
+		palette: CHART_PALETTE_IDS.map((id) => getColorValue(colors, id, 'solid')),
+		text: colors.text,
+		axis: colors.text,
+		split: getColorValue(colors, 'grey', 'semi'),
+	}
+}
+
+/** Render an ECharts option to a stored PNG URL, off-screen (never shown). */
+/** Histograms have no X column, so X must not block picking the same column for Y. */
+function chartXFor(node: ChartNode): string {
+	return node.kind === 'histogram' ? '' : node.xCol
+}
+
+async function renderChartPng(option: Record<string, unknown>, width = 960, height = 600): Promise<string> {
+	const mod = await import('echarts')
+	// Paint the theme's own background so dark-theme text stays readable in the image.
+	const background =
+		getComputedStyle(document.querySelector('.tl-container') ?? document.body).getPropertyValue('--tl-color-background').trim() || '#fff'
+	// Server-side SVG mode: no DOM node and no animation frame, so it renders the same whether
+	// or not the page is visible (an off-screen canvas left pie charts empty).
+	const chart = mod.init(null, null, { renderer: 'svg', ssr: true, width, height })
+	chart.setOption({ ...option, animation: false, backgroundColor: background })
+	const svg = chart.renderToSVGString()
+	chart.dispose()
+	const svgBlob = new Blob([svg], { type: 'image/svg+xml' })
+	try {
+		return await storeBlob(await svgToPng(svgBlob, width, height, 2))
+	} catch {
+		// Rasterizing failed (no canvas support): keep the SVG, it still shows and places fine.
+		return await storeBlob(svgBlob)
+	}
+}
+
+async function svgToPng(svg: Blob, width: number, height: number, scale: number): Promise<Blob> {
+	const url = URL.createObjectURL(svg)
+	try {
+		const img = new Image()
+		img.src = url
+		await Promise.race([
+			img.decode(),
+			new Promise((_, reject) => setTimeout(() => reject(new Error('SVG decode timed out')), 5000)),
+		])
+		const canvas = document.createElement('canvas')
+		canvas.width = width * scale
+		canvas.height = height * scale
+		const ctx = canvas.getContext('2d')
+		if (!ctx) throw new Error('No 2D canvas')
+		ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+		return await new Promise<Blob>((resolve, reject) =>
+			canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('PNG encode failed'))), 'image/png')
+		)
+	} finally {
+		URL.revokeObjectURL(url)
+	}
+}
 
 export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	static type = 'chart'
@@ -913,33 +1042,161 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	heading = 'Chart'
 	icon = icon
 	category = categoryOf('chart')
-	resultKeys = ['error'] as const
+	resultKeys = ['error', 'imageUrl'] as const
 	override showsOutput = true
 	override defaultWidthPx = 440
 	getDefault(): ChartNode {
-		return { type: 'chart', text: SAMPLE, format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score', dualScale: false, error: null }
+		return {
+			type: 'chart',
+			text: SAMPLE,
+			format: 'csv',
+			kind: 'bar',
+			xCol: 'name',
+			yCol: 'score',
+			dualScale: false,
+			error: null,
+			series: '',
+			aggregate: 'none',
+			stack: false,
+			sort: 'none',
+			top: 0,
+			otherRow: false,
+			bins: 10,
+			title: '',
+			xLabel: '',
+			yLabel: '',
+			labels: false,
+			smooth: false,
+			titlesOpen: false,
+			imageUrl: null,
+		}
 	}
-	getBodyHeightPx(shape: NodeShape) {
-		// Rows: data port, text label (WP17), kind, x column, y columns, dual-axes = 6
-		// (kind/x column split onto their own rows), then the chart area.
-		return getNodeRowHeightPx(shape.props.fontSize) * 6 + 264
+	getBodyHeightPx(shape: NodeShape, node: ChartNode) {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		const { extra, titleFields } = chartVisibleRows(node)
+		// data, text, kind, x column, y columns = 5, then the kind-dependent extra fields,
+		// the "Titles and labels" header (+ its own fields when open), then the chart area.
+		const rows = 5 + extra.length + 1 + (node.titlesOpen ? titleFields.length : 0)
+		return rowPx * rows + CHART_AREA_PX
 	}
 	getPorts(shape: NodeShape, node: ChartNode): Record<string, ShapePort> {
-		return { data: end('data', 0, getNodeRowHeightPx(shape.props.fontSize)), output: out(this.getWidthPx(shape, node)) }
+		return {
+			data: end('data', 0, getNodeRowHeightPx(shape.props.fontSize)),
+			output: { ...out(this.getWidthPx(shape, node)), dataType: 'image' },
+		}
 	}
 	async execute(shape: NodeShape, node: ChartNode, inputs: InputValues): Promise<ExecutionResult> {
 		const text = getInputText(inputs, 'data') || node.text
-		chartOption(text, node.format, node.kind, node.xCol, splitList(node.yCol), node.dualScale)
-		updateNode<ChartNode>(this.editor, shape, (n) => ({ ...n, text, error: null }), false)
-		return { output: text }
+		const table = parseTable(text, detectFormat(text, node.format))
+		if (table.headers.length === 0) throw new Error('No table to chart. Wire in a table, or paste one into Text.')
+		const columns = resolveColumns(table, chartXFor(node), splitList(node.yCol))
+		const series = node.series && table.headers.includes(node.series) ? node.series : ''
+		const spec = chartSpecFrom(node, columns.xCol, columns.yCols, series)
+		try {
+			const option = buildChart(table, spec, getChartTheme(this.editor))
+			const imageUrl = await renderChartPng(option)
+			updateNode<ChartNode>(this.editor, shape, (n) => ({ ...n, text, error: null, imageUrl }), false)
+			return { output: imageUrl }
+		} catch (error) {
+			updateNode<ChartNode>(this.editor, shape, (n) => ({ ...n, text, error: (error as Error).message }), false)
+			throw error
+		}
 	}
 	getOutputInfo(shape: NodeShape, node: ChartNode, inputs: InfoValues): InfoValues {
-		return info(shape, node.text, inputs)
+		return {
+			output: {
+				value: node.imageUrl ?? null,
+				isOutOfDate: areAnyInputsOutOfDate(inputs) || shape.props.isOutOfDate,
+				dataType: 'image',
+			},
+		}
 	}
 	Component = ChartComponent
 }
 
 const icon = <span className="NodeShape-emoji">▦</span>
+
+const AGGREGATE_OPTIONS = [
+	{ value: 'none', label: 'None' },
+	{ value: 'sum', label: 'Sum' },
+	{ value: 'avg', label: 'Average' },
+	{ value: 'count', label: 'Count' },
+	{ value: 'min', label: 'Min' },
+	{ value: 'max', label: 'Max' },
+]
+
+const SORT_OPTIONS = [
+	{ value: 'none', label: 'None' },
+	{ value: 'x', label: 'By x' },
+	{ value: 'value-asc', label: 'Value ↑' },
+	{ value: 'value-desc', label: 'Value ↓' },
+]
+
+/** "Titles and labels": a collapsible section, like `MoreSettingsSection` in ImageGenNode.tsx.
+ * While closed, its still-wirable fields anchor their ports to the header row. */
+function ChartTitlesSection({
+	shape,
+	node,
+	set,
+	fields,
+}: {
+	shape: NodeShape
+	node: ChartNode
+	set: (patch: Partial<ChartNode>) => void
+	fields: readonly string[]
+}) {
+	const closedRef = useFieldPortAnchors<HTMLButtonElement>(shape.id, node.titlesOpen ? [] : [...fields])
+	return (
+		<div className="UiSection">
+			<button
+				ref={closedRef}
+				type="button"
+				className="UiSection-title"
+				onPointerDown={stopEvent}
+				onClick={() => set({ titlesOpen: !node.titlesOpen })}
+			>
+				{node.titlesOpen ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+				Titles and labels
+				{!node.titlesOpen && (
+					<span className="ChartNode-toggle-ports" title="Title/label inputs (open to see them)">
+						{fields.map((key) => (
+							<Port key={key} shapeId={shape.id} portId={fieldPortId(key)} />
+						))}
+					</span>
+				)}
+			</button>
+			{node.titlesOpen && (
+				<div className="UiSection-body">
+					{fields.includes('title') && (
+						<WireField shapeId={shape.id} fieldKey="title" label="Title">
+							<UiTextInput value={node.title ?? ''} onChange={(title) => set({ title })} />
+						</WireField>
+					)}
+					{fields.includes('xLabel') && (
+						<WireField shapeId={shape.id} fieldKey="xLabel" label="X label">
+							<UiTextInput value={node.xLabel ?? ''} onChange={(xLabel) => set({ xLabel })} />
+						</WireField>
+					)}
+					{fields.includes('yLabel') && (
+						<WireField shapeId={shape.id} fieldKey="yLabel" label="Y label">
+							<UiTextInput value={node.yLabel ?? ''} onChange={(yLabel) => set({ yLabel })} />
+						</WireField>
+					)}
+					{fields.includes('labels') && (
+						<WireField shapeId={shape.id} fieldKey="labels" label="Data labels">
+							<UiCheckbox checked={!!node.labels} label="Show value labels" onChange={(labels) => set({ labels })} />
+						</WireField>
+					)}
+					{fields.includes('smooth') && (
+						<WireField shapeId={shape.id} fieldKey="smooth" label="Smooth">
+							<UiCheckbox checked={!!node.smooth} label="Smooth curve" onChange={(smooth) => set({ smooth })} />
+						</WireField>
+					)}
+				</div>
+			)}
+		</div>
+	)
+}
 
 function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	const editor = useEditor()
@@ -957,33 +1214,34 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	)
 	const table = useMemo(() => {
 		try {
-			return parseTable(source, node.format)
+			return parseTable(source, detectFormat(source, node.format))
 		} catch {
 			return { headers: [] as string[], rows: [] as string[][] }
 		}
 	}, [source, node.format])
-	const columns = resolveColumns(table, node.xCol, splitList(node.yCol))
+	const columns = resolveColumns(table, chartXFor(node), splitList(node.yCol))
 	const ySelected = splitList(node.yCol)
-	// First render with this data (or new columns): snap the stored columns to real headers.
-	useEffect(() => {
-		if (table.headers.length === 0) return
-		const patch: Partial<ChartNode> = {}
-		if (columns.xCol !== node.xCol) patch.xCol = columns.xCol
-		const joined = columns.yCols.join(',')
-		if (joined !== node.yCol) patch.yCol = joined
-		if (Object.keys(patch).length > 0) set(patch)
-	}, [table, node.xCol, node.yCol])
+	const yOptions = useMemo(() => columnsNumberFirst(table), [table])
+	const seriesCol = node.series && table.headers.includes(node.series) ? node.series : ''
+	const { titleFields, hidden } = chartVisibleRows(node)
+	const theme = useValue('chart theme', () => getChartTheme(editor), [editor])
+
+	// The chosen columns are never rewritten here: resolveColumns only picks a fallback for
+	// display and rendering, so a choice made before the input arrives (or while it is briefly
+	// empty) survives until the real table shows up.
+
 	useEffect(() => {
 		const host = ref.current
 		if (!host) return
 		let dead = false
 		let observer: ResizeObserver | null = null
 		let chart: { dispose: () => void; setOption: (option: object) => void; resize: () => void } | null = null
+		const spec = chartSpecFrom(node, columns.xCol, columns.yCols, seriesCol)
 		void import('echarts').then((mod) => {
 			if (dead) return
 			chart = mod.init(host)
 			try {
-				chart.setOption(chartOption(source, node.format, node.kind, node.xCol, splitList(node.yCol), node.dualScale))
+				chart.setOption(buildChart(table, spec, theme))
 			} catch (error) {
 				set({ error: (error as Error).message })
 			}
@@ -997,16 +1255,39 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 			observer?.disconnect()
 			chart?.dispose()
 		}
-	}, [source, node.format, node.kind, node.xCol, node.yCol, node.dualScale])
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		table,
+		theme,
+		node.kind,
+		columns.xCol,
+		columns.yCols.join(','),
+		seriesCol,
+		node.aggregate,
+		node.stack,
+		node.dualScale,
+		node.sort,
+		node.top,
+		node.otherRow,
+		node.bins,
+		node.title,
+		node.xLabel,
+		node.yLabel,
+		node.labels,
+		node.smooth,
+	])
+
 	return (
 		<div className="ChartNode">
 			<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
 			<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Text" />
 			<WireField shapeId={shape.id} fieldKey="kind" label="Kind">
 				<NodeSelect className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
-					<option value="bar">Bar</option>
-					<option value="line">Line</option>
-					<option value="pie">Pie</option>
+					{CHART_KINDS.map((k) => (
+						<option key={k.id} value={k.id}>
+							{k.label}
+						</option>
+					))}
 				</NodeSelect>
 			</WireField>
 			<WireField shapeId={shape.id} fieldKey="xCol" label="X column">
@@ -1031,7 +1312,7 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 					emptyLabel={table.headers.length ? 'Y columns' : 'No columns'}
 					values={ySelected.filter((col) => col !== columns.xCol && table.headers.includes(col))}
 					disabled={table.headers.length === 0}
-					options={table.headers.map((header) => ({
+					options={yOptions.map((header) => ({
 						value: header,
 						label: header,
 						disabled: header === columns.xCol,
@@ -1039,15 +1320,66 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 					onChange={(next) => set({ yCol: next.filter((col) => col !== columns.xCol).join(',') })}
 				/>
 			</WireField>
-			<WireField shapeId={shape.id} fieldKey="dualScale" label="Dual axis">
-				<UiCheckbox
-					checked={!!node.dualScale}
-					title="First y column on the left axis, the rest on the right"
-					label="Dual y-axes"
-					onChange={(dualScale) => set({ dualScale })}
-				/>
-			</WireField>
-			<div ref={ref} className="ChartNode-view" />
+			{!hidden.has('series') && (
+				<WireField shapeId={shape.id} fieldKey="series" label="Split by">
+					<NodeSelect className="NodeField-select" value={seriesCol} onPointerDown={stopEvent} onChange={(e) => set({ series: e.target.value })}>
+						<option value="">None</option>
+						{table.headers.map((header) => (
+							<option key={header} value={header}>
+								{header}
+							</option>
+						))}
+					</NodeSelect>
+				</WireField>
+			)}
+			{!hidden.has('aggregate') && (
+				<WireField shapeId={shape.id} fieldKey="aggregate" label="Summary">
+					<UiSelect value={node.aggregate ?? 'none'} options={AGGREGATE_OPTIONS} onChange={(aggregate) => set({ aggregate })} />
+				</WireField>
+			)}
+			{!hidden.has('stack') && (
+				<WireField shapeId={shape.id} fieldKey="stack" label="Stack">
+					<UiCheckbox checked={!!node.stack} label="Stack series" onChange={(stack) => set({ stack })} />
+				</WireField>
+			)}
+			{!hidden.has('dualScale') && (
+				<WireField shapeId={shape.id} fieldKey="dualScale" label="Dual axis">
+					<UiCheckbox
+						checked={!!node.dualScale}
+						title="First series on the left axis, the rest on the right"
+						label="Dual y-axes"
+						onChange={(dualScale) => set({ dualScale })}
+					/>
+				</WireField>
+			)}
+			{!hidden.has('sort') && (
+				<WireField shapeId={shape.id} fieldKey="sort" label="Sort">
+					<UiSelect value={node.sort ?? 'none'} options={SORT_OPTIONS} onChange={(sort) => set({ sort })} />
+				</WireField>
+			)}
+			{!hidden.has('top') && (
+				<WireField shapeId={shape.id} fieldKey="top" label="Top N" dataType="number">
+					<UiNumberInput value={node.top ?? 0} min={0} placeholder="all" onChange={(top) => set({ top: top ?? 0 })} />
+				</WireField>
+			)}
+			{!hidden.has('otherRow') && (
+				<WireField shapeId={shape.id} fieldKey="otherRow" label="Other">
+					<UiCheckbox checked={!!node.otherRow} label='Sum the rest into "Other"' onChange={(otherRow) => set({ otherRow })} />
+				</WireField>
+			)}
+			{!hidden.has('bins') && (
+				<WireField shapeId={shape.id} fieldKey="bins" label="Bins" dataType="number">
+					<UiNumberInput value={node.bins ?? 10} min={1} onChange={(bins) => set({ bins: bins ?? 10 })} />
+				</WireField>
+			)}
+			<ChartTitlesSection shape={shape} node={node} set={set} fields={titleFields} />
+			{table.headers.length === 0 ? (
+				<UiEmpty text="Wire in a table, or paste one into Text" />
+			) : columns.yCols.length === 0 ? (
+				<UiEmpty text="Pick a number column for Y" />
+			) : (
+				<div ref={ref} className="ChartNode-view" />
+			)}
 		</div>
 	)
 }
