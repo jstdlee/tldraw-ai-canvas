@@ -20,6 +20,7 @@ import { CHART_KINDS } from './chartOption'
 import { JEV_KINDS } from './jevKinds'
 import { TEXT_TOOL_OPS } from './textTools'
 import { TEXT_AI_OPERATIONS } from './textAiOps'
+import { DB_SOURCES } from './dbSources'
 import { recencyScore, type PickerRecency } from './recency'
 
 /** One searchable, insertable card. `deep` presets a field when the card is inserted. */
@@ -344,13 +345,27 @@ function textAiOpDocs(): CardDoc[] {
 	return TEXT_AI_OPERATIONS.map((op) => deepDoc('text_ai', op.id, 'operation', op.label, '', []))
 }
 
+/** "Database · SQLite file / Built-in Postgres / Postgres / DuckDB" (WP13): one deep entry
+ * per source, built from the same registry the card's own source picker uses. */
+function dbSourceDocs(): CardDoc[] {
+	return DB_SOURCES.map((source) => deepDoc('database', source.id, 'source', source.label, source.description, source.keywords))
+}
+
 /**
  * Every searchable, insertable card: one base document per non-superseded node type,
  * plus every deep entry built from the op/kind registries above.
  */
 export function buildCardDocs(): CardDoc[] {
 	const types = Object.keys(NODE_PORTS).filter((type) => !HIDDEN_TYPES.has(type))
-	return [...types.map(baseDoc), ...tableOpDocs(), ...chartKindDocs(), ...jevKindDocs(), ...textToolOpDocs(), ...textAiOpDocs()]
+	return [
+		...types.map(baseDoc),
+		...tableOpDocs(),
+		...chartKindDocs(),
+		...jevKindDocs(),
+		...textToolOpDocs(),
+		...textAiOpDocs(),
+		...dbSourceDocs(),
+	]
 }
 
 let cachedDocs: CardDoc[] | null = null

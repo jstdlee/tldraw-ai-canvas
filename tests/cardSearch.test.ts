@@ -31,14 +31,15 @@ describe('cardSearch', () => {
 		expect(top('plot')[0].type).toBe('chart')
 	})
 
-	it('"duck" (no DuckDB card exists yet, WP13) finds nothing, but "sqlite" finds Database', () => {
-		// WP13 (external Postgres/DuckDB) has not landed yet, so there is no "Database · DuckDB"
-		// deep entry to find. The Database card itself (SQLite/PGlite today) still searches fine.
+	it('"duck" and "sqlite" both find the Database card (WP13: one card, four sources)', () => {
 		expect(top('sqlite')[0].type).toBe('database')
+		expect(top('duckdb')[0].type).toBe('database')
 	})
 
-	it('has no "DuckDB" deep entry yet (documented gap: WP13 adds external DuckDB/Postgres)', () => {
-		expect(docs.some((d) => d.id.toLowerCase().includes('duckdb'))).toBe(false)
+	it('has a deep entry for every Database source (WP13)', () => {
+		for (const source of ['sqlite', 'pglite', 'postgres', 'duckdb']) {
+			expect(docs.some((d) => d.id === `database:${source}`), source).toBe(true)
+		}
 	})
 
 	it('recency changes the order between otherwise-tied docs', () => {

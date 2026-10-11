@@ -790,14 +790,34 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		title: title('database'),
 		group: groupOf('database'),
 		purpose: purpose('database'),
-		useWhen: 'Use to query an uploaded SQLite/.db file.',
-		inputs: [port('sql', 'text', 'Overrides the sql field when wired.')],
+		useWhen:
+			'Use to run full SQL (read, write, DDL, transactions) against a SQLite file, the built-in Postgres, or an external Postgres/DuckDB database.',
+		inputs: [
+			port('sql', 'text', 'Overrides the sql field when wired.'),
+			port('rows', 'text', 'CSV rows to load into a table (target table + mode below).'),
+		],
 		outputs: [port('output', 'text', 'Query result as CSV.'), port('schema', 'text', 'The database’s table/column schema, as JSON.')],
-		fields: [field('sql', 'sql', 'SQL', 'The query to run against the uploaded database.')],
+		fields: [
+			field('source', 'enum', 'Source', 'Which database to use.', ['sqlite', 'pglite', 'postgres', 'duckdb']),
+			field('sql', 'sql', 'SQL', 'The statement(s) to run against the selected database.'),
+			field('conn', 'json', 'Connection', 'Postgres/DuckDB connection settings (JSON; never a raw password).', undefined, undefined, false),
+			field('targetTable', 'text', 'Target table', 'Where to load the wired rows input (Postgres/DuckDB only).'),
+			field(
+				'loadMode',
+				'enum',
+				'Load mode',
+				'How wired rows are loaded into the target table.',
+				['insert', 'upsert', 'replace']
+			),
+			field('upsertKey', 'text', 'Key column', 'The column to match on for "upsert on key".'),
+		],
 		assistant: {
-			role: 'You write the SQL query, using only the tables/columns given in the context (never invent names).',
-			chips: ['Select all from…', 'Count rows in…', 'Join … and …'],
-			rules: ['Only reference tables and columns that appear in the database’s own schema context.'],
+			role: 'You write the SQL query, using only the tables/columns given in the context (never invent names). Match the dialect of the selected source (SQLite/Postgres/DuckDB).',
+			chips: ['Select all from…', 'Count rows in…', 'Join … and …', 'Create a table for…'],
+			rules: [
+				'Only reference tables and columns that appear in the database’s own schema context.',
+				'Never write a password or connection string; connections are configured in the card, not by you.',
+			],
 		},
 	},
 	openrouter: {

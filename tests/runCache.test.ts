@@ -15,6 +15,15 @@ describe('isRunCacheable', () => {
 	it('never caches a card whose formula calls today()', () => {
 		expect(isRunCacheable({ type: 'table', expr: 'concat(name, today())' })).toBe(false)
 	})
+
+	it('never caches a database card whose SQL writes', () => {
+		expect(isRunCacheable({ type: 'database', sql: 'insert into t values (1)' })).toBe(false)
+		expect(isRunCacheable({ type: 'database', sql: 'update t set a = 1 where id = 1' })).toBe(false)
+	})
+
+	it('caches a database card whose SQL only reads', () => {
+		expect(isRunCacheable({ type: 'database', sql: 'select * from t' })).toBe(true)
+	})
 })
 
 describe('usesTimeDependentFormula', () => {

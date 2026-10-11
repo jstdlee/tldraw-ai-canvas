@@ -20,6 +20,7 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	download: ['fileName'],
 	net_tool: ['tool', 'option'],
 	postgres: ['mode', 'sql', 'csv', 'sourceUrl'],
+	database: ['source', 'targetTable', 'loadMode', 'upsertKey'],
 	text_ai: ['operation', 'option', 'instruction', 'promptOverride'],
 	generate_text: ['promptText'],
 	chat: ['userMessage'],

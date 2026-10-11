@@ -42,7 +42,9 @@ function isDateLike(value: string): boolean {
 	return !Number.isNaN(new Date(v).getTime())
 }
 
-function detectType(values: string[]): ColumnType {
+/** Exported for the Database card's "load rows into a table" feature (WP13): picks a column's
+ * type the same way the Profile card does, so a new table's columns match what Profile would show. */
+export function detectType(values: string[]): ColumnType {
 	const nonEmpty = values.filter((v) => v.trim() !== '')
 	if (!nonEmpty.length) return 'text'
 	if (nonEmpty.every((v) => /^(true|false)$/i.test(v.trim()))) return 'boolean'

@@ -20,6 +20,8 @@ import {
 	toPublicConfig,
 } from './config'
 import { createSecret, deleteSecret, getSecretValue } from './secretsStore'
+import { DbError, getSchema, normalizeConn, runQuery, testConnection } from './db'
+import { DbConn } from '../shared/dbConn'
 import { resolveSecret } from '../shared/secrets'
 import { importRemoteImage, probeImageUrl, readImage, resolveImage, saveImage, toDataUrl } from './images'
 import { generateImage, ImageGenParams } from './imageGen'
@@ -72,7 +74,7 @@ app.use('*', async (c, next) => {
 })
 
 app.onError((err, c) => {
-	const status = err instanceof ConfigError ? 400 : 500
+	const status = err instanceof ConfigError || err instanceof DbError ? 400 : 500
 	if (status === 500) console.error(err)
 	return c.json({ error: err.message ?? String(err) }, status)
 })
@@ -417,6 +419,49 @@ app.get('/api/images/:imageId/data-url', (c) => {
 	const image = readImage(c.req.param('imageId'))
 	if (!image) return c.text('Not found', 404)
 	return c.text(toDataUrl(image))
+})
+
+// --- External databases: Postgres and DuckDB (WP13) -------------------------
+
+/** The conn to send back to the client when a pasted URL was split into fields + a secret. */
+function normalizedConnPayload(conn: DbConn) {
+	const normalized = normalizeConn(conn)
+	return normalized === conn ? undefined : normalized
+}
+
+app.post('/api/db/test', async (c) => {
+	const body = (await c.req.json()) as { conn: DbConn }
+	if (!body?.conn) throw new ConfigError('conn is required')
+	const result = await testConnection(body.conn)
+	const normalizedConn = normalizedConnPayload(body.conn)
+	return c.json(normalizedConn ? { ...result, normalizedConn } : result)
+})
+
+app.post('/api/db/schema', async (c) => {
+	const body = (await c.req.json()) as { conn: DbConn }
+	if (!body?.conn) throw new ConfigError('conn is required')
+	const result = await getSchema(body.conn)
+	const normalizedConn = normalizedConnPayload(body.conn)
+	return c.json(normalizedConn ? { ...result, normalizedConn } : result)
+})
+
+app.post('/api/db/query', async (c) => {
+	const body = (await c.req.json()) as {
+		conn: DbConn
+		sql: string
+		limit?: number
+		params?: unknown[]
+		transaction?: boolean
+	}
+	if (!body?.conn) throw new ConfigError('conn is required')
+	if (!body?.sql) throw new ConfigError('sql is required')
+	const result = await runQuery(body.conn, body.sql, {
+		limit: body.limit,
+		params: body.params,
+		transaction: body.transaction,
+	})
+	const normalizedConn = normalizedConnPayload(body.conn)
+	return c.json(normalizedConn ? { ...result, normalizedConn } : result)
 })
 
 // --- Generic file store (DataPipe uploads, Database files) -----------------

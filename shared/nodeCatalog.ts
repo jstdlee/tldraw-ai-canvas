@@ -48,7 +48,7 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 		],
 	},
 	profile: { in: ['data'], out: ['output'], fields: ['text', 'format'] },
-	database: { in: ['sql'], out: ['output', 'schema'], fields: ['sql'] },
+	database: { in: ['sql', 'rows'], out: ['output', 'schema'], fields: ['sql', 'source'] },
 	openrouter: { in: [], out: ['output'], fields: ['model'] },
 	raw_model: { in: ['prompt', 'model'], out: ['output'], fields: ['url', 'model', 'keyRef', 'system', 'temperature', 'thinking', 'maxTokens'] },
 	video: { in: ['url'], out: ['output'], fields: ['url', 'autoplay'] },

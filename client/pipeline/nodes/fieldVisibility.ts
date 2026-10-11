@@ -39,6 +39,13 @@ export function hiddenFieldKeys(node: NodeType): Set<string> {
 			if (source !== 'url') hidden.add('asText')
 			return hidden
 		}
+		case 'database': {
+			// Target table / load mode / upsert key only apply to an external source (WP13);
+			// the key column only matters in "upsert on key" mode.
+			const source = (node as { source?: string }).source ?? 'sqlite'
+			if (source !== 'postgres' && source !== 'duckdb') return new Set(['targetTable', 'loadMode', 'upsertKey'])
+			return (node as { loadMode?: string }).loadMode === 'upsert' ? new Set() : new Set(['upsertKey'])
+		}
 		case 'chart': {
 			const hidden = new Set<string>()
 			const kind = node.kind
@@ -81,6 +88,11 @@ export function hiddenDedicatedPortIds(node: NodeType): Set<string> {
 	if (node.type === 'file_in') {
 		const source = (node as { source?: string }).source ?? 'upload'
 		return source === 'url' ? new Set() : new Set(['url'])
+	}
+	// Database: "load rows into a table" only applies to an external source (WP13).
+	if (node.type === 'database') {
+		const source = (node as { source?: string }).source ?? 'sqlite'
+		return source === 'postgres' || source === 'duckdb' ? new Set() : new Set(['rows'])
 	}
 	return new Set()
 }
