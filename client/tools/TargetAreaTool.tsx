@@ -12,6 +12,7 @@ export class TargetAreaTool extends StateNode {
 
 	override onEnter() {
 		this.editor.setCursor({ type: 'cross', rotation: 0 })
+		installClearAreaKeys(this.editor)
 	}
 
 	override onExit() {
@@ -116,4 +117,27 @@ class TargetAreaDragging extends StateNode {
 
 		this.bounds = { x, y, w, h }
 	}
+}
+
+/**
+ * The areas this tool marks are agent context (drawn as a highlight), not canvas shapes, so
+ * Delete never reached them. With nothing selected and no text field focused, Delete,
+ * Backspace or Escape now clears the areas and points you marked for the agent.
+ */
+const installedFor = new WeakSet<object>()
+function installClearAreaKeys(editor: import('tldraw').Editor) {
+	if (installedFor.has(editor)) return
+	installedFor.add(editor)
+	window.addEventListener('keydown', (event) => {
+		if (event.key !== 'Delete' && event.key !== 'Backspace' && event.key !== 'Escape') return
+		const target = event.target as HTMLElement | null
+		if (target?.closest('input, textarea, [contenteditable="true"]')) return
+		if (editor.getSelectedShapeIds().length > 0 || editor.getEditingShapeId()) return
+		for (const agent of AgentAppAgentsManager.getAgents(editor)) {
+			const marked = agent.context
+				.getItems()
+				.filter((item) => (item.type === 'area' || item.type === 'point') && item.source === 'user')
+			for (const item of marked) agent.context.remove(item)
+		}
+	})
 }
