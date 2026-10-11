@@ -2,7 +2,7 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor, useValue } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiGenerateText } from '../../api/pipelineApi'
-import { startExecution } from '../../execution/executionState'
+import { currentRunSignal, startExecution } from '../../execution/executionState'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
@@ -140,15 +140,18 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 		const { text: prompt, warning } = fillLlmTemplate(promptSource, vars, inputs)
 		const settings = llmEffectiveSettings(node, inputs)
 
-		const result = await apiGenerateText({
-			input,
-			prompt,
-			model: settings.model || node.model || undefined,
-			system: settings.system,
-			temperature: settings.temperature,
-			maxTokens: settings.maxTokens,
-			thinking: settings.thinking,
-		})
+		const result = await apiGenerateText(
+			{
+				input,
+				prompt,
+				model: settings.model || node.model || undefined,
+				system: settings.system,
+				temperature: settings.temperature,
+				maxTokens: settings.maxTokens,
+				thinking: settings.thinking,
+			},
+			currentRunSignal(this.editor)
+		)
 
 		const usage = result.usage ? formatLlmUsage(result.usage) : ''
 		updateNode<GenerateTextNode>(this.editor, shape, (n) => ({

@@ -11,6 +11,8 @@ import {
 	suggestColumns,
 } from '../../../../shared/pgImport'
 import { apiHttp } from '../../api/pipelineApi'
+import { currentRunSignal } from '../../execution/executionState'
+import { isAbortError } from '../../../../shared/abort'
 import { runSql } from '../../pg'
 import { NumberIcon } from '../../components/icons/NumberIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
@@ -18,7 +20,7 @@ import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { CodeArea } from '../../editors/CodeArea'
 import { UiButton, UiCheckbox, UiNumberInput, UiTextArea, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect, useInputConnected, WireField, WireFieldHeader } from './fields'
+import { PgliteMemoryWarning, PortRow, stopEvent, NodeSelect, useInputConnected, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -113,7 +115,7 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 			let text: string
 			if (node.mode === 'import') {
 				let source = input == null ? '' : coerceToText(input)
-				if (!source.trim() && node.sourceUrl?.trim()) source = await textFromUrl(node.sourceUrl)
+				if (!source.trim() && node.sourceUrl?.trim()) source = await textFromUrl(node.sourceUrl, currentRunSignal(this.editor))
 				if (!source.trim()) source = node.csv ?? ''
 				if (!source.trim()) throw new Error('Wire CSV text, paste it, or set a URL')
 				// The saved steps are reused. Without them, guess once and keep the guess.
@@ -133,8 +135,7 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 			}
 			return { output: text }
 		} catch (error) {
-			const message = (error as Error).message
-			updateNode<PostgresNode>(this.editor, shape, (n) => ({ ...n, error: message }), false)
+			updateNode<PostgresNode>(this.editor, shape, (n) => ({ ...n, error: isAbortError(error) ? null : (error as Error).message }), false)
 			return { output: STOP_EXECUTION }
 		}
 	}
@@ -150,11 +151,11 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 	Component = PostgresNodeComponent
 }
 
-async function textFromUrl(url: string): Promise<string> {
+async function textFromUrl(url: string, signal?: AbortSignal): Promise<string> {
 	const trimmed = url.trim()
 	if (!trimmed) throw new Error('Type a URL')
 	const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-	const result = await apiHttp({ method: 'GET', url: href, extractText: true })
+	const result = await apiHttp({ method: 'GET', url: href, extractText: true }, signal)
 	if (!result.ok) throw new Error(`URL returned ${result.status}`)
 	if (!result.text.trim()) throw new Error('The URL returned no text')
 	return result.text
@@ -187,6 +188,7 @@ function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>
 	const csvWired = useInputConnected(shape.id, 'field:csv')
 	return (
 		<>
+			<PgliteMemoryWarning />
 			<PortRow shapeId={shape.id} portId="input" label={importing ? 'CSV' : '$1'} dataType="text" hint={importing ? 'or paste below' : 'optional value'} />
 			<WireField shapeId={shape.id} fieldKey="mode" label="Mode">
 				<NodeSelect className="NodeField-select" value={importing ? 'import' : 'sql'} onPointerDown={stopEvent} onChange={(e) => set({ mode: e.target.value })}>

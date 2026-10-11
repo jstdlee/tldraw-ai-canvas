@@ -9,6 +9,8 @@ import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiSecretInput, UiTextArea, UiTextInput } from '../../../ui'
 import { apiSaveSecret } from '../../api/pipelineApi'
+import { currentRunSignal } from '../../execution/executionState'
+import { isAbortError } from '../../../../shared/abort'
 import { PortRow, stopEvent, NodeSelect, NodeTextResult, useInputConnected, WireField, WireFieldHeader } from './fields'
 import { fillLlmTemplate, llmTemplateVars, llmVarPorts, llmVarsHeight, LlmVarRows } from './llmSettings'
 import {
@@ -134,6 +136,7 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 					maxTokens: node.maxTokens === '' ? undefined : Number(node.maxTokens),
 					prompt,
 				}),
+				signal: currentRunSignal(this.editor),
 			})
 			const payload = (await response.json()) as { text?: string; usage?: LlmUsage; error?: string }
 			if (!response.ok) throw new Error(payload.error || response.statusText)
@@ -142,7 +145,7 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 			updateNode<RawModelNode>(this.editor, shape, (n) => ({ ...n, lastText: text, lastUsage: [usage, warning].filter(Boolean).join(' · ') || null, error: null }), false)
 			return { output: text }
 		} catch (error) {
-			updateNode<RawModelNode>(this.editor, shape, (n) => ({ ...n, error: (error as Error).message }), false)
+			updateNode<RawModelNode>(this.editor, shape, (n) => ({ ...n, error: isAbortError(error) ? null : (error as Error).message }), false)
 			return { output: STOP_EXECUTION }
 		}
 	}

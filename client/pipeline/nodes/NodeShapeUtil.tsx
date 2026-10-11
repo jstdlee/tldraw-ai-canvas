@@ -470,6 +470,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 					running={isExecuting || run?.status === 'running'}
 					cards={runningCards}
 					cached={run?.status === 'ok' && run.message === 'cached'}
+					stopped={run?.status === 'stopped'}
 				/>
 			)}
 		</HTMLContainer>
@@ -482,22 +483,26 @@ function NodeRunStatus({
 	running,
 	cards,
 	cached,
+	stopped,
 }: {
 	shape: NodeShape
 	running: boolean
 	cards?: number | null
 	cached?: boolean
+	stopped?: boolean
 }) {
 	const usage = (shape.props.node as { lastUsage?: string | null }).lastUsage
 	const text = running
 		? cards && cards > 1
 			? `Running ${cards} cards…`
 			: 'Running…'
-		: cached
-			? 'cached'
-			: typeof usage === 'string'
-				? usage
-				: ''
+		: stopped
+			? 'Stopped'
+			: cached
+				? 'cached'
+				: typeof usage === 'string'
+					? usage
+					: ''
 	if (!text) return null
 	return <div className="NodeLlmStatus">{text}</div>
 }

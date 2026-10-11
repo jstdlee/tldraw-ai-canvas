@@ -2,7 +2,8 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { Editor, T, useEditor, useValue } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiChatStream, ChatMessage } from '../../api/pipelineApi'
-import { startExecution } from '../../execution/executionState'
+import { currentRunSignal, startExecution } from '../../execution/executionState'
+import { isAbortError } from '../../../../shared/abort'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
@@ -232,7 +233,8 @@ export async function sendChat(
 				const latest = editor.getShape<NodeShape>(shape.id)
 				if (!latest) return
 				updateNode<ChatNode>(editor, latest, (n) => ({ ...n, assistantMessage: text }))
-			}
+			},
+			currentRunSignal(editor)
 		)
 		const usage = reply.usage ? formatLlmUsage(reply.usage) : ''
 		const latest = editor.getShape<NodeShape>(shape.id)
@@ -247,7 +249,7 @@ export async function sendChat(
 	} catch (e) {
 		const latest = editor.getShape<NodeShape>(shape.id)
 		if (latest) {
-			updateNode<ChatNode>(editor, latest, (n) => ({ ...n, error: (e as Error).message }), false)
+			updateNode<ChatNode>(editor, latest, (n) => ({ ...n, error: isAbortError(e) ? null : (e as Error).message }), false)
 		}
 		return null
 	}

@@ -48,7 +48,7 @@ function top(probs: Record<string, number>) {
 	return Object.entries(probs).sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
 }
 
-export async function decide(req: JevRequest): Promise<JevResult> {
+export async function decide(req: JevRequest, signal?: AbortSignal): Promise<JevResult> {
 	if (!req.question?.trim()) throw new ConfigError('A question is required')
 	const options = (req.options ?? []).map(parseOption).filter((o) => o.label)
 	if (req.type === 'choice' && options.length < 2) throw new ConfigError('A choice needs at least 2 options (one per line)')
@@ -56,12 +56,12 @@ export async function decide(req: JevRequest): Promise<JevResult> {
 	if (req.type === 'score' && levels.length < 2) throw new ConfigError('A score needs at least 2 levels (worst first)')
 
 	const { model, provider } = resolveModelRef(req.model, 'jev')
-	if (provider.kind === 'systemone') return systemOne(provider.baseURL, provider.apiKey, model.model, req, options, levels)
+	if (provider.kind === 'systemone') return systemOne(provider.baseURL, provider.apiKey, model.model, req, options, levels, signal)
 	if (provider.kind === 'cloudflare' && model.model.startsWith('@cf/cloudflare/clef')) {
 		if (!provider.accountId) throw new ConfigError(`Provider "${provider.name}" needs a Cloudflare account id.`)
-		return clef(provider.accountId, provider.apiKey, model.model, req, options, levels)
+		return clef(provider.accountId, provider.apiKey, model.model, req, options, levels, signal)
 	}
-	return llmDecision(req, options, levels, getLanguageModel(provider, model), model.key)
+	return llmDecision(req, options, levels, getLanguageModel(provider, model), model.key, signal)
 }
 
 /** The "state + questions" body System One (and Clef, which shares the same shape) expects. */
@@ -107,20 +107,25 @@ export function parseSystemOneAnswer(
 	return { type: 'score', answer: nameFor(idx), probabilities: probs, confidence: a.confidence ?? null }
 }
 
+function withTimeout(signal: AbortSignal | undefined): AbortSignal {
+	return signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000)
+}
+
 async function systemOne(
 	baseURL: string | undefined,
 	apiKey: string | undefined,
 	modelId: string,
 	req: JevRequest,
 	options: { label: string; description: string }[],
-	levels: string[]
+	levels: string[],
+	signal?: AbortSignal
 ): Promise<JevResult> {
 	const base = (baseURL ?? 'http://127.0.0.1:8011').replace(/\/+$/, '').replace(/\/v1$/, '')
 	const res = await fetch(`${base}/v1/systemone`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
 		body: JSON.stringify(buildSystemOneBody(modelId, req, options, levels)),
-		signal: AbortSignal.timeout(60_000),
+		signal: withTimeout(signal),
 	})
 	const data = (await res.json().catch(() => ({}))) as any
 	if (!res.ok) throw new Error(`System One API ${res.status}: ${data?.detail ?? data?.error ?? JSON.stringify(data).slice(0, 300)}`)
@@ -135,14 +140,15 @@ async function clef(
 	modelId: string,
 	req: JevRequest,
 	options: { label: string; description: string }[],
-	levels: string[]
+	levels: string[],
+	signal?: AbortSignal
 ): Promise<JevResult> {
 	const modelName = modelId.replace(/^@cf\/cloudflare\//, '')
 	const res = await fetch(`${cloudflareBase(accountId)}/run/${modelId}`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey ?? ''}` },
 		body: JSON.stringify(buildSystemOneBody(modelName, req, options, levels)),
-		signal: AbortSignal.timeout(60_000),
+		signal: withTimeout(signal),
 	})
 	const raw = (await res.json().catch(() => ({}))) as any
 	if (!res.ok) {
@@ -160,7 +166,8 @@ async function llmDecision(
 	options: { label: string; description: string }[],
 	levels: string[],
 	model: ReturnType<typeof getLanguageModel>,
-	modelKey: string
+	modelKey: string,
+	signal?: AbortSignal
 ): Promise<JevResult> {
 	const labels = req.type === 'noul' ? ['yes', 'no'] : req.type === 'choice' ? options.map((o) => o.label) : levels
 	const described =
@@ -175,6 +182,7 @@ async function llmDecision(
 		prompt: `Context:\n${(req.context ?? '').slice(0, 40_000) || '(none)'}\n\nQuestion: ${req.question}\n\nAnswers (use these exact keys):\n${described}`,
 		temperature: 0,
 		maxOutputTokens: 2000,
+		abortSignal: signal,
 	})
 	const json = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
 	let parsed: { probabilities?: Record<string, number> } = {}

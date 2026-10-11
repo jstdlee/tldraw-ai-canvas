@@ -1,7 +1,10 @@
 import { mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { authHeader } from '../shared/httpBuild'
+import { resolveSecret } from '../shared/secrets'
 import { ConfigError, DATA_DIR } from './config'
 import { resolveImage, saveImage } from './images'
+import { getSecretValue } from './secretsStore'
 
 /** Files from the Download node and the Save node. Never committed. */
 export const DOWNLOAD_DIR = join(DATA_DIR, 'downloads')
@@ -17,6 +20,13 @@ export interface HttpRequestInput {
 	body?: string
 	/** Turn an HTML page into readable text. */
 	extractText?: boolean
+	/** Bearer / basic auth: `auth` picks the scheme, `authRef` (`secret:<id>`/`env:NAME`) or a
+	 * legacy plain `authValue` gives the value. Resolved here so the secret never reaches the client. */
+	auth?: string
+	authRef?: string
+	authValue?: string
+	/** Set by the route handler from the request, not sent by the client (WP19 Part 2: Stop aborts it). */
+	signal?: AbortSignal
 }
 
 export interface HttpResult {
@@ -90,6 +100,10 @@ export async function httpRequest(input: HttpRequestInput): Promise<HttpResult> 
 	const method = (input.method ?? 'GET').toUpperCase()
 	const hasBody = !['GET', 'HEAD'].includes(method) && input.body != null && input.body !== ''
 	const headers: Record<string, string> = { 'User-Agent': 'oh-my-tldraw/0.1', ...(input.headers ?? {}) }
+	if (input.auth) {
+		const secret = resolveSecret(input.authRef || input.authValue, process.env, getSecretValue)
+		Object.assign(headers, authHeader(input.auth, secret))
+	}
 	if (hasBody && !Object.keys(headers).some((h) => h.toLowerCase() === 'content-type')) {
 		headers['Content-Type'] = /^\s*[[{]/.test(input.body!) ? 'application/json' : 'text/plain'
 	}
@@ -99,7 +113,7 @@ export async function httpRequest(input: HttpRequestInput): Promise<HttpResult> 
 		headers,
 		body: hasBody ? input.body : undefined,
 		redirect: 'follow',
-		signal: AbortSignal.timeout(60_000),
+		signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
 	})
 	const contentType = res.headers.get('content-type')?.split(';')[0].trim() ?? ''
 	const responseHeaders = [...res.headers.entries()]

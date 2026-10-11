@@ -167,12 +167,16 @@ async function storeImageSources(sources: string[]): Promise<string[]> {
 	return out
 }
 
-async function postJson(url: string, headers: Record<string, string>, body: unknown): Promise<any> {
+function withTimeout(signal: AbortSignal | undefined): AbortSignal {
+	return signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS)
+}
+
+async function postJson(url: string, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<any> {
 	const res = await fetch(url, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...headers },
 		body: JSON.stringify(body),
-		signal: AbortSignal.timeout(TIMEOUT_MS),
+		signal: withTimeout(signal),
 	})
 	const json = await res.json().catch(() => ({}))
 	if (!res.ok) throw new ConfigError(describeProviderError(json, res.status))
@@ -183,7 +187,8 @@ async function openAIEditImages(
 	base: string,
 	headers: Record<string, string>,
 	model: string,
-	params: ImageGenParams
+	params: ImageGenParams,
+	signal?: AbortSignal
 ): Promise<any> {
 	const form = new FormData()
 	form.append('model', model)
@@ -198,7 +203,7 @@ async function openAIEditImages(
 		method: 'POST',
 		headers,
 		body: form,
-		signal: AbortSignal.timeout(TIMEOUT_MS),
+		signal: withTimeout(signal),
 	})
 	const json = await res.json().catch(() => ({}))
 	if (!res.ok) throw new ConfigError(describeProviderError(json, res.status))
@@ -209,7 +214,8 @@ async function openAIEditImages(
 export async function generateImage(
 	provider: ProviderConfig,
 	model: ModelConfig,
-	params: ImageGenParams
+	params: ImageGenParams,
+	signal?: AbortSignal
 ): Promise<ImageGenResult> {
 	if (!params.prompt.trim()) throw new ConfigError('Write a prompt first')
 
@@ -218,13 +224,13 @@ export async function generateImage(
 		const headers = { 'x-goog-api-key': provider.apiKey ?? '' }
 		const isImagen = /^imagen-/i.test(model.model)
 		if (isImagen) {
-			const json = await postJson(`${base}/models/${model.model}:predict`, headers, buildImagenBody(params))
+			const json = await postJson(`${base}/models/${model.model}:predict`, headers, buildImagenBody(params), signal)
 			return { images: await storeImageSources(parseImagenResponse(json)) }
 		}
 		const images: string[] = []
 		const calls = Math.max(1, Math.min(8, params.n || 1))
 		for (let i = 0; i < calls; i++) {
-			const json = await postJson(`${base}/models/${model.model}:generateContent`, headers, buildGeminiImageBody(params))
+			const json = await postJson(`${base}/models/${model.model}:generateContent`, headers, buildGeminiImageBody(params), signal)
 			images.push(...parseGeminiImageResponse(json))
 		}
 		return { images: await storeImageSources(images) }
@@ -237,7 +243,7 @@ export async function generateImage(
 		const images: string[] = []
 		const calls = Math.max(1, Math.min(8, params.n || 1))
 		for (let i = 0; i < calls; i++) {
-			const json = await postJson(`${base}/chat/completions`, authHeaders, buildOpenRouterImageBody(model.model, params))
+			const json = await postJson(`${base}/chat/completions`, authHeaders, buildOpenRouterImageBody(model.model, params), signal)
 			images.push(...parseOpenRouterImageResponse(json))
 		}
 		if (!images.length) throw new ConfigError('The model did not return an image. Pick an image-capable OpenRouter model.')
@@ -247,12 +253,12 @@ export async function generateImage(
 	// openai, or a generic openai-compatible server (custom URL).
 	const base = baseOf(provider, 'https://api.openai.com/v1')
 	if (params.images?.length) {
-		const json = await openAIEditImages(base, authHeaders, model.model, params)
+		const json = await openAIEditImages(base, authHeaders, model.model, params, signal)
 		const items = parseOpenAIImageResponse(json)
 		const sources = items.map((item) => (item.b64 ? `data:image/png;base64,${item.b64}` : item.url!))
 		return { images: await storeImageSources(sources) }
 	}
-	const json = await postJson(`${base}/images/generations`, authHeaders, buildOpenAIImageBody(model.model, params))
+	const json = await postJson(`${base}/images/generations`, authHeaders, buildOpenAIImageBody(model.model, params), signal)
 	const items = parseOpenAIImageResponse(json)
 	const sources = items.map((item) => (item.b64 ? `data:image/png;base64,${item.b64}` : item.url!))
 	return { images: await storeImageSources(sources) }

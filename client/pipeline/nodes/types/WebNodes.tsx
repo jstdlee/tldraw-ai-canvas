@@ -1,8 +1,10 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
-import { buildHttpRequest } from '../../../../shared/httpBuild'
+import { buildHttpRequest, needsAuthValueMigration } from '../../../../shared/httpBuild'
 import { formatRunMs } from '../../../../shared/llmUsage'
+import { isAbortError } from '../../../../shared/abort'
 import { T, useEditor } from 'tldraw'
-import { apiDownload, apiHttp, apiSave } from '../../api/pipelineApi'
+import { apiDownload, apiHttp, apiSave, apiSaveSecret } from '../../api/pipelineApi'
+import { currentRunSignal } from '../../execution/executionState'
 import { TextAreaField } from '../../editors/CodeArea'
 import { LoadImageIcon } from '../../components/icons/LoadImageIcon'
 import { PromptIcon } from '../../components/icons/PromptIcon'
@@ -16,7 +18,7 @@ import {
 import { Port as PortDot, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiCheckbox, UiTextInput } from '../../../ui'
+import { UiCheckbox, UiSecretInput, UiTextInput } from '../../../ui'
 import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -91,7 +93,10 @@ export const HttpNode = T.object({
 	headers: T.string,
 	body: T.string,
 	auth: T.string.optional(),
+	/** Legacy: a bearer token / basic password typed straight into the node. Moved to the server's secret store on first run. */
 	authValue: T.string.optional(),
+	/** `secret:<id>` from the server's secret store, or `env:NAME`. */
+	authRef: T.string.optional(),
 	extractText: T.boolean,
 	lastStatus: T.string.nullable(),
 	lastText: T.string.nullable(),
@@ -163,19 +168,29 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 		const bodyInput = getInput(inputs, 'body')
 		const body = bodyInput != null ? coerceToText(bodyInput) : node.body
 		try {
+			// An old canvas may still carry a token/password typed straight into the node:
+			// move it to the server's secret store the first time this node runs.
+			let authRef = node.authRef
+			if (needsAuthValueMigration(node.auth, node.authRef, node.authValue)) {
+				authRef = await apiSaveSecret(node.authValue!)
+				updateNode<HttpNode>(this.editor, shape, (n) => ({ ...n, authRef, authValue: '' }), false)
+			}
 			const built = buildHttpRequest({
 				method: node.method,
 				url,
 				query: node.query ?? '',
 				headers: node.headers,
 				body,
-				auth: node.auth ?? '',
-				authValue: node.authValue ?? '',
 			})
-			const result = await apiHttp({
-				...built,
-				extractText: node.extractText,
-			})
+			const result = await apiHttp(
+				{
+					...built,
+					auth: node.auth || undefined,
+					authRef: authRef || undefined,
+					extractText: node.extractText,
+				},
+				currentRunSignal(this.editor)
+			)
 			const status = [
 				String(result.status),
 				result.contentType || 'no type',
@@ -196,7 +211,7 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 			if (!result.ok) return { output: STOP_EXECUTION }
 			return { output: result.imageUrl ?? result.text }
 		} catch (e) {
-			updateNode<HttpNode>(this.editor, shape, (n) => ({ ...n, error: (e as Error).message }), false)
+			updateNode<HttpNode>(this.editor, shape, (n) => ({ ...n, error: isAbortError(e) ? null : (e as Error).message }), false)
 			return { output: STOP_EXECUTION }
 		}
 	}
@@ -269,11 +284,10 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 			</WireField>
 			{!authWired && (
 				<NodeRow>
-					<UiTextInput
-						placeholder={node.auth === 'basic' ? 'user:password' : 'token'}
-						value={node.authValue ?? ''}
-						disabled={!node.auth}
-						onChange={(authValue) => set({ authValue })}
+					<UiSecretInput
+						placeholder={node.auth === 'basic' ? 'user:password' : 'token (pick Auth above first)'}
+						value={node.authRef}
+						onChange={(authRef) => set({ authRef, authValue: '' })}
 					/>
 				</NodeRow>
 			)}

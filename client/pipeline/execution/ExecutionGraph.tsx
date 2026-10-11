@@ -21,6 +21,8 @@ import { isRunCacheable } from '../../../shared/runCache'
 import { runHash } from '../../../shared/runHash'
 import { setNodeRun } from './nodeRunState'
 import { getArrowInputs, writeArrowOutputs } from './arrows'
+import { currentRunSignal } from './executionState'
+import { isAbortError } from '../../../shared/abort'
 
 export interface ExecutionGraphOptions {
 	/** Only these nodes may run (loop bodies, packed groups). */
@@ -244,6 +246,9 @@ export class ExecutionGraph {
 		})
 		setNodeRun(this.editor, nodeId, { status: 'running' })
 		const started = performance.now()
+		// Captured before the call, not read again afterwards: a new run may have
+		// already installed a fresh (not-yet-aborted) signal by the time this resolves.
+		const runSignal = currentRunSignal(this.editor)
 
 		this.editor.updateShape({
 			id: nodeId,
@@ -257,11 +262,15 @@ export class ExecutionGraph {
 		} catch (error) {
 			caught = true
 			outputs = { output: STOP_EXECUTION }
-			setNodeRun(this.editor, nodeId, {
-				status: 'error',
-				message: runErrorMessage(error),
-				ms: Math.round(performance.now() - started),
-			})
+			if (isAbortError(error) || runSignal?.aborted) {
+				setNodeRun(this.editor, nodeId, { status: 'stopped', message: 'Stopped', ms: Math.round(performance.now() - started) })
+			} else {
+				setNodeRun(this.editor, nodeId, {
+					status: 'error',
+					message: runErrorMessage(error),
+					ms: Math.round(performance.now() - started),
+				})
+			}
 		}
 		this.editor.updateShape({
 			id: nodeId,
@@ -284,11 +293,14 @@ export class ExecutionGraph {
 		const failed =
 			!!nodeError ||
 			(Object.keys(outputs).length > 0 && Object.values(outputs).every((value) => value === STOP_EXECUTION))
+		// A card that stopped because of Stop (not a real failure) clears its own error field
+		// (WP19 Part 2); this is how the run badge tells "stopped" apart from "failed".
+		const stopped = failed && !nodeError && !!runSignal?.aborted
 		const ms = Math.round(performance.now() - started)
 		if (!caught) {
 			setNodeRun(this.editor, nodeId, {
-				status: failed ? 'error' : 'ok',
-				message: nodeError || undefined,
+				status: stopped ? 'stopped' : failed ? 'error' : 'ok',
+				message: stopped ? 'Stopped' : nodeError || undefined,
 				ms,
 			})
 			if (hash !== undefined && !failed) {

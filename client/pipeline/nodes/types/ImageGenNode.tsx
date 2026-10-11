@@ -4,7 +4,8 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiGenerateImage } from '../../api/pipelineApi'
 import { toImageUrl } from '../../imageOps'
-import { startExecution } from '../../execution/executionState'
+import { currentRunSignal, startExecution } from '../../execution/executionState'
+import { isAbortError } from '../../../../shared/abort'
 import { placeImageOnCanvas } from '../../placeOnCanvas'
 import { ImageZoom } from '../../editors/LargeEditor'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
@@ -171,20 +172,23 @@ export class ImageGenNodeDefinition extends NodeDefinition<ImageGenNode> {
 			const referenceSource = imageFromPort || node.referenceImage.trim()
 			const referenceImage = referenceSource ? await toImageUrl(referenceSource) : undefined
 			const params = parseLlmParams(getInputText(inputs, 'params'))
-			const result = await apiGenerateImage({
-				model,
-				prompt,
-				n: Math.max(1, Math.min(8, params.n ?? node.n ?? 1)),
-				size: params.size ?? node.size,
-				images: referenceImage ? [referenceImage] : undefined,
-				negative: node.negative.trim() || undefined,
-				seed: params.seed ?? node.seed ?? undefined,
-			})
+			const result = await apiGenerateImage(
+				{
+					model,
+					prompt,
+					n: Math.max(1, Math.min(8, params.n ?? node.n ?? 1)),
+					size: params.size ?? node.size,
+					images: referenceImage ? [referenceImage] : undefined,
+					negative: node.negative.trim() || undefined,
+					seed: params.seed ?? node.seed ?? undefined,
+				},
+				currentRunSignal(this.editor)
+			)
 			if (!result.images.length) throw new Error('The model did not return an image')
 			updateNode<ImageGenNode>(this.editor, shape, (n) => ({ ...n, images: JSON.stringify(result.images), error: null }))
 			return { output: result.images[0], images: result.images.join('\n') }
 		} catch (error) {
-			updateNode<ImageGenNode>(this.editor, shape, (n) => ({ ...n, error: (error as Error).message }), false)
+			updateNode<ImageGenNode>(this.editor, shape, (n) => ({ ...n, error: isAbortError(error) ? null : (error as Error).message }), false)
 			throw error
 		}
 	}

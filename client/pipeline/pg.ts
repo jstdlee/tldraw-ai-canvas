@@ -14,12 +14,24 @@ interface PgDb {
 
 let opening: Promise<PgDb> | null = null
 
+// WP19 Part 3: when idb://ai-canvas cannot be opened, the Postgres cards fall back to an
+// in-memory database so the card still works — but anything written there is lost on reload.
+// This flag lets the cards show that instead of staying silent about it.
+let memoryFallbackReason: string | null = null
+
+/** Why the built-in Postgres is running in memory, or null when it opened normally. */
+export function pgliteMemoryFallbackReason(): string | null {
+	return memoryFallbackReason
+}
+
 async function openDb(): Promise<PgDb> {
 	try {
 		const db = new PGlite('idb://ai-canvas') as unknown as PgDb
 		await db.query('SELECT 1')
+		memoryFallbackReason = null
 		return db
-	} catch {
+	} catch (error) {
+		memoryFallbackReason = (error as Error)?.message || 'could not open its saved database'
 		return new PGlite() as unknown as PgDb
 	}
 }
@@ -27,6 +39,17 @@ async function openDb(): Promise<PgDb> {
 export function getPg(): Promise<PgDb> {
 	opening ??= openDb()
 	return opening
+}
+
+// A toast for this is shown at most once per session, regardless of how many
+// Postgres cards are on the canvas.
+let toastShown = false
+
+/** True the first time this is called after the fallback happened; false on every later call. */
+export function takePgliteFallbackToast(): boolean {
+	if (toastShown || !memoryFallbackReason) return false
+	toastShown = true
+	return true
 }
 
 function table(result: PgResult): string {

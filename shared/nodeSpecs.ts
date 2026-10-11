@@ -167,6 +167,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			field('body', 'longtext', 'Body', 'Request body, sent for POST/PUT/PATCH.'),
 			field('auth', 'enum', 'Auth', 'Authorization style.', ['', 'bearer', 'basic']),
 			field('authValue', 'text', 'Auth value', 'The token or user:password for the chosen auth style. Secret — never set or shown by AI.', undefined, undefined, false),
+			field('authRef', 'text', 'Auth key', 'Saved key ref for the chosen auth style. Secret — never set or shown by AI.', undefined, undefined, false),
 			field('extractText', 'boolean', 'Extract text', 'Read the readable text out of an HTML response instead of raw HTML.'),
 		],
 		assistant: {

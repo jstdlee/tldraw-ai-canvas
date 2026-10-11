@@ -2,6 +2,7 @@ import { Editor, TLShapeId } from 'tldraw'
 import { getNodePortConnections } from '../nodes/nodePorts'
 import { PipelineValue, STOP_EXECUTION } from '../nodes/types/shared'
 import { ExecutionGraph } from './ExecutionGraph'
+import { currentRunSignal } from './executionState'
 import { nodeRunState } from './nodeRunState'
 
 /** All nodes reachable downstream from one output port of a node (not the node itself). */
@@ -46,6 +47,10 @@ export async function runLoopBody(
 	resultPort: string,
 	value: PipelineValue
 ): Promise<LoopItemResult> {
+	// Stop may land between the loop's own generation check and this call; the body's own
+	// cards would see the same signal already aborted and stop there, but checking here too
+	// avoids starting a body graph at all for an item that will not get to run anything.
+	if (currentRunSignal(editor)?.aborted) return { value: null }
 	const connections = getNodePortConnections(editor, nodeId)
 	const itemLinks = connections.filter((c) => c.terminal === 'start' && c.ownPortId === itemPort)
 	const resultLink = connections.find((c) => c.terminal === 'end' && c.ownPortId === resultPort)

@@ -576,6 +576,10 @@ button.UiChip {
 	color: var(--tl-color-text-3);
 }
 
+.NodeHint-warning {
+	color: var(--tl-color-warning);
+}
+
 .NodeBody > .NodeHint {
 	margin-block: 0.1em 0.3em;
 }

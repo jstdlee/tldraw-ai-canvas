@@ -7,7 +7,8 @@ import { DB_SOURCES, DbSourceId } from '../../../../shared/dbSources'
 import { parseCsv } from '../../../../shared/pgImport'
 import { summarizeScript } from '../../../../shared/sqlStatements'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
-import { startExecution } from '../../execution/executionState'
+import { currentRunSignal, startExecution } from '../../execution/executionState'
+import { isAbortError } from '../../../../shared/abort'
 import { ShapePort } from '../../ports/Port'
 import { storeFile, loadFileBytes } from '../../fileStore'
 import { describeTables, openDatabase, runSqlCsv, schemaText, type SqlTableInfo } from '../../sqlJs'
@@ -17,7 +18,7 @@ import { NodeShape } from '../NodeShapeUtil'
 import { isInputWired } from '../nodePorts'
 import { UiButton, UiCheckbox, UiEmpty, UiSecretInput, UiSegmented, UiTable, UiTextArea, UiTextInput } from '../../../ui'
 import { IconAlert, IconDatabase, IconTable, IconUpload } from '../../../ui/icons'
-import { NodeSelect, PortRow, stopEvent, useInputConnected, WireField, WireFieldHeader } from './fields'
+import { NodeSelect, PgliteMemoryWarning, PortRow, stopEvent, useInputConnected, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -192,8 +193,8 @@ function layout(node: DatabaseNode, sqlWired: boolean) {
 // Server API (postgres/duckdb): thin fetch wrappers around server/db.ts's routes.
 // ---------------------------------------------------------------------------
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-	const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
+	const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal })
 	const data = await res.json().catch(() => ({}))
 	if (!res.ok) throw new Error((data as { error?: string }).error || res.statusText)
 	return data as T
@@ -202,15 +203,19 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 function dbTest(conn: DbConn) {
 	return postJson<{ ok: true; version: string; normalizedConn?: DbConn }>('/api/db/test', { conn })
 }
-function dbSchema(conn: DbConn) {
-	return postJson<{ tables: ExtSchemaTable[]; normalizedConn?: DbConn }>('/api/db/schema', { conn })
+function dbSchema(conn: DbConn, signal?: AbortSignal) {
+	return postJson<{ tables: ExtSchemaTable[]; normalizedConn?: DbConn }>('/api/db/schema', { conn }, signal)
 }
-function dbQuery(conn: DbConn, sql: string, opts: { transaction?: boolean } = {}) {
-	return postJson<{ results: ExtQueryResultRow[]; ms: number; normalizedConn?: DbConn }>('/api/db/query', {
-		conn,
-		sql,
-		transaction: opts.transaction,
-	})
+function dbQuery(conn: DbConn, sql: string, opts: { transaction?: boolean; signal?: AbortSignal } = {}) {
+	return postJson<{ results: ExtQueryResultRow[]; ms: number; normalizedConn?: DbConn }>(
+		'/api/db/query',
+		{
+			conn,
+			sql,
+			transaction: opts.transaction,
+		},
+		opts.signal
+	)
 }
 
 function escapeCsvCell(value: unknown): string {
@@ -308,7 +313,7 @@ export class DatabaseNodeDefinition extends NodeDefinition<DatabaseNode> {
 			)
 			return { output, schema }
 		} catch (error) {
-			updateNode<DatabaseNode>(this.editor, shape, (n) => ({ ...n, error: (error as Error).message }), false)
+			updateNode<DatabaseNode>(this.editor, shape, (n) => ({ ...n, error: isAbortError(error) ? null : (error as Error).message }), false)
 			throw error
 		}
 	}
@@ -319,17 +324,18 @@ export class DatabaseNodeDefinition extends NodeDefinition<DatabaseNode> {
 		sql: string,
 		inputs: InputValues
 	): Promise<ExecutionResult> {
+		const signal = currentRunSignal(this.editor)
 		const conn = connOf(node, source)
 		const rowsInput = getInputText(inputs, 'rows')
 		let loadSummary = ''
 		if (rowsInput && rowsInput.trim()) {
 			const plan = buildLoadPlan(parseCsv(rowsInput), node.targetTable || '', (node.loadMode as LoadMode) || 'insert', node.upsertKey || undefined)
-			await dbQuery(conn, plan.statements.join(';\n'), { transaction: true })
+			await dbQuery(conn, plan.statements.join(';\n'), { transaction: true, signal })
 			loadSummary = `Loaded ${plan.rowCount} row${plan.rowCount === 1 ? '' : 's'} into ${plan.table}\n\n`
 		}
 		if (!sql.trim() && !loadSummary) throw new Error('Type a SQL statement, or wire rows to load into a table')
-		const queryResult = sql.trim() ? await dbQuery(conn, sql) : { results: [], ms: 0 }
-		const schemaResult = await dbSchema(conn).catch(() => ({ tables: [] as ExtSchemaTable[] }))
+		const queryResult = sql.trim() ? await dbQuery(conn, sql, { signal }) : { results: [], ms: 0 }
+		const schemaResult = await dbSchema(conn, signal).catch(() => ({ tables: [] as ExtSchemaTable[] }))
 		const schemaOut = extSchemaToText(schemaResult.tables)
 		// The output stays pure CSV so DataPipe and Chart can read it; the load note goes to lastInfo.
 		const output = resultsToOutputText(queryResult.results)
@@ -674,6 +680,7 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 				</>
 			)}
 
+			{source === 'pglite' && <PgliteMemoryWarning />}
 			<div className="NodeHint">
 				{source === 'sqlite'
 					? 'Changes stay in memory; use Save file to write them back, or Download a copy.'

@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { T, useEditor } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiGenerateText, apiJev, JevResult } from '../../api/pipelineApi'
+import { currentRunSignal } from '../../execution/executionState'
+import { isAbortError } from '../../../../shared/abort'
 import { RouterIcon } from '../../components/icons/RouterIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
@@ -111,30 +113,37 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 		const question = coerceToText(getInput(inputs, 'question')) || node.question
 		const input = coerceToText(getInput(inputs, 'input'))
 		const lines = node.options.split('\n').map((l) => l.trim()).filter(Boolean)
+		const signal = currentRunSignal(this.editor)
 		try {
-			const result = await apiJev({
-				model: node.model || undefined,
-				type: node.kind as JevResult['type'],
-				question,
-				context: [context, input && !context ? input : ''].filter(Boolean).join('\n\n'),
-				options: node.kind === 'choice' ? lines : undefined,
-				levels: node.kind === 'score' ? lines.map((l) => l.replace(/:.*/, '').trim()) : undefined,
-			})
+			const result = await apiJev(
+				{
+					model: node.model || undefined,
+					type: node.kind as JevResult['type'],
+					question,
+					context: [context, input && !context ? input : ''].filter(Boolean).join('\n\n'),
+					options: node.kind === 'choice' ? lines : undefined,
+					levels: node.kind === 'score' ? lines.map((l) => l.replace(/:.*/, '').trim()) : undefined,
+				},
+				signal
+			)
 			let final = result.answer
 			if (node.filter) {
 				const probs = Object.entries(result.probabilities)
 					.sort((a, b) => b[1] - a[1])
 					.map(([k, v]) => `${k}: ${(v * 100).toFixed(1)}%`)
 					.join(', ')
-				const { text } = await apiGenerateText({
-					model: node.filterModel || undefined,
-					system:
-						'You apply a decision made by a separate judge model. Use the decision and its probabilities; ' +
-						'if the top answer is uncertain (below 60%), say so briefly. Return only the result.',
-					prompt:
-						`Question: ${question}\nDecision: ${result.answer}\nProbabilities: ${probs}\n\n` +
-						`Task: ${node.filterInstruction}\n\nInput text:\n${input || context}`,
-				})
+				const { text } = await apiGenerateText(
+					{
+						model: node.filterModel || undefined,
+						system:
+							'You apply a decision made by a separate judge model. Use the decision and its probabilities; ' +
+							'if the top answer is uncertain (below 60%), say so briefly. Return only the result.',
+						prompt:
+							`Question: ${question}\nDecision: ${result.answer}\nProbabilities: ${probs}\n\n` +
+							`Task: ${node.filterInstruction}\n\nInput text:\n${input || context}`,
+					},
+					signal
+				)
 				final = text
 			}
 			updateNode<JevNode>(this.editor, shape, (n) => ({
@@ -152,7 +161,7 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 				...(node.kind === 'noul' ? { yes: isYes ? pass : STOP_EXECUTION, no: isYes ? STOP_EXECUTION : pass } : {}),
 			}
 		} catch (e) {
-			updateNode<JevNode>(this.editor, shape, (n) => ({ ...n, error: (e as Error).message }), false)
+			updateNode<JevNode>(this.editor, shape, (n) => ({ ...n, error: isAbortError(e) ? null : (e as Error).message }), false)
 			return { output: STOP_EXECUTION, probs: STOP_EXECUTION, final: STOP_EXECUTION, yes: STOP_EXECUTION, no: STOP_EXECUTION }
 		}
 	}

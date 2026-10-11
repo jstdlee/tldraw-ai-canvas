@@ -4,6 +4,8 @@ import { T, useEditor } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { RANDOM_MODES, randomValue } from '../../../../shared/random'
 import { apiGenerateText, apiNetTool } from '../../api/pipelineApi'
+import { currentRunSignal } from '../../execution/executionState'
+import { isAbortError } from '../../../../shared/abort'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import { NumberIcon } from '../../components/icons/NumberIcon'
@@ -388,13 +390,16 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 			(node.language ? ` Write in ${node.language}.` : '')
 		try {
 			const images = kind === 'video' ? await videoFrames(value) : undefined
-			const result = await apiGenerateText({
-				input: kind === 'video' ? undefined : value,
-				images,
-				prompt,
-				model: node.model || undefined,
-				...llmRequestSettings(node),
-			})
+			const result = await apiGenerateText(
+				{
+					input: kind === 'video' ? undefined : value,
+					images,
+					prompt,
+					model: node.model || undefined,
+					...llmRequestSettings(node),
+				},
+				currentRunSignal(this.editor)
+			)
 			const usage = result.usage ? formatLlmUsage(result.usage) : ''
 			updateNode<SummarizeNode>(this.editor, shape, (n) => ({
 				...n,
@@ -405,7 +410,7 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 			}))
 			return { output: result.text }
 		} catch (e) {
-			updateNode<SummarizeNode>(this.editor, shape, (n) => ({ ...n, error: (e as Error).message }), false)
+			updateNode<SummarizeNode>(this.editor, shape, (n) => ({ ...n, error: isAbortError(e) ? null : (e as Error).message }), false)
 			return { output: STOP_EXECUTION }
 		}
 	}

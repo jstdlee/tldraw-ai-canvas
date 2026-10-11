@@ -158,7 +158,8 @@ export function registerBatchRoutes(app: Hono) {
 				...(key ? { Authorization: `Bearer ${key}` } : {}),
 			},
 			body: JSON.stringify(payload),
-			signal: AbortSignal.timeout(60_000),
+			// Stop (WP19 Part 2) closes the client request; combine with the hard timeout.
+			signal: AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(60_000)]),
 		})
 		if (!response.ok) throw new Error((await response.text()).slice(0, 400) || `Model ${response.status}`)
 		const data = (await response.json()) as {

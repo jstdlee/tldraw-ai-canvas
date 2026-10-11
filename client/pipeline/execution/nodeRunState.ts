@@ -1,7 +1,7 @@
 import { Editor, TLShapeId } from 'tldraw'
 import { EditorAtom } from '../utils'
 
-export type NodeRunStatus = 'running' | 'ok' | 'error' | 'missing'
+export type NodeRunStatus = 'running' | 'ok' | 'error' | 'missing' | 'stopped'
 
 export interface NodeRunInfo {
 	status: NodeRunStatus

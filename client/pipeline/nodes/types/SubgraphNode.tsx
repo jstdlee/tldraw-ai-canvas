@@ -2,6 +2,7 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, TLShapeId, useEditor } from 'tldraw'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, PortDataType } from '../../constants'
 import { ExecutionGraph } from '../../execution/ExecutionGraph'
+import { currentRunSignal } from '../../execution/executionState'
 import { ShapePort } from '../../ports/Port'
 import { openGroup } from '../../subgraph'
 import { shapeText } from '../../../clips/shapeText'
@@ -116,6 +117,10 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 		return ports
 	}
 	async execute(shape: NodeShape, node: SubgraphNode, inputs: InputValues): Promise<ExecutionResult> {
+		// Stop between cards: don't start the box's members at all once the run is aborted.
+		if (currentRunSignal(this.editor)?.aborted) {
+			return Object.fromEntries(node.outputs.map((p) => [p.id, STOP_EXECUTION]))
+		}
 		const inner = new Set(node.innerIds as TLShapeId[])
 		const overrides = new Map<string, PipelineValue>()
 		for (const p of node.inputs) {

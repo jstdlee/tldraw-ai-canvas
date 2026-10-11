@@ -35,7 +35,7 @@ export interface GenerateTextResult {
  * Call the /api/generate-text endpoint to generate text from a multimodal AI model.
  * Falls back to a local placeholder if the worker is not available.
  */
-export async function apiGenerateText(params: GenerateTextParams): Promise<GenerateTextResult> {
+export async function apiGenerateText(params: GenerateTextParams, signal?: AbortSignal): Promise<GenerateTextResult> {
 	// Coerce input to string so the worker always receives a string
 	const coercedParams = {
 		...params,
@@ -46,6 +46,7 @@ export async function apiGenerateText(params: GenerateTextParams): Promise<Gener
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(coercedParams),
+			signal,
 		})
 
 		if (!response.ok) {
@@ -112,11 +113,12 @@ export function stripThinking(text: string) {
 	return (open === -1 ? withoutClosed : withoutClosed.slice(0, open)).trimStart()
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
+async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
 	const response = await fetch(url, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(body),
+		signal,
 	})
 	const data = await response.json().catch(() => ({ error: response.statusText }))
 	if (!response.ok) throw new Error((data as { error?: string }).error ?? response.statusText)
@@ -164,19 +166,26 @@ export interface GenerateImageParams {
 }
 
 /** Generate N images from a prompt. Returns /api/images/… URLs; keys stay on the server. */
-export function apiGenerateImage(params: GenerateImageParams) {
-	return postJson<{ images: string[] }>('/api/generate-image', params)
+export function apiGenerateImage(params: GenerateImageParams, signal?: AbortSignal) {
+	return postJson<{ images: string[] }>('/api/generate-image', params, signal)
 }
 
 /** HTTP node: the local server makes the request (no CORS limits). */
-export function apiHttp(params: {
-	method: string
-	url: string
-	headers?: Record<string, string>
-	body?: string
-	extractText?: boolean
-}) {
-	return postJson<HttpResult>('/api/http', params)
+export function apiHttp(
+	params: {
+		method: string
+		url: string
+		headers?: Record<string, string>
+		body?: string
+		extractText?: boolean
+		/** Bearer / basic auth: `auth` picks the scheme, `authRef` (`secret:<id>`) or `authValue` gives the value. The server resolves it; the value never comes back. */
+		auth?: string
+		authRef?: string
+		authValue?: string
+	},
+	signal?: AbortSignal
+) {
+	return postJson<HttpResult>('/api/http', params, signal)
 }
 
 export interface DownloadResult {
@@ -207,15 +216,18 @@ export interface JevResult {
 }
 
 /** JEV decision: System One API, or a chat model asked for probabilities. */
-export function apiJev(params: {
-	model?: string
-	type: 'noul' | 'choice' | 'score'
-	question: string
-	context?: string
-	options?: string[]
-	levels?: string[]
-}) {
-	return postJson<JevResult>('/api/jev', params)
+export function apiJev(
+	params: {
+		model?: string
+		type: 'noul' | 'choice' | 'score'
+		question: string
+		context?: string
+		options?: string[]
+		levels?: string[]
+	},
+	signal?: AbortSignal
+) {
+	return postJson<JevResult>('/api/jev', params, signal)
 }
 
 /** Network tools on the local server: ping, traceroute, dig, whois, ports, subnet… */

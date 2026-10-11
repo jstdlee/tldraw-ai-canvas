@@ -2,7 +2,8 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
 import { ModelSelect } from '../../../ai/aiConfig'
 import { apiGenerateText } from '../../api/pipelineApi'
-import { startExecution } from '../../execution/executionState'
+import { currentRunSignal, startExecution } from '../../execution/executionState'
+import { isAbortError } from '../../../../shared/abort'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
 import {
@@ -160,15 +161,18 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 		const { text: jobPrompt, warning } = fillLlmTemplate(jobPromptSource, vars, inputs)
 		const settings = llmEffectiveSettings(node, inputs)
 		try {
-			const result = await apiGenerateText({
-				input: input || undefined,
-				prompt: input ? jobPrompt : `${jobPrompt}\n\n(No input was given.)`,
-				model: settings.model || node.model || undefined,
-				system: settings.system,
-				temperature: settings.temperature,
-				maxTokens: settings.maxTokens,
-				thinking: settings.thinking,
-			})
+			const result = await apiGenerateText(
+				{
+					input: input || undefined,
+					prompt: input ? jobPrompt : `${jobPrompt}\n\n(No input was given.)`,
+					model: settings.model || node.model || undefined,
+					system: settings.system,
+					temperature: settings.temperature,
+					maxTokens: settings.maxTokens,
+					thinking: settings.thinking,
+				},
+				currentRunSignal(this.editor)
+			)
 			const usage = result.usage ? formatLlmUsage(result.usage) : ''
 			updateNode<TextAINode>(this.editor, shape, (n) => ({
 				...n,
@@ -178,7 +182,7 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 			}))
 			return { output: result.text }
 		} catch (e) {
-			updateNode<TextAINode>(this.editor, shape, (n) => ({ ...n, error: (e as Error).message }), false)
+			updateNode<TextAINode>(this.editor, shape, (n) => ({ ...n, error: isAbortError(e) ? null : (e as Error).message }), false)
 			return { output: STOP_EXECUTION }
 		}
 	}

@@ -1,10 +1,11 @@
-import { ReactElement, ReactNode, useState } from 'react'
-import { TLShapeId, useEditor, useValue } from 'tldraw'
+import { ReactElement, ReactNode, useEffect, useState } from 'react'
+import { TLShapeId, useEditor, useToasts, useValue } from 'tldraw'
 export { NodeMultiSelect, NodeSelect } from './NodeSelect'
 import { FieldMax, LargeEditor } from '../../editors/LargeEditor'
 import { PortDataType } from '../../constants'
 import { parseModelValue } from '../../../../shared/modelRef'
 import { fieldPortId } from '../../../../shared/fieldOverrides'
+import { getPg, pgliteMemoryFallbackReason, takePgliteFallbackToast } from '../../pg'
 import { Port } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { getNodeInputPortValues, getNodePortConnections } from '../nodePorts'
@@ -13,6 +14,41 @@ import { NodePlaceholder, NodePortLabel, NodeRow, STOP_EXECUTION } from './share
 
 /** Keep pointer and key events inside form fields (not the canvas). */
 export const stopEvent = (e: React.SyntheticEvent) => e.stopPropagation()
+
+/**
+ * WP19 Part 3: the built-in Postgres (PGlite) can fall back to an in-memory database when it
+ * cannot open its saved one; data then disappears on reload. Shown by the Database card
+ * (source "pglite") and the legacy Postgres card, whichever is on screen opens the database
+ * and reports the reason. A toast fires once per session, no matter how many cards mount.
+ */
+export function PgliteMemoryWarning() {
+	const toasts = useToasts()
+	const [reason, setReason] = useState(pgliteMemoryFallbackReason())
+	useEffect(() => {
+		let cancelled = false
+		getPg().then(() => {
+			if (!cancelled) setReason(pgliteMemoryFallbackReason())
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [])
+	useEffect(() => {
+		if (!reason || !takePgliteFallbackToast()) return
+		toasts.addToast({
+			severity: 'warning',
+			title: 'Built-in Postgres is running in memory',
+			description: `Data is lost on reload (${reason}).`,
+			keepOpen: true,
+		})
+	}, [reason, toasts])
+	if (!reason) return null
+	return (
+		<NodeRow>
+			<span className="NodeHint NodeHint-warning">Built-in Postgres is running in memory: data is lost on reload ({reason}).</span>
+		</NodeRow>
+	)
+}
 
 export function isImageValue(value: unknown): value is string {
 	return (

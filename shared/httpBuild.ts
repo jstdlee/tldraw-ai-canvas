@@ -55,16 +55,36 @@ export function applyQuery(url: string, query: string): string {
 	return url + (url.includes('?') ? '&' : '?') + extra
 }
 
+/**
+ * WP19 Part 1: an old canvas may still carry a bearer token / basic password typed straight
+ * into the node. True when that value should move to the server's secret store (and the
+ * plain field cleared) the next time the card runs — pure so the decision is testable without
+ * a network call; the node's `execute` does the actual `apiSaveSecret` + `updateNode`.
+ */
+export function needsAuthValueMigration(
+	auth: string | undefined,
+	authRef: string | undefined,
+	authValue: string | undefined
+): boolean {
+	return !!auth && !authRef && !!authValue
+}
+
+/** The `Authorization` header for a bearer/basic auth scheme, or `{}` when there is nothing to send. */
+export function authHeader(auth: string | undefined, secret: string | undefined): Record<string, string> {
+	const kind = (auth ?? '').toLowerCase()
+	const value = (secret ?? '').trim()
+	if (!value) return {}
+	if (kind === 'bearer') return { Authorization: `Bearer ${value}` }
+	if (kind === 'basic') {
+		const token = typeof btoa === 'function' ? btoa(value) : Buffer.from(value).toString('base64')
+		return { Authorization: `Basic ${token}` }
+	}
+	return {}
+}
+
 export function buildHttpRequest(input: HttpBuildInput): BuiltHttpRequest {
 	const method = (input.method || 'GET').toUpperCase()
-	const headers = parseHeaderLines(input.headers ?? '')
-	const auth = (input.auth ?? '').toLowerCase()
-	const secret = (input.authValue ?? '').trim()
-	if (auth === 'bearer' && secret) headers.Authorization = `Bearer ${secret}`
-	if (auth === 'basic' && secret) {
-		const token = typeof btoa === 'function' ? btoa(secret) : Buffer.from(secret).toString('base64')
-		headers.Authorization = `Basic ${token}`
-	}
+	const headers = { ...parseHeaderLines(input.headers ?? ''), ...authHeader(input.auth, input.authValue) }
 	const sendsBody = !['GET', 'HEAD'].includes(method)
 	return {
 		method,

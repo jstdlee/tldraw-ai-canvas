@@ -172,7 +172,9 @@ app.get('/api/models/health', async (c) => {
 
 // --- Web: HTTP request, download, save, link preview -------------------------
 
-app.post('/api/http', async (c) => c.json(await httpRequest((await c.req.json()) as HttpRequestInput)))
+app.post('/api/http', async (c) =>
+	c.json(await httpRequest({ ...((await c.req.json()) as HttpRequestInput), signal: c.req.raw.signal }))
+)
 
 app.post('/api/download', async (c) => {
 	const body = (await c.req.json()) as { url: string; fileName?: string }
@@ -328,6 +330,7 @@ app.post('/api/generate-text', async (c) => {
 		...(body.temperature != null ? { temperature: body.temperature } : {}),
 		maxOutputTokens: body.maxTokens || model.maxOutputTokens || 4096,
 		providerOptions: getProviderOptions(provider, withThinking(model, body.thinking)),
+		abortSignal: c.req.raw.signal,
 	})
 	return c.json({
 		text: stripThink(generated.text),
@@ -347,7 +350,7 @@ app.delete('/api/custom-nodes/:id', (c) => {
 
 // --- JEV decisions ---------------------------------------------------------------
 
-app.post('/api/jev', async (c) => c.json(await decide((await c.req.json()) as JevRequest)))
+app.post('/api/jev', async (c) => c.json(await decide((await c.req.json()) as JevRequest, c.req.raw.signal)))
 
 // --- Network tools ---------------------------------------------------------------
 
@@ -385,14 +388,19 @@ app.post('/api/generate-image', async (c) => {
 		seed?: number
 	}
 	const { model, provider } = resolveModelRef(body.model, 'image')
-	const images = await generateImage(provider, model, {
-		prompt: body.prompt ?? '',
-		n: body.n ?? 1,
-		size: body.size,
-		images: body.images,
-		negative: body.negative,
-		seed: body.seed,
-	} satisfies ImageGenParams)
+	const images = await generateImage(
+		provider,
+		model,
+		{
+			prompt: body.prompt ?? '',
+			n: body.n ?? 1,
+			size: body.size,
+			images: body.images,
+			negative: body.negative,
+			seed: body.seed,
+		} satisfies ImageGenParams,
+		c.req.raw.signal
+	)
 	return c.json(images)
 })
 
