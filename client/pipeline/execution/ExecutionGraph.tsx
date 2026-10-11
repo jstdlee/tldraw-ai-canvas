@@ -6,11 +6,19 @@ import {
 	NodePortConnection,
 } from '../nodes/nodePorts'
 import { NodeShape } from '../nodes/NodeShapeUtil'
-import { executeNode } from '../nodes/nodeTypes'
-import { ExecutionResult, PipelineValue, STOP_EXECUTION } from '../nodes/types/shared'
+import { executeNode, getNodeDefinition } from '../nodes/nodeTypes'
+import {
+	ExecutionResult,
+	InfoValues,
+	isMultiInfoValue,
+	PipelineValue,
+	STOP_EXECUTION,
+} from '../nodes/types/shared'
 import { missingRunInput } from '../../../shared/runIssue'
 import { spillUnconnectedOutput } from '../autoSpill'
 import { runErrorMessage } from '../../../shared/runError'
+import { isRunCacheable } from '../../../shared/runCache'
+import { runHash } from '../../../shared/runHash'
 import { setNodeRun } from './nodeRunState'
 import { getArrowInputs, writeArrowOutputs } from './arrows'
 
@@ -19,6 +27,17 @@ export interface ExecutionGraphOptions {
 	allowed?: Set<TLShapeId>
 	/** Fixed input values, keyed `${nodeId}|${portId}` (loop item, packed-group inputs). */
 	overrides?: Map<string, PipelineValue>
+	/** "Run without cache": ignore `lastRunHash`, always execute. */
+	noCache?: boolean
+}
+
+/** An output port's InfoValues, reduced to the plain values `ExecutionResult` wants. */
+function toExecutionResult(info: InfoValues): ExecutionResult {
+	const result: ExecutionResult = {}
+	for (const [portId, value] of Object.entries(info)) {
+		result[portId] = isMultiInfoValue(value) ? value.value[0] ?? null : value.value
+	}
+	return result
 }
 
 /** True when the connection ends on a loop-back (feedback) port. */
@@ -79,6 +98,11 @@ export class ExecutionGraph {
 	getOutputs(nodeId: TLShapeId): ExecutionResult | undefined {
 		const node = this.nodesById.get(nodeId)
 		return node?.state === 'executed' ? node.outputs : undefined
+	}
+
+	/** How many cards this run touches in total (for the "Running N cards…" footer text). */
+	get size(): number {
+		return this.nodesById.size
 	}
 
 	private state: 'waiting' | 'executing' | 'stopped' = 'waiting'
@@ -183,6 +207,37 @@ export class ExecutionGraph {
 			return
 		}
 
+		// Input-hash cache (WP14 Part B): skip the card when nothing that matters
+		// changed since its last run and it still has outputs to show.
+		const nodeValue = node.shape.props.node as { type: string } & Record<string, unknown>
+		let hash: string | undefined
+		if (isRunCacheable(nodeValue)) {
+			const definition = getNodeDefinition(this.editor, node.shape.props.node)
+			const resultKeys = new Set(definition.resultKeys ?? [])
+			hash = cacheHashFor(this.editor, node.shape, inputs)
+
+			if (!this.options.noCache && node.shape.props.lastRunHash === hash) {
+				const defaults = definition.getDefault() as unknown as Record<string, unknown>
+				// Error fields are empty after a good run, so they say nothing about stored output.
+				const outputKeys = [...resultKeys].filter((key) => key !== 'error' && key !== 'lastUsage')
+				const hasOutput =
+					outputKeys.length === 0 || outputKeys.some((key) => nodeValue[key] !== defaults[key])
+				if (hasOutput) {
+					const cachedOutputs = toExecutionResult(getNodeOutputPortInfo(this.editor, nodeId))
+					this.nodesById.set(nodeId, { ...node, state: 'executed', outputs: cachedOutputs })
+					setNodeRun(this.editor, nodeId, { status: 'ok', message: 'cached' })
+					const dependents = []
+					for (const connection of Object.values(node.connections)) {
+						if (!connection || connection.terminal !== 'start') continue
+						if (isFeedbackEnd(this.editor, connection.connectedShapeId, connection.connectedPortId)) continue
+						dependents.push(this.executeNodeIfReady(connection.connectedShapeId))
+					}
+					await Promise.all(dependents)
+					return
+				}
+			}
+		}
+
 		this.nodesById.set(nodeId, {
 			...node,
 			state: 'executing',
@@ -236,6 +291,13 @@ export class ExecutionGraph {
 				message: nodeError || undefined,
 				ms,
 			})
+			if (hash !== undefined && !failed) {
+				// Hash the settings as they are after the run: some cards copy their input into a
+				// field (Chart keeps the table text), so the pre-run hash would never match again.
+				const after = this.editor.getShape<NodeShape>(nodeId)
+				const settledHash = after ? cacheHashFor(this.editor, after, inputs) : hash
+				this.editor.updateShape({ id: nodeId, type: node.shape.type, props: { lastRunHash: settledHash } })
+			}
 		}
 
 		if (!failed) {
@@ -266,4 +328,15 @@ export class ExecutionGraph {
 	getNodeStatus(nodeId: TLShapeId) {
 		return this.nodesById.get(nodeId)?.state
 	}
+}
+
+/** The run-cache key of a card: its settings (all node fields except results) and its inputs. */
+function cacheHashFor(editor: Editor, shape: NodeShape, inputs: unknown): string {
+	const nodeValue = shape.props.node as unknown as Record<string, unknown>
+	const resultKeys = new Set(getNodeDefinition(editor, shape.props.node).resultKeys ?? [])
+	const settings: Record<string, unknown> = {}
+	for (const [key, value] of Object.entries(nodeValue)) {
+		if (!resultKeys.has(key)) settings[key] = value
+	}
+	return runHash({ settings, inputs })
 }

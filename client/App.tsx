@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
 	DefaultMainMenu,
 	DefaultMainMenuContent,
@@ -18,6 +18,7 @@ import {
 	TldrawUiToastsProvider,
 	TLUiOverrides,
 	useEditor,
+	useToasts,
 	useValue,
 } from 'tldraw'
 import { getAssetUrlsByImport } from '@tldraw/assets/imports.vite'
@@ -29,6 +30,7 @@ import {
 	refreshAIConfig,
 } from './ai/aiConfig'
 import { AIProvidersDialog } from './ai/AIProvidersDialog'
+import { $modelHealth, refreshModelHealth } from './ai/modelHealth'
 import { TldrawAgentApp } from './agent/TldrawAgentApp'
 import {
 	TldrawAgentAppContextProvider,
@@ -109,6 +111,7 @@ function App() {
 
 	useEffect(() => {
 		refreshAIConfig()
+		refreshModelHealth()
 	}, [])
 
 	useEffect(() => {
@@ -320,6 +323,7 @@ function App() {
 				</div>
 				<ProvidersModal editor={editor} />
 				<ImageEditorModal editor={editor} />
+				<ModelHealthToasts />
 				{panels.chat && app && (
 					<div className="chat-float-modal" role="dialog" aria-label="Agent chat">
 						<button className="chat-float-close" type="button" title="Close" onClick={() => togglePanel('chat')}>
@@ -366,6 +370,38 @@ function ProvidersModal({ editor }: { editor: Editor | null }) {
 			<AIProvidersDialog onClose={close} />
 		</div>
 	)
+}
+
+/** One toast per broken default model, the first time its health is seen this session. */
+function ModelHealthToasts() {
+	const toasts = useToasts()
+	const health = useValue('model health', () => $modelHealth.get(), [])
+	const shown = useRef(false)
+	useEffect(() => {
+		if (!health || shown.current) return
+		// A capability with no model set is not "broken" (nobody chose one); only report set ones.
+		const broken = Object.entries(health).filter(([, info]) => info && !info.ok && info.model)
+		if (!broken.length) return
+		shown.current = true
+		// Group capabilities that share a model, and keep the reason to its first sentence.
+		const byModel = new Map<string, { caps: string[]; reason: string }>()
+		for (const [capability, info] of broken) {
+			const key = info!.model!
+			const reason = (info!.error ?? 'unknown error').split(/[;.](\s|$)/)[0].slice(0, 120)
+			const entry = byModel.get(key) ?? { caps: [], reason }
+			entry.caps.push(capability)
+			byModel.set(key, entry)
+		}
+		const lines = [...byModel].map(([model, { caps, reason }]) => `${caps.join(', ')}: ${model} — ${reason}`)
+		toasts.addToast({
+			severity: 'warning',
+			title: broken.length === 1 ? 'A default model is not available' : `${broken.length} default models are not available`,
+			description: `${lines.join('\n')}\nPick others in AI providers.`,
+			keepOpen: true,
+			actions: [{ type: 'primary', label: 'AI providers…', onClick: () => openProvidersDialog() }],
+		})
+	}, [health, toasts])
+	return null
 }
 
 /** Shown until at least one model is set up, or when the server is down. */

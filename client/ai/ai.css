@@ -332,6 +332,20 @@
 	color: var(--tl-color-text-3);
 }
 
+.ai-defaults__label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.ai-dot.is-ok {
+	background: var(--tl-color-success);
+}
+
+.ai-dot.is-error {
+	background: var(--tl-color-danger);
+}
+
 @media (max-width: 640px) {
 	.ai-dialog__columns {
 		grid-template-columns: 1fr;

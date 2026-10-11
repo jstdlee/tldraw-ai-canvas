@@ -70,6 +70,15 @@ export interface AIConfig {
 	defaults: AIDefaults
 }
 
+/** Health of one default model (WP14 Part C), from `GET /api/models/health`. */
+export interface CapabilityHealth {
+	ok: boolean
+	model?: string
+	error?: string
+}
+
+export type ModelsHealth = Partial<Record<ModelCapability, CapabilityHealth>>
+
 export interface PublicAIConfig {
 	providers: PublicProviderConfig[]
 	models: ModelConfig[]

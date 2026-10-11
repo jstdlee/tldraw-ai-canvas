@@ -93,6 +93,12 @@ declare module 'tldraw' {
 			note?: string
 			/** Text size inside the node, in px. Default 13. */
 			fontSize?: number
+			/**
+			 * Hash of the card type, its settings and its inputs from the last run
+			 * (WP14 Part B). Run skips the card when this still matches and the
+			 * outputs are present.
+			 */
+			lastRunHash?: string
 		}
 	}
 }
@@ -116,6 +122,7 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		label: T.string.optional(),
 		note: T.string.optional(),
 		fontSize: T.number.optional(),
+		lastRunHash: T.string.optional(),
 	}
 
 	getDefaultProps(): NodeShape['props'] {
@@ -274,6 +281,13 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 	)
 
 	const run = useValue('node run', () => nodeRunState.get(editor)[shape.id], [editor, shape.id])
+
+	// Total cards in the current run (this card, its stale upstream, and downstream), for the footer text.
+	const runningCards = useValue(
+		'running cards',
+		() => executionState.get(editor).runningGraph?.size ?? null,
+		[editor]
+	)
 
 	const nodeDefinition = getNodeDefinition(editor, shape.props.node)
 	const [naming, setNaming] = useState(false)
@@ -439,16 +453,39 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 					}}
 				/>
 			) : (
-				<NodeRunStatus shape={shape} running={isExecuting || run?.status === 'running'} />
+				<NodeRunStatus
+					shape={shape}
+					running={isExecuting || run?.status === 'running'}
+					cards={runningCards}
+					cached={run?.status === 'ok' && run.message === 'cached'}
+				/>
 			)}
 		</HTMLContainer>
 	)
 }
 
 /** Model call state sits under the card, not in the settings row. */
-function NodeRunStatus({ shape, running }: { shape: NodeShape; running: boolean }) {
+function NodeRunStatus({
+	shape,
+	running,
+	cards,
+	cached,
+}: {
+	shape: NodeShape
+	running: boolean
+	cards?: number | null
+	cached?: boolean
+}) {
 	const usage = (shape.props.node as { lastUsage?: string | null }).lastUsage
-	const text = running ? 'Running…' : typeof usage === 'string' ? usage : ''
+	const text = running
+		? cards && cards > 1
+			? `Running ${cards} cards…`
+			: 'Running…'
+		: cached
+			? 'cached'
+			: typeof usage === 'string'
+				? usage
+				: ''
 	if (!text) return null
 	return <div className="NodeLlmStatus">{text}</div>
 }
@@ -755,6 +792,15 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 						<TldrawUiDropdownMenuItem>
 							<TldrawUiButton type="menu" title="Clear output" onClick={clearOutput}>
 								<TldrawUiButtonLabel>Clear output</TldrawUiButtonLabel>
+							</TldrawUiButton>
+						</TldrawUiDropdownMenuItem>
+						<TldrawUiDropdownMenuItem>
+							<TldrawUiButton
+								type="menu"
+								title="Run this card (and anything it needs) again, even if nothing changed"
+								onClick={() => void startExecution(editor, new Set([shape.id]), { noCache: true })}
+							>
+								<TldrawUiButtonLabel>Run without cache</TldrawUiButtonLabel>
 							</TldrawUiButton>
 						</TldrawUiDropdownMenuItem>
 					</TldrawUiDropdownMenuGroup>

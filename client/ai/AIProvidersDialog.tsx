@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useValue } from 'tldraw'
 import {
 	AIDefaults,
 	guessCapabilities,
@@ -14,6 +15,7 @@ import {
 } from '../../shared/aiConfig'
 import { UiField, UiTextInput } from '../ui'
 import { $aiConfig, fetchProviderModels, saveAIConfig } from './aiConfig'
+import { $modelHealth, refreshModelHealth } from './modelHealth'
 
 type DraftProvider = PublicProviderConfig & { apiKey?: string }
 
@@ -135,6 +137,12 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 		window.addEventListener('keydown', onKey)
 		return () => window.removeEventListener('keydown', onKey)
 	}, [onClose])
+
+	useEffect(() => {
+		refreshModelHealth(true)
+	}, [])
+
+	const modelHealth = useValue('model health', () => $modelHealth.get(), [])
 
 	return (
 		<div className="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title">
@@ -393,9 +401,24 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 				<div className="ai-defaults">
 					<div className="ai-defaults__title">Default model for each job</div>
 					<div className="ai-defaults__grid">
-						{MODEL_CAPABILITIES.map((cap) => (
+						{MODEL_CAPABILITIES.map((cap) => {
+							const health = modelHealth?.[cap]
+							const dotTitle = !health
+								? 'Not checked yet'
+								: health.ok
+									? `${health.model ?? 'Default'} answers`
+									: `${health.model ?? 'Default'} failed: ${health.error ?? 'unknown error'}`
+							return (
 							<label key={cap} title={CAPABILITY_HELP[cap]}>
-								<span>{cap}</span>
+								<span className="ai-defaults__label">
+									<span
+										className={
+											'ai-dot' + (health ? (health.ok ? ' is-ok' : ' is-error') : '')
+										}
+										title={dotTitle}
+									/>
+									{cap}
+								</span>
 								<select
 									value={defaults[cap] ?? ''}
 									onChange={(e) => setDefaults((d) => ({ ...d, [cap]: e.target.value || undefined }))}
@@ -408,7 +431,8 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 									))}
 								</select>
 							</label>
-						))}
+							)
+						})}
 					</div>
 				</div>
 			</div>

@@ -31,6 +31,7 @@ import { NET_TOOLS, NetTool, runNetTool } from './nettools'
 import { getLanguageModel, getProviderOptions, listProviderModels, ProviderModelInfo } from './llm'
 import { guessCapabilities, ModelCapability, ModelConfig } from '../shared/aiConfig'
 import { registerBatchRoutes } from './batchRoutes'
+import { checkModelsHealth } from './modelHealth'
 
 const PORT = Number(process.env.API_PORT ?? 8790)
 const HOST = process.env.HOST ?? '127.0.0.1'
@@ -159,6 +160,12 @@ app.get('/api/models', async (c) => {
 			})
 	)
 	return c.json({ providers: results })
+})
+
+/** Default-model health (WP14 Part C): one tiny request per capability, cached 10 min. */
+app.get('/api/models/health', async (c) => {
+	const force = c.req.query('force') === '1'
+	return c.json(await checkModelsHealth(force))
 })
 
 // --- Web: HTTP request, download, save, link preview -------------------------

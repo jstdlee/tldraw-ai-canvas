@@ -1,6 +1,7 @@
 import { Editor, TLShapeId } from 'tldraw'
 import { EditorAtom } from '../utils'
 import { ExecutionGraph } from './ExecutionGraph'
+import { staleUpstreamOrder } from './upstream'
 
 export interface ExecutionState {
 	runningGraph: ExecutionGraph | null
@@ -21,8 +22,16 @@ export function executionGeneration(editor: Editor): number {
 	return executionState.get(editor).generation
 }
 
-export async function startExecution(editor: Editor, startingNodeIds: Set<TLShapeId>) {
-	const graph = new ExecutionGraph(editor, startingNodeIds)
+export async function startExecution(
+	editor: Editor,
+	startingNodeIds: Set<TLShapeId>,
+	options: { noCache?: boolean } = {}
+) {
+	// Run every out-of-date card upstream of what was pressed first, in dependency
+	// order, so the pressed card (and anything downstream of it) sees fresh inputs.
+	const stale = staleUpstreamOrder(editor, startingNodeIds)
+	const allStartingIds = new Set([...stale, ...startingNodeIds])
+	const graph = new ExecutionGraph(editor, allStartingIds, { noCache: options.noCache })
 	executionState.update(editor, (state) => {
 		state.runningGraph?.stop()
 		return {
