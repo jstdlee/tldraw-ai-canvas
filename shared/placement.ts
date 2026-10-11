@@ -65,6 +65,28 @@ export function findFreeSpot(
 	return { x: want.x, y: want.y }
 }
 
+/**
+ * Place to the left of `anchor`: try anchor.left-gap-w at the anchor's y, then step down.
+ */
+export function placeLeftOf(
+	anchor: Box,
+	size: { w: number; h: number },
+	taken: Box[],
+	gap = 48
+): { x: number; y: number } {
+	const x = anchor.x - size.w - gap
+	const isFreeAt = (y: number) => isFree({ x, y, w: size.w, h: size.h }, taken, gap)
+
+	if (isFreeAt(anchor.y)) return { x, y: anchor.y }
+
+	const stepY = size.h + gap
+	for (let i = 1; i <= 200; i++) {
+		const y = anchor.y + i * stepY
+		if (isFreeAt(y)) return { x, y }
+	}
+	return { x, y: anchor.y }
+}
+
 function dist2(a: { x: number; y: number }, b: { x: number; y: number }): number {
 	const dx = a.x - b.x
 	const dy = a.y - b.y

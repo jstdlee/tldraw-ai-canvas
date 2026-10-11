@@ -399,7 +399,8 @@
 .chat-float-button {
 	position: fixed;
 	right: 20px;
-	bottom: 20px;
+	/* 56px further up than the corner, so it does not sit on tldraw's "Get a license" note. */
+	bottom: 76px;
 	z-index: 400;
 	width: 48px;
 	height: 48px;

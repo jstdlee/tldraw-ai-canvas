@@ -5,7 +5,7 @@ import { createComputedCache, Editor, TLShapeId } from 'tldraw'
 import { getConnectionBindings } from '../connection/ConnectionBindingUtil'
 import { PortDataType } from '../constants'
 import { PortId } from '../ports/Port'
-import { NodeShape } from './NodeShapeUtil'
+import type { NodeShape } from './NodeShapeUtil'
 import { getNodeOutputInfo, getNodeTypePorts } from './nodeTypes'
 import {
 	areAnyInputsOutOfDate,
@@ -14,6 +14,19 @@ import {
 	PipelineValue,
 	STOP_EXECUTION,
 } from './types/shared'
+
+/**
+ * Whether an input port has a wire, read straight from the bindings. Safe to call from a
+ * definition's getPorts / getBodyHeightPx (unlike getNodeInputPortValues, which needs the ports).
+ */
+export function isInputWired(editor: Editor, shapeId: TLShapeId, portId: string): boolean {
+	return editor
+		.getBindingsToShape(shapeId, 'connection')
+		.some((binding) => {
+			const props = binding.props as { terminal?: string; portId?: string }
+			return props.terminal === 'end' && props.portId === portId
+		})
+}
 
 /**
  * Get the ports for a node. This is cached, because we only want to re-evaluate it when the

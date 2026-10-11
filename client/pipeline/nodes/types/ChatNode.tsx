@@ -119,7 +119,7 @@ export class ChatNodeDefinition extends NodeDefinition<ChatNode> {
 				dataType: 'any',
 			},
 			model: llmModelPort(modelY),
-			...llmSettingsPorts(settingsStartY),
+			...llmSettingsPorts(settingsStartY, !!node.showSettings),
 			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
 			output: {
 				id: 'output',

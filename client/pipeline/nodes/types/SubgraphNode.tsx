@@ -7,7 +7,7 @@ import { openGroup } from '../../subgraph'
 import { shapeText } from '../../../clips/shapeText'
 import { concatMemberText } from '../../../../shared/groupText'
 import { Port } from '../../ports/Port'
-import { NodeShape } from '../NodeShapeUtil'
+import type { NodeShape } from '../NodeShapeUtil'
 import { IconGroup, UiButton, UiEmpty } from '../../../ui'
 import { stopEvent } from './fields'
 import {
@@ -78,7 +78,7 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 	getDefault(): SubgraphNode {
 		return {
 			type: 'subgraph',
-			title: 'Group box',
+			title: 'Group (0 cards)',
 			innerIds: [],
 			inputs: [],
 			outputs: [],
@@ -202,12 +202,12 @@ function SubgraphNodeComponent({ shape, node }: NodeComponentProps<SubgraphNode>
 				{node.thumbnail ? (
 					<img src={node.thumbnail} alt="group members" draggable={false} />
 				) : (
-					<UiEmpty icon={<IconGroup />} text={`${node.innerIds.length} node${node.innerIds.length === 1 ? '' : 's'} inside`} />
+					<UiEmpty icon={<IconGroup />} text={`${node.innerIds.length} card${node.innerIds.length === 1 ? '' : 's'} inside`} />
 				)}
 			</div>
 			<NodeRow className="Subgraph-footer">
 				<span className="Subgraph-count">
-					{node.innerIds.length} node{node.innerIds.length === 1 ? '' : 's'} inside
+					{node.innerIds.length} card{node.innerIds.length === 1 ? '' : 's'} inside
 				</span>
 				<UiButton size="sm" label="Open" onClick={() => openGroup(editor, shape.id)} />
 			</NodeRow>

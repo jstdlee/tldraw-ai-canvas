@@ -12,7 +12,7 @@ import { NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextArea, UiTextInput } from '../../../ui'
-import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
+import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	LlmSettingsFields,
@@ -214,8 +214,8 @@ export class NetToolNodeDefinition extends NodeDefinition<NetToolNode> {
 	override getWidthPx() {
 		return 340
 	}
-	getBodyHeightPx(_shape: NodeShape, node: NetToolNode) {
-		return NODE_ROW_HEIGHT_PX * 4 + (node.error ? NODE_ROW_HEIGHT_PX : 0)
+	getBodyHeightPx(_shape: NodeShape, _node: NetToolNode) {
+		return NODE_ROW_HEIGHT_PX * 4
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { target: { id: 'target', x: 0, y: portY(0), terminal: 'end', dataType: 'text' }, output: out('text', 340) }
@@ -272,11 +272,6 @@ function NetToolNodeComponent({ shape, node }: NodeComponentProps<NetToolNode>) 
 					<span className="NodeStatus">{node.lastMs != null ? `took ${node.lastMs} ms` : 'Runs on this machine'}</span>
 				)}
 			</NodeRow>
-			{node.error && (
-				<NodeRow>
-					<span className="NodeStatus is-error">{node.error}</span>
-				</NodeRow>
-			)}
 		</>
 	)
 }
@@ -341,6 +336,7 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 	icon = <GenerateTextIcon />
 	category = categoryOf('summarize')
 	override defaultWidthPx = 380
+	override showsOutput = true
 	resultKeys = ['lastResultText', 'lastKind', 'error'] as const
 	getDefault(): SummarizeNode {
 		return {
@@ -357,7 +353,7 @@ export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
 		}
 	}
 	getBodyHeightPx(_s: NodeShape, node: SummarizeNode) {
-		return NODE_ROW_HEIGHT_PX * 5 + llmSettingsHeight(node)
+		return NODE_ROW_HEIGHT_PX * 5 + llmSettingsHeight(node) + SUM_RESULT_PX
 	}
 	getPorts(shape: NodeShape, node: SummarizeNode): Record<string, ShapePort> {
 		return {
@@ -446,6 +442,7 @@ function SummarizeNodeComponent({ shape, node }: NodeComponentProps<SummarizeNod
 				<span className="NodeStatus">{node.lastKind ? `Last input: ${node.lastKind}` : 'Videos: 6 frames are read'}</span>
 			</NodeRow>
 			<LlmSettingsPanel editor={editor} shape={shape} node={node} />
+			<NodeTextResult text={node.lastResultText} error={node.error} empty="Output appears here" height={SUM_RESULT_PX} />
 		</>
 	)
 }

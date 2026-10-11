@@ -7,6 +7,7 @@ import { ShapePort } from '../../ports/Port'
 import { storeFile, loadFileBytes } from '../../fileStore'
 import { describeTables, openDatabase, runSqlCsv, schemaText, type SqlTableInfo } from '../../sqlJs'
 import { NodeShape } from '../NodeShapeUtil'
+import { getNodeInputPortValues, isInputWired } from '../nodePorts'
 import { UiButton, UiEmpty, UiTable, UiTextArea } from '../../../ui'
 import { IconDatabase, IconTable, IconUpload } from '../../../ui/icons'
 import { PortRow, stopEvent, useInputConnected } from './fields'
@@ -55,7 +56,22 @@ export const DatabaseNode = T.object({
 	lastOutput: T.string.nullable(),
 	lastInfo: T.string,
 	error: T.string.nullable(),
+	/** SQL editor height, in lines. Default 5; the results area grows to fill the rest. */
+	editorRows: T.number.optional(),
 })
+
+const SQL_EDITOR_DEFAULT_LINES = 5
+const SQL_EDITOR_MIN_LINES = 3
+const SQL_EDITOR_MAX_LINES = 20
+/** Approximate px per line of the mono SQL editor at the card's default font. */
+const SQL_LINE_PX = 19
+const SQL_EDITOR_PADDING_PX = 16
+const DRAG_HANDLE_PX = 10
+const RESULTS_DEFAULT_PX = 220
+
+function editorHeightPx(node: DatabaseNode) {
+	return (node.editorRows ?? SQL_EDITOR_DEFAULT_LINES) * SQL_LINE_PX + SQL_EDITOR_PADDING_PX
+}
 
 function tablesList(node: DatabaseNode): SqlTableInfo[] {
 	if (!node.tables) return []
@@ -64,6 +80,21 @@ function tablesList(node: DatabaseNode): SqlTableInfo[] {
 	} catch {
 		return []
 	}
+}
+
+/** Where DatabaseNode's rows land, so ports and body height agree with the rendered rows. */
+function layout(node: DatabaseNode, sqlWired: boolean) {
+	const tables = tablesList(node)
+	const tablesRows = tables.length > 0 ? Math.min(6, tables.length) : 0
+	let row = 0
+	const uploadRow = row++
+	const tablesRow = tablesRows > 0 ? row : null
+	row += tablesRows
+	const sqlRow = row++
+	// The editor + its drag handle only render when the port is not wired.
+	const sqlExtraPx = sqlWired ? 0 : editorHeightPx(node) + DRAG_HANDLE_PX
+	const hintRow = row++
+	return { uploadRow, tablesRow, tablesRows, sqlRow, sqlExtraPx, hintRow, rowsCount: row }
 }
 
 export class DatabaseNodeDefinition extends NodeDefinition<DatabaseNode> {
@@ -78,15 +109,18 @@ export class DatabaseNodeDefinition extends NodeDefinition<DatabaseNode> {
 	getDefault(): DatabaseNode {
 		return { type: 'database', fileUrl: '', fileName: '', fileSize: 0, sql: '', tables: '', lastOutput: null, lastInfo: '', error: null }
 	}
-	getBodyHeightPx(_shape: NodeShape, node: DatabaseNode) {
-		const tables = tablesList(node)
-		const tablesRows = Math.min(6, Math.max(1, tables.length))
-		// Rows: upload button, tables panel, sql editor (5 rows), hint = roughly 2 + tablesRows + 5 + 1, plus preview.
-		return NODE_ROW_HEIGHT_PX * (2 + tablesRows + (node.error ? 1 : 0)) + 100 + 240
+	getBodyHeightPx(shape: NodeShape, node: DatabaseNode) {
+		const sqlWired = isInputWired(this.editor, shape.id, 'sql')
+		const { rowsCount, sqlExtraPx } = layout(node, sqlWired)
+		// Rows: upload button, tables panel, SQL row, hint row, then the results area, which
+		// grows to fill whatever space the card is resized to.
+		return NODE_ROW_HEIGHT_PX * rowsCount + sqlExtraPx + RESULTS_DEFAULT_PX
 	}
 	getPorts(shape: NodeShape, node: DatabaseNode): Record<string, ShapePort> {
+		const sqlWired = isInputWired(this.editor, shape.id, 'sql')
+		const { sqlRow } = layout(node, sqlWired)
 		const width = this.getWidthPx(shape, node)
-		return { sql: end('sql', 0), output: out('output', 0, width), schema: out('schema', 1, width) }
+		return { sql: end('sql', sqlRow), output: out('output', 0, width), schema: out('schema', 1, width) }
 	}
 	async execute(shape: NodeShape, node: DatabaseNode, inputs: InputValues): Promise<ExecutionResult> {
 		try {
@@ -207,35 +241,72 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 			) : (
 				<>
 					<PortRow shapeId={shape.id} portId="sql" label="SQL" dataType="text" hint="optional: overrides the editor below" />
-					<UiTextArea
-						className="NodeField-textarea"
-						mono
-						rows={5}
-						value={node.sql}
-						placeholder="SELECT * FROM ..."
-						onChange={(sql) => set({ sql })}
-						onKeyDown={(e) => {
-							if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-								runNow()
-							}
-						}}
-					/>
+					<div className="NodeField-block" style={{ height: editorHeightPx(node) }}>
+						<UiTextArea
+							className="NodeField-textarea"
+							grow
+							mono
+							value={node.sql}
+							placeholder="SELECT * FROM ..."
+							onChange={(sql) => set({ sql })}
+							onKeyDown={(e) => {
+								if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+									runNow()
+								}
+							}}
+						/>
+					</div>
+					<SqlEditorDragHandle node={node} set={set} />
 				</>
 			)}
 			<div className="NodeHint">Changes stay in memory; the file is not modified.</div>
-			{node.error && (
-				<NodeRow>
-					<span className="NodeStatus is-error">{node.error}</span>
-				</NodeRow>
-			)}
-			{preview ? (
-				<>
-					<UiTable columns={preview.headers} rows={preview.rows} maxRows={50} />
-					<div className="NodeHint">{node.lastInfo}</div>
-				</>
-			) : (
-				<UiEmpty text="Press Run to see the result" />
-			)}
+			<div className="NodeGrow DatabaseNode-results" onPointerDown={stopEvent}>
+				{preview ? (
+					<>
+						<UiTable columns={preview.headers} rows={preview.rows} maxRows={50} />
+						<div className="NodeHint">{node.lastInfo}</div>
+					</>
+				) : (
+					<UiEmpty text="Press Run to see the result" />
+				)}
+			</div>
 		</>
+	)
+}
+
+/** A thin drag handle below the SQL editor; drag up/down to resize it (5 lines by default). */
+function SqlEditorDragHandle({
+	node,
+	set,
+}: {
+	node: DatabaseNode
+	set: (patch: Partial<DatabaseNode>) => void
+}) {
+	const editor = useEditor()
+	const dragRef = useRef<{ startY: number; startLines: number } | null>(null)
+	return (
+		<div
+			className="DatabaseNode-dragHandle"
+			title="Drag to resize the SQL editor"
+			onPointerDown={(e) => {
+				e.stopPropagation()
+				e.currentTarget.setPointerCapture(e.pointerId)
+				dragRef.current = { startY: e.clientY, startLines: node.editorRows ?? SQL_EDITOR_DEFAULT_LINES }
+			}}
+			onPointerMove={(e) => {
+				const drag = dragRef.current
+				if (!drag) return
+				const zoom = editor.getZoomLevel()
+				const deltaLines = Math.round((e.clientY - drag.startY) / zoom / SQL_LINE_PX)
+				const next = Math.max(SQL_EDITOR_MIN_LINES, Math.min(SQL_EDITOR_MAX_LINES, drag.startLines + deltaLines))
+				if (next !== (node.editorRows ?? SQL_EDITOR_DEFAULT_LINES)) set({ editorRows: next })
+			}}
+			onPointerUp={(e) => {
+				dragRef.current = null
+				e.currentTarget.releasePointerCapture(e.pointerId)
+			}}
+		>
+			<span />
+		</div>
 	)
 }

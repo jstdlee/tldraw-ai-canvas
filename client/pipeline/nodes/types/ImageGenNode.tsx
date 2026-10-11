@@ -147,7 +147,7 @@ export class ImageGenNodeDefinition extends NodeDefinition<ImageGenNode> {
 			model: { id: 'model', x: 0, y: MODEL_ROW_Y, terminal: 'end', dataType: 'model' },
 			prompt: { id: 'prompt', x: 0, y: PROMPT_PORT_Y, terminal: 'end', dataType: 'text' },
 			image: { id: 'image', x: 0, y: IMAGE_PORT_Y, terminal: 'end', dataType: 'image' },
-			...llmSettingsPorts(settingsStartY),
+			...llmSettingsPorts(settingsStartY, !!node.showSettings),
 			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
 			output: { id: 'output', x: width, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'image' },
 			images: { id: 'images', x: width, y: NODE_HEADER_HEIGHT_PX / 2 + 20, terminal: 'start', dataType: 'text' },

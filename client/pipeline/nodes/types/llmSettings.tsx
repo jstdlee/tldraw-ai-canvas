@@ -2,7 +2,7 @@ import { NodeSelect } from './NodeSelect'
 import { TLShapeId, Editor, T } from 'tldraw'
 import { IconChevronDown, IconChevronRight, UiButton, UiNumberInput, UiSlider, UiTextArea } from '../../../ui'
 import { NODE_ROW_HEIGHT_PX } from '../../constants'
-import { ShapePort } from '../../ports/Port'
+import { Port, ShapePort } from '../../ports/Port'
 import { findVars, fillVars, MAX_TEMPLATE_VARS } from '../../../../shared/templateVars'
 import { NodeShape } from '../NodeShapeUtil'
 import { NodeType } from '../nodeTypes'
@@ -47,17 +47,30 @@ export const DEFAULT_LLM_SETTINGS: Required<Omit<LlmSettings, 'lastUsage'>> & { 
 	lastUsage: '',
 }
 
-/** One row per settings port (system, params), always shown so they can be wired. */
+/** One row per settings port (system, params), shown only while the section is open. */
 export const LLM_PORT_ROW_HEIGHT_PX = NODE_ROW_HEIGHT_PX
-/** Height of the open settings panel (closed: the toggle + the two port rows). */
+/** Height of the open settings panel (closed: just the toggle row). */
 export const LLM_SETTINGS_OPEN_HEIGHT_PX = 196
 export const LLM_SETTINGS_TOGGLE_HEIGHT_PX = 28
 export function llmSettingsHeight(node: LlmSettings) {
-	return LLM_SETTINGS_TOGGLE_HEIGHT_PX + LLM_PORT_ROW_HEIGHT_PX * 2 + (node.showSettings ? LLM_SETTINGS_OPEN_HEIGHT_PX : 0)
+	return (
+		LLM_SETTINGS_TOGGLE_HEIGHT_PX +
+		(node.showSettings ? LLM_PORT_ROW_HEIGHT_PX * 2 + LLM_SETTINGS_OPEN_HEIGHT_PX : 0)
+	)
 }
 
-/** The `system` and `params` settings ports, one row each, right after the toggle row. */
-export function llmSettingsPorts(startY: number): Record<string, ShapePort> {
+/**
+ * The `system` and `params` settings ports. Open: one row each, right after the toggle row.
+ * Closed: both sit on the toggle row itself (stacked 6px apart), so they stay wirable.
+ */
+export function llmSettingsPorts(startY: number, open: boolean): Record<string, ShapePort> {
+	if (!open) {
+		const cy = startY + LLM_SETTINGS_TOGGLE_HEIGHT_PX / 2
+		return {
+			system: { id: 'system', x: 0, y: cy - 3, terminal: 'end', dataType: 'text' },
+			params: { id: 'params', x: 0, y: cy + 3, terminal: 'end', dataType: 'text' },
+		}
+	}
 	return {
 		system: {
 			id: 'system',
@@ -232,6 +245,12 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 			>
 				{node.showSettings ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
 				Model settings
+				{!node.showSettings && (
+					<span className="LlmSettings-toggle-ports" title="System and Params inputs (open to see them)">
+						<Port shapeId={shape.id} portId="system" />
+						<Port shapeId={shape.id} portId="params" />
+					</span>
+				)}
 				{wiredCount > 0 ? (
 					<span className="LlmSettings-badge">{wiredCount} wired</span>
 				) : (
@@ -242,10 +261,10 @@ export function LlmSettingsPanel<N extends NodeType & LlmSettings>({
 					)
 				)}
 			</button>
-			<PortRow shapeId={shape.id} portId="system" label="System" dataType="text" hint="optional" />
-			<PortRow shapeId={shape.id} portId="params" label="Params" dataType="text" hint='e.g. {"temperature":0.2}' />
 			{node.showSettings && (
-				<div className="LlmSettings-body" style={{ height: LLM_SETTINGS_OPEN_HEIGHT_PX }}>
+				<div className="LlmSettings-body" style={{ height: LLM_PORT_ROW_HEIGHT_PX * 2 + LLM_SETTINGS_OPEN_HEIGHT_PX }}>
+					<PortRow shapeId={shape.id} portId="system" label="System" dataType="text" hint="optional" />
+					<PortRow shapeId={shape.id} portId="params" label="Params" dataType="text" hint='e.g. {"temperature":0.2}' />
 					<UiTextArea
 						className="LlmSettings-system"
 						placeholder={systemWired ? '(from the System input)' : 'System prompt (optional): role, tone, rules…'}

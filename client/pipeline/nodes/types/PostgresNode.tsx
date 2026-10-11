@@ -259,11 +259,6 @@ function PostgresNodeComponent({ shape, node }: NodeComponentProps<PostgresNode>
 					</NodeRow>
 				</>
 			)}
-			{node.error && (
-				<NodeRow>
-					<span className="NodeStatus is-error">{node.error}</span>
-				</NodeRow>
-			)}
 		</>
 	)
 }

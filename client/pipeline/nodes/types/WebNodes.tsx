@@ -16,7 +16,7 @@ import {
 import { Port as PortDot, ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiCheckbox, UiTextInput } from '../../../ui'
-import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
+import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -41,7 +41,19 @@ function formatBytes(n: number) {
 	return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-/** Shows the result: an image preview, or text. */
+/** Pretty-print a JSON body; any other text (or invalid JSON) passes through unchanged. */
+function prettyMaybeJson(text: string | null): string | null {
+	if (!text) return text
+	const trimmed = text.trim()
+	if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return text
+	try {
+		return JSON.stringify(JSON.parse(trimmed), null, 2)
+	} catch {
+		return text
+	}
+}
+
+/** Shows the result: an image preview, or the `NodeTextResult` text area (JSON pretty-printed). */
 function ResultView({
 	imageUrl,
 	text,
@@ -62,7 +74,7 @@ function ResultView({
 			</div>
 		)
 	}
-	return null
+	return <NodeTextResult text={prettyMaybeJson(text)} empty={empty} height={height} />
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +113,7 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 	heading = 'HTTP'
 	icon = <UpscaleIcon />
 	category = categoryOf('http')
+	override showsOutput = true
 	resultKeys = ['lastStatus', 'lastText', 'lastImageUrl', 'error'] as const
 	getDefault(): HttpNode {
 		return {
@@ -124,14 +137,14 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 	override getWidthPx() {
 		return HTTP_WIDTH_PX
 	}
-	getBodyHeightPx(_shape: NodeShape, node: HttpNode) {
+	getBodyHeightPx(_shape: NodeShape, _node: HttpNode) {
 		// Rows: method, URL, auth, body port, "web page -> text" checkbox, status = 6.
 		return (
 			NODE_ROW_HEIGHT_PX * 6 +
 			HTTP_QUERY_HEIGHT_PX +
 			HTTP_HEADERS_HEIGHT_PX +
 			HTTP_BODY_HEIGHT_PX +
-			(node.lastImageUrl ? HTTP_RESULT_HEIGHT_PX : 0)
+			HTTP_RESULT_HEIGHT_PX
 		)
 	}
 	getPorts(): Record<string, ShapePort> {
@@ -324,6 +337,7 @@ export class DownloadNodeDefinition extends NodeDefinition<DownloadNode> {
 	icon = <LoadImageIcon />
 	category = categoryOf('download')
 	override defaultWidthPx = 380
+	override showsOutput = true
 	resultKeys = ['lastPath', 'lastInfo', 'lastText', 'lastImageUrl', 'error'] as const
 	getDefault(): DownloadNode {
 		return {
@@ -337,8 +351,8 @@ export class DownloadNodeDefinition extends NodeDefinition<DownloadNode> {
 			error: null,
 		}
 	}
-	getBodyHeightPx(_shape: NodeShape, node: DownloadNode) {
-		return NODE_ROW_HEIGHT_PX * 3 + (node.lastImageUrl ? DOWNLOAD_RESULT_HEIGHT_PX : 0)
+	getBodyHeightPx(_shape: NodeShape, _node: DownloadNode) {
+		return NODE_ROW_HEIGHT_PX * 3 + DOWNLOAD_RESULT_HEIGHT_PX
 	}
 	getPorts(shape: NodeShape, node: DownloadNode): Record<string, ShapePort> {
 		return {
@@ -434,12 +448,13 @@ export class SaveNodeDefinition extends NodeDefinition<SaveNode> {
 	heading = 'Save'
 	icon = <PromptIcon />
 	category = categoryOf('save')
+	override showsOutput = true
 	resultKeys = ['lastPath', 'lastPreview', 'error'] as const
 	getDefault(): SaveNode {
 		return { type: 'save', fileName: 'canvas-{{date}}', lastPath: null, lastPreview: null, error: null }
 	}
-	getBodyHeightPx(_shape: NodeShape, node: SaveNode) {
-		return NODE_ROW_HEIGHT_PX * 3 + (isImageValue(node.lastPreview) ? 120 : 0)
+	getBodyHeightPx(_shape: NodeShape, _node: SaveNode) {
+		return NODE_ROW_HEIGHT_PX * 3 + 120
 	}
 	getPorts(): Record<string, ShapePort> {
 		return {

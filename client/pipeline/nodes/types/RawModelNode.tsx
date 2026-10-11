@@ -9,7 +9,7 @@ import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiSecretInput, UiTextArea, UiTextInput } from '../../../ui'
 import { apiSaveSecret } from '../../api/pipelineApi'
-import { PortRow, stopEvent, NodeSelect } from './fields'
+import { PortRow, stopEvent, NodeSelect, NodeTextResult } from './fields'
 import { fillLlmTemplate, llmTemplateVars, llmVarPorts, llmVarsHeight, LlmVarRows } from './llmSettings'
 import {
 	areAnyInputsOutOfDate,
@@ -26,6 +26,7 @@ import {
 
 const WIDTH = 380
 const BASE_Y = NODE_HEADER_HEIGHT_PX + 8
+const RESULT_HEIGHT_PX = 110
 
 /**
  * A model call with every setting on the card: endpoint, model id, key, system
@@ -59,6 +60,7 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 	heading = 'Raw model'
 	icon = (<GenerateTextIcon />)
 	category = categoryOf('raw_model')
+	override showsOutput = true
 	resultKeys = ['lastText', 'lastUsage', 'error'] as const
 	getDefault(): RawModelNode {
 		return {
@@ -83,8 +85,8 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 	}
 	getBodyHeightPx(_shape: NodeShape, node: RawModelNode) {
 		// Rows: prompt, model, URL, model id, key, temp, max tokens, think = 8, plus the
-		// system-prompt text box (72), the {{var}} rows, and an error row when set.
-		return NODE_ROW_HEIGHT_PX * 8 + 72 + llmVarsHeight(this.vars(node)) + (node.error ? NODE_ROW_HEIGHT_PX : 0)
+		// system-prompt text box (72), the {{var}} rows, and the result area.
+		return NODE_ROW_HEIGHT_PX * 8 + 72 + llmVarsHeight(this.vars(node)) + RESULT_HEIGHT_PX
 	}
 	getPorts(_shape: NodeShape, node: RawModelNode): Record<string, ShapePort> {
 		const vars = this.vars(node)
@@ -203,11 +205,7 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 				</NodeSelect>
 			</Field>
 			<LlmVarRows shapeId={shape.id} vars={vars} />
-			{node.error && (
-				<NodeRow>
-					<span className="NodeStatus is-error">{node.error}</span>
-				</NodeRow>
-			)}
+			<NodeTextResult text={node.lastText} error={node.error} empty="Output appears here" height={RESULT_HEIGHT_PX} />
 		</>
 	)
 }

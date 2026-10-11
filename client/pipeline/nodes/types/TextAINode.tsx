@@ -13,7 +13,7 @@ import {
 import { Port, ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiTextArea, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, useInputConnected, NodeSelect } from './fields'
+import { PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	fillLlmTemplate,
@@ -108,6 +108,7 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 	icon = <GenerateTextIcon />
 	category = categoryOf('text_ai')
 	override defaultWidthPx = 380
+	override showsOutput = true
 	resultKeys = ['lastResultText', 'error'] as const
 	getDefault(): TextAINode {
 		return {
@@ -131,7 +132,8 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 			OPTION_HEIGHT_PX +
 			llmSettingsHeight(node) +
 			llmVarsHeight(this.vars(node)) +
-			(node.showSettings ? 140 : 0)
+			(node.showSettings ? 140 : 0) +
+			RESULT_HEIGHT_PX
 		)
 	}
 	getPorts(shape: NodeShape, node: TextAINode): Record<string, ShapePort> {
@@ -143,7 +145,7 @@ export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 		return {
 			input: { id: 'input', x: 0, y: baseY + NODE_ROW_HEIGHT_PX * 0.5, terminal: 'end', dataType: 'any' },
 			model: llmModelPort(modelY),
-			...llmSettingsPorts(settingsStartY),
+			...llmSettingsPorts(settingsStartY, !!node.showSettings),
 			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
 			output: {
 				id: 'output',
@@ -286,6 +288,7 @@ function TextAINodeComponent({ shape, node }: NodeComponentProps<TextAINode>) {
 					/>
 				</div>
 			)}
+			<NodeTextResult text={node.lastResultText} error={node.error} empty="Output appears here" height={RESULT_HEIGHT_PX} />
 		</>
 	)
 }

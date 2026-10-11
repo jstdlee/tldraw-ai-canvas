@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { T, useEditor } from 'tldraw'
 import { detectFileKind } from '../../../../shared/fileKind'
 import { categoryOf } from '../../../../shared/nodeGroups'
+import { parseTable } from '../../../../shared/tableOps'
 import { asWebUrl } from '../../../../shared/webUrl'
 import { readSpreadsheet } from '../../excel'
 import { loadFileBytes, storeFile } from '../../fileStore'
@@ -10,7 +11,7 @@ import { storeBlob } from '../../imageOps'
 import { NODE_HEADER_HEIGHT_PX, NODE_IMAGE_PREVIEW_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_ROW_HEIGHT_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiButton, UiCheckbox, UiEmpty, UiSegmented, UiTextInput } from '../../../ui'
+import { UiButton, UiCheckbox, UiEmpty, UiSegmented, UiTable, UiTextInput } from '../../../ui'
 import { FieldMax, ImageZoom } from '../../editors/LargeEditor'
 import { isImageValue, PortRow, stopEvent, NodeSelect, useInputConnected } from './fields'
 import {
@@ -138,7 +139,6 @@ export class FileInNodeDefinition extends NodeDefinition<FileInNode> {
 		} else {
 			rows += 1 // "as text" row
 		}
-		if (node.error) rows += 1
 		return NODE_ROW_HEIGHT_PX * rows + NODE_IMAGE_PREVIEW_HEIGHT_PX
 	}
 	getPorts(): Record<string, ShapePort> {
@@ -343,6 +343,19 @@ function FileInComponent({ shape, node }: NodeComponentProps<FileInNode>) {
 	)
 }
 
+/** CSV/TSV-looking text: a real table (2+ columns), or a single column with a .csv/.tsv name. */
+function looksTabular(node: FileInNode, text: string): boolean {
+	const name = (node.fileName || '').toLowerCase()
+	const namedAsTable = /\.(csv|tsv)$/.test(name) || node.fileType === 'csv' || node.fileType === 'tsv'
+	try {
+		const table = parseTable(text, 'auto')
+		if (table.headers.length >= 2) return true
+		return namedAsTable && table.headers.length >= 1
+	} catch {
+		return false
+	}
+}
+
 function FileInPreview({ node, shape }: { node: FileInNode; shape: NodeShape }) {
 	const editor = useEditor()
 	const [open, setOpen] = useState(false)
@@ -357,10 +370,11 @@ function FileInPreview({ node, shape }: { node: FileInNode; shape: NodeShape }) 
 			</div>
 		)
 	}
+	const table = text && looksTabular(node, text) ? safeParseTable(text) : null
 	return (
 		<div className="NodeOutputView NodeGrow" style={{ height: NODE_IMAGE_PREVIEW_HEIGHT_PX - 8 }} onPointerDown={stopEvent}>
-			{node.error ? (
-				<span className="NodeStatus is-error">{node.error}</span>
+			{table ? (
+				<UiTable columns={table.headers} rows={table.rows} maxRows={50} />
 			) : text ? (
 				<pre className="ValuePreview-text is-mono">{text.length > 2000 ? text.slice(0, 2000) + '…' : text}</pre>
 			) : (
@@ -368,6 +382,14 @@ function FileInPreview({ node, shape }: { node: FileInNode; shape: NodeShape }) 
 			)}
 		</div>
 	)
+}
+
+function safeParseTable(text: string) {
+	try {
+		return parseTable(text, 'auto')
+	} catch {
+		return null
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -396,8 +418,8 @@ export class UrlInNodeDefinition extends NodeDefinition<UrlInNode> {
 	getDefault(): UrlInNode {
 		return { type: 'url_in', url: '', fetchBody: false, lastText: null, error: null }
 	}
-	getBodyHeightPx(_shape: NodeShape, node: UrlInNode) {
-		return NODE_ROW_HEIGHT_PX * (3 + (node.error ? 1 : 0))
+	getBodyHeightPx(_shape: NodeShape, _node: UrlInNode) {
+		return NODE_ROW_HEIGHT_PX * 3
 	}
 	getPorts(): Record<string, ShapePort> {
 		return { output: out() }
@@ -464,11 +486,6 @@ function UrlInComponent({ shape, node }: NodeComponentProps<UrlInNode>) {
 			<NodeRow>
 				<UiCheckbox checked={node.fetchBody} label="Fetch page text" onChange={(fetchBody) => set({ fetchBody })} />
 			</NodeRow>
-			{node.error && (
-				<NodeRow>
-					<span className="NodeStatus is-error">{node.error}</span>
-				</NodeRow>
-			)}
 		</>
 	)
 }

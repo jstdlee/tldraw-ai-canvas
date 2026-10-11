@@ -15,8 +15,8 @@ import { SubtractIcon } from '../../components/icons/SubtractIcon'
 import { NODE_WIDTH_PX, PORT_TYPE_COLORS, PortDataType } from '../../constants'
 import { Port, PortId, ShapePort } from '../../ports/Port'
 import { getNodeInputPortValues } from '../nodePorts'
-import { NodeShape } from '../NodeShapeUtil'
-import { NodeType } from '../nodeTypes'
+import type { NodeShape } from '../NodeShapeUtil'
+import type { NodeType } from '../nodeTypes'
 import { UiTextInput } from '../../../ui'
 
 /**

@@ -1187,6 +1187,29 @@ body {
 	color: var(--tl-color-text-1);
 }
 
+/* While the section is closed, System/Params stay wirable: their dots stack here, 6px apart. */
+.LlmSettings-toggle-ports {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: 12px;
+	height: 18px;
+	flex: 0 0 auto;
+}
+
+.LlmSettings-toggle-ports .Port {
+	position: absolute;
+	left: 0;
+}
+
+.LlmSettings-toggle-ports .Port:first-child {
+	top: 0;
+}
+
+.LlmSettings-toggle-ports .Port:last-child {
+	top: 6px;
+}
+
 .LlmSettings-badge {
 	padding: 0 6px;
 	border-radius: 999px;
@@ -2483,6 +2506,32 @@ body {
 }
 .DatabaseNode-table .NodeHint {
 	margin-left: auto;
+}
+
+/* Drag handle between the SQL editor and the results area. */
+.DatabaseNode-dragHandle {
+	flex: 0 0 auto;
+	height: 10px;
+	margin: 0 var(--tl-space-4);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: row-resize;
+	touch-action: none;
+}
+.DatabaseNode-dragHandle span {
+	width: 32px;
+	height: 3px;
+	border-radius: 999px;
+	background: var(--tl-color-divider);
+}
+.DatabaseNode-dragHandle:hover span {
+	background: var(--tl-color-text-3);
+}
+
+.DatabaseNode-results {
+	overflow: auto;
+	margin: 0 var(--tl-space-4);
 }
 
 /* Video node: a fixed 16:9 frame so YouTube embeds and plain files both fit the card. */

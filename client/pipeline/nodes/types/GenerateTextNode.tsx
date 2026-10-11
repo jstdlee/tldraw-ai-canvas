@@ -114,7 +114,7 @@ export class GenerateTextNodeDefinition extends NodeDefinition<GenerateTextNode>
 				dataType: 'text',
 			},
 			...llmModelPortMap(modelY),
-			...llmSettingsPorts(settingsStartY),
+			...llmSettingsPorts(settingsStartY, !!node.showSettings),
 			...llmVarPorts(vars, settingsStartY + llmSettingsHeight(node)),
 			output: {
 				id: 'output',

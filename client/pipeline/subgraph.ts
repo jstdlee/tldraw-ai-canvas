@@ -1,10 +1,10 @@
 import { Box, createShapeId, Editor, TLGroupShape, TLShape, TLShapeId } from 'tldraw'
 import { computeGroupPorts, GroupPort, InnerPort, InnerWire } from '../../shared/groupPorts'
-import { findFreeSpot } from '../../shared/placement'
+import { findFreeSpot, placeLeftOf, placeRightOf } from '../../shared/placement'
 import { createOrUpdateConnectionBinding, getConnectionBindings } from './connection/ConnectionBindingUtil'
 import { getNodePortConnections, getNodePorts } from './nodes/nodePorts'
-import { NodeShape } from './nodes/NodeShapeUtil'
-import { getNodeDefinition } from './nodes/nodeTypes'
+import type { NodeShape } from './nodes/NodeShapeUtil'
+import { getNodeDefinition } from './nodes/registry'
 import type { SubgraphNode, SubgraphPort } from './nodes/types/SubgraphNode'
 import { PortDataType } from './constants'
 import { storeBlob } from './imageOps'
@@ -142,13 +142,35 @@ function takenBoxesExcluding(editor: Editor, excludeIds: Set<TLShapeId>) {
 	return boxes
 }
 
-/** Move a box to a free spot near `want`, so it never lands on top of a shape left outside it. */
+/**
+ * Move a box to a free spot near `want` (its members' own bounds), so it never lands on
+ * top of a shape left outside it. When it has to move, prefer a spot to the right of its
+ * upstream sources, then to the left of its downstream targets, so wires keep flowing
+ * forward instead of running backwards; otherwise fall back to the generic free-spot search.
+ */
 function placeBoxFreely(editor: Editor, boxId: TLShapeId, memberIds: TLShapeId[], want: { x: number; y: number }) {
 	const bounds = editor.getShapePageBounds(boxId)
 	if (!bounds) return
 	const exclude = new Set<TLShapeId>([boxId, ...memberIds])
 	const taken = takenBoxesExcluding(editor, exclude)
-	const spot = findFreeSpot(want, { w: bounds.width, h: bounds.height }, taken)
+	const size = { w: bounds.width, h: bounds.height }
+	let spot = findFreeSpot(want, size, taken)
+	if (spot.x !== want.x || spot.y !== want.y) {
+		const connections = getNodePortConnections(editor, boxId)
+		const upstream = unionPageBounds(
+			editor,
+			connections.filter((c) => c.terminal === 'end').map((c) => c.connectedShapeId)
+		)
+		const downstream = unionPageBounds(
+			editor,
+			connections.filter((c) => c.terminal === 'start').map((c) => c.connectedShapeId)
+		)
+		if (upstream) {
+			spot = placeRightOf({ x: upstream.x, y: upstream.y, w: upstream.width, h: upstream.height }, size, taken)
+		} else if (downstream) {
+			spot = placeLeftOf({ x: downstream.x, y: downstream.y, w: downstream.width, h: downstream.height }, size, taken)
+		}
+	}
 	if (spot.x !== bounds.x || spot.y !== bounds.y) {
 		editor.updateShape({ id: boxId, type: 'node', x: spot.x, y: spot.y })
 	}
@@ -285,7 +307,7 @@ export async function packSelection(editor: Editor): Promise<TLShapeId | null> {
 		editor.markHistoryStoppingPoint('group as box')
 		const node: SubgraphNode = {
 			type: 'subgraph',
-			title: `Group box (${memberIds.length} nodes)`,
+			title: `Group (${memberIds.length} card${memberIds.length === 1 ? '' : 's'})`,
 			innerIds: [],
 			inputs: [],
 			outputs: [],

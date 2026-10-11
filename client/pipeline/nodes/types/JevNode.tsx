@@ -270,9 +270,7 @@ function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 				</>
 			)}
 			<div className="NodeOutputView NodeGrow" style={{ height: BARS_PX - 8 }} onDoubleClick={() => setShowFinal((v) => !v)}>
-				{node.error ? (
-					<span className="NodeStatus is-error">{node.error}</span>
-				) : result && (!showFinal || !node.filter) ? (
+				{result && (!showFinal || !node.filter) ? (
 					<Bars result={result} />
 				) : node.lastFinal && node.filter ? (
 					<pre className="ValuePreview-text">{node.lastFinal}</pre>

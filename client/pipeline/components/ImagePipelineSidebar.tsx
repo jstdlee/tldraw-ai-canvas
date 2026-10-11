@@ -512,7 +512,7 @@ export function ImagePipelineSidebar({ editor }: { editor: Editor }) {
 											<div className="ImagePipelineSidebar-empty">
 												<UiEmpty
 													icon={<IconGroup />}
-													text="Pack nodes, then right-click → “Save as my node”."
+													text="Select cards, right-click → “Group as box”, then “Save as my node”."
 												/>
 											</div>
 										) : (

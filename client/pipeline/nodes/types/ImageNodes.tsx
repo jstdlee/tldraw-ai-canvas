@@ -60,7 +60,6 @@ const imageOut = (): ShapePort => ({
 
 function Preview({
 	url,
-	error,
 	loading,
 	shape,
 }: {
@@ -76,9 +75,7 @@ function Preview({
 			className={'NodeImagePreview NodeScroll' + (loading ? ' NodeImagePreview_loading' : '')}
 			style={{ height: NODE_IMAGE_PREVIEW_HEIGHT_PX - 8 }}
 		>
-			{error ? (
-				<span className="NodeStatus is-error">{error}</span>
-			) : url ? (
+			{url ? (
 				<>
 					<NodeImage src={url} alt="result" />
 					<FieldMax title="Open the image" onClick={() => setOpen(true)} />
@@ -208,9 +205,7 @@ function CameraNodeComponent({ shape, node }: NodeComponentProps<CameraNode>) {
 					style={{ display: stream ? 'block' : 'none', width: '100%', height: '100%', objectFit: 'contain' }}
 				/>
 				{!stream &&
-					(node.error ? (
-						<span className="NodeStatus is-error">{node.error}</span>
-					) : node.lastResultUrl ? (
+					(node.lastResultUrl ? (
 						<NodeImage src={node.lastResultUrl} alt="photo" />
 					) : (
 						<span className="NodeRow-disconnected">Start the camera, then take a photo</span>

@@ -371,7 +371,6 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 			<div className="ProgressBar" title={node.progress ?? 'Wire item, then Result, then Play'}>
 				<span style={{ width: `${forEachPercent(node.progress)}%` }} />
 			</div>
-			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
 		</>
 	)
 }

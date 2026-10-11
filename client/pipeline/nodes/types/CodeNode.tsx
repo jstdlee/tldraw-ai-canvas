@@ -20,7 +20,7 @@ import { Port } from '../../ports/Port'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
 import { IconSparkle, UiButton, UiNumberInput, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect } from './fields'
+import { PortRow, stopEvent, NodeSelect, NodeTextResult } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -59,6 +59,7 @@ export const CodeNode = T.object({
 
 const CODE_HEIGHT_PX = 200
 const AI_HEIGHT_PX = 120
+const RESULT_HEIGHT_PX = 100
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 
 const inputId = codeInputId
@@ -80,6 +81,7 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 	heading = 'Code'
 	icon = <NumberIcon />
 	category = categoryOf('code')
+	override showsOutput = true
 	resultKeys = ['lastOutputs', 'logs', 'error'] as const
 	getDefault(): CodeNode {
 		return {
@@ -107,7 +109,12 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 	}
 	getBodyHeightPx(_shape: NodeShape, node: CodeNode) {
 		const portRows = Math.max(this.inCount(node), this.outCount(node) - 1, 1)
-		return NODE_ROW_HEIGHT_PX * (portRows + 1) + CODE_HEIGHT_PX + (node.showAI ? AI_HEIGHT_PX : 0)
+		return (
+			NODE_ROW_HEIGHT_PX * (portRows + 1) +
+			CODE_HEIGHT_PX +
+			(node.showAI ? AI_HEIGHT_PX : 0) +
+			RESULT_HEIGHT_PX
+		)
 	}
 	getPorts(_shape: NodeShape, node: CodeNode): Record<string, ShapePort> {
 		const ports: Record<string, ShapePort> = {}
@@ -354,6 +361,12 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 			<div className="NodeGrow" style={{ minHeight: CODE_HEIGHT_PX }}>
 				<CodeArea value={node.code} lang={node.lang} onChange={(code) => set({ code })} />
 			</div>
+			<NodeTextResult
+				text={[node.logs ? `stdout:\n${node.logs}` : '', result != null ? `Result:\n${result}` : ''].filter(Boolean).join('\n\n') || null}
+				error={node.error}
+				empty="Run to see stdout and the returned value"
+				height={RESULT_HEIGHT_PX}
+			/>
 		</>
 	)
 }

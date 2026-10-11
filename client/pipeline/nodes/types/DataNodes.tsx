@@ -12,7 +12,7 @@ import { createNodeAt } from '../../placeNode'
 import { readSpreadsheet } from '../../excel'
 import { storeFile, loadFileBytes } from '../../fileStore'
 import { sleep } from '../../utils/sleep'
-import { getNodeInputPortValues } from '../nodePorts'
+import { getNodeInputPortValues, isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiCheckbox, UiEmpty, UiField, UiSegmented, UiSelect, UiTable, UiTextArea, UiTextInput } from '../../../ui'
 import { IconPlus, IconTable, IconUpload } from '../../../ui/icons'
@@ -79,12 +79,13 @@ export const TableNode = T.object({
 })
 
 /** Where DataPipe's rows land, so ports and body height agree. */
-function layout(node: TableNode) {
+function layout(node: TableNode, dataWired = false) {
 	const spec = opSpec(node.op)
 	const params = spec?.params ?? []
 	let row = 0
 	const dataRow = row++
-	const fileRow = node.source === 'file' ? row++ : null
+	// The file-upload row only renders when the data port is not wired (same condition as the component).
+	const fileRow = !dataWired && node.source === 'file' ? row++ : null
 	const opRow = row++
 	const paramStart = row
 	row += params.length
@@ -125,15 +126,19 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 			lastInfo: '',
 		}
 	}
-	getBodyHeightPx(_shape: NodeShape, node: TableNode) {
-		const { rowsCount } = layout(node)
-		const inlineExtra = (node.source ?? 'inline') === 'inline' ? 90 : 0
+	getBodyHeightPx(shape: NodeShape, node: TableNode) {
+		const dataWired = isInputWired(this.editor, shape.id, 'data')
+		const { rowsCount } = layout(node, dataWired)
+		// The inline textarea only renders when the data port is not wired (same condition as the component).
+		const inlineExtra = !dataWired && (node.source ?? 'inline') === 'inline' ? 90 : 0
 		const descriptionExtra = 20
-		const previewExtra = 240
+		// A real preview table needs room to show rows; the empty placeholder is much shorter.
+		const previewExtra = node.lastOutput ? 240 : 64
 		return NODE_ROW_HEIGHT_PX * rowsCount + inlineExtra + descriptionExtra + previewExtra
 	}
 	getPorts(shape: NodeShape, node: TableNode): Record<string, ShapePort> {
-		const { dataRow, secondRow } = layout(node)
+		const dataWired = isInputWired(this.editor, shape.id, 'data')
+		const { dataRow, secondRow } = layout(node, dataWired)
 		return {
 			data: end('data', dataRow),
 			extra: end('extra', secondRow ?? dataRow),
@@ -635,7 +640,6 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 				/>
 			</NodeRow>
 			<div ref={ref} className="ChartNode-view" />
-			{node.error && <span className="NodeStatus is-error">{node.error}</span>}
 		</div>
 	)
 }

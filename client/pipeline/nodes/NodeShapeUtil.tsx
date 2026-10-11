@@ -47,7 +47,8 @@ import {
 import { executionState, startExecution, stopExecution } from '../execution/executionState'
 import { Port } from '../ports/Port'
 import { getNodeOutputPortInfo, getNodePorts } from './nodePorts'
-import { getNodeDefinition, getNodeHeightPx, getNodeWidthPx, NodeBody, NodeType, shouldSpillOutput } from './nodeTypes'
+import { getNodeHeightPx, getNodeWidthPx, NodeBody, shouldSpillOutput } from './nodeTypes'
+import { getNodeDefinition, NodeType } from './registry'
 import { resizeNode } from './resizeNode'
 import { openGroup } from '../subgraph'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../placeOnCanvas'
@@ -291,7 +292,9 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 
 	const nodeDefinition = getNodeDefinition(editor, shape.props.node)
 	const [naming, setNaming] = useState(false)
-	const title = shape.props.label || nodeDefinition.heading || nodeDefinition.title
+	// A group box shows its own title (e.g. "Group (3 cards)") instead of the generic heading.
+	const boxTitle = shape.props.node.type === 'subgraph' ? (shape.props.node as { title?: string }).title : undefined
+	const title = shape.props.label || boxTitle || nodeDefinition.heading || nodeDefinition.title
 	const [nameDraft, setNameDraft] = useState(title)
 	const cancelRename = useRef(false)
 	const storedError = (shape.props.node as { error?: unknown }).error
@@ -403,7 +406,6 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 						{title}
 					</div>
 				)}
-				{shape.props.node.type === 'subgraph' && <span className="NodeShape-kindBadge">Group box</span>}
 				{output !== undefined && shape.props.node.type !== 'subgraph' && <Port shapeId={shape.id} portId="output" />}
 			</div>
 			<NodeBody shape={shape} />
