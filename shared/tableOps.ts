@@ -666,7 +666,7 @@ export const TABLE_OPS: OpSpec[] = [
 		id: 'groupby',
 		label: 'Group and summarise',
 		group: 'Summarise',
-		description: 'Groups rows by one or more columns and summarises the rest, e.g. score:sum.',
+		description: 'Groups rows by one or more columns and summarises the rest, e.g. score:sum. Output columns are named fn_column (sum_score), or col:fn:alias sets the name.',
 		params: [
 			{ field: 'column', label: 'Group by', kind: 'columns', required: true },
 			{ field: 'columns', label: 'Summaries', kind: 'summaries', placeholder: 'score:sum, *:count' },
