@@ -1,14 +1,19 @@
-/** Sidebar groups, in the order a workflow is built: bring data in, shape it, think, show it. */
+/**
+ * One taxonomy for every card: used by the library drawer, the wire-drop picker, the
+ * command palette, the Build-with-AI type chips, and the AI specs. Groups are in the
+ * order a workflow is usually built: bring data/text/images in, shape and think about
+ * them, reach out to the web, decide, then show the result.
+ */
 
 export const NODE_GROUPS = [
-	{ id: 'input', label: 'Input' },
-	{ id: 'text', label: 'Text' },
-	{ id: 'llm', label: 'AI' },
-	{ id: 'image', label: 'Image' },
+	{ id: 'sources', label: 'Sources' },
 	{ id: 'data', label: 'Data' },
-	{ id: 'net', label: 'Net' },
-	{ id: 'logic', label: 'Logic & code' },
-	{ id: 'media', label: 'Media' },
+	{ id: 'text', label: 'Text' },
+	{ id: 'ai', label: 'AI models' },
+	{ id: 'decide', label: 'Decide' },
+	{ id: 'web', label: 'Web' },
+	{ id: 'image', label: 'Image' },
+	{ id: 'flow', label: 'Flow & code' },
 	{ id: 'output', label: 'Output' },
 ] as const
 
@@ -20,60 +25,60 @@ export const NODE_GROUP_LABELS: Record<string, string> = Object.fromEntries(
 
 export const NODE_GROUP_ORDER: string[] = NODE_GROUPS.map((g) => g.id)
 
-/** Which group each node type belongs to. */
+/** Which group each node type belongs to. Every type in `shared/nodeCatalog.ts` has one entry. */
 export const NODE_CATEGORY: Record<string, NodeGroupId> = {
-	// Input: where a value comes from
-	prompt: 'input',
-	number: 'input',
-	random: 'input',
-	file_in: 'input',
-	url_in: 'input',
-	load_image: 'input',
-	camera: 'input',
-	capture: 'input',
+	// Sources: where a value comes from
+	prompt: 'sources',
+	file_in: 'sources',
+	url_in: 'sources', // superseded by file_in ("Read from"), kept for old canvases
+	load_image: 'sources',
+	camera: 'sources',
+	capture: 'sources',
+	random: 'sources',
+	number: 'sources',
+	// Data: tables, databases, charts
+	table: 'data',
+	database: 'data',
+	postgres: 'data', // superseded by database, kept hidden for old canvases
+	chart: 'data',
 	// Text
 	prompt_concat: 'text',
 	text_tool: 'text',
-	// AI
-	generate_text: 'llm',
-	chat: 'llm',
-	summarize: 'llm',
-	text_ai: 'llm',
-	raw_model: 'llm',
-	jev: 'llm',
-	openrouter: 'llm',
-	model_source: 'llm',
+	// AI models
+	generate_text: 'ai',
+	text_ai: 'ai',
+	summarize: 'ai',
+	chat: 'ai',
+	raw_model: 'ai',
+	model_source: 'ai',
+	openrouter: 'ai',
+	image_gen: 'ai',
+	// Decide
+	jev: 'decide',
+	if: 'decide',
+	logic: 'decide',
+	router: 'decide',
+	// Web
+	http: 'web',
+	download: 'web',
+	net_tool: 'web',
+	video: 'web',
 	// Image
 	crop: 'image',
 	image_resize: 'image',
 	image_filter: 'image',
 	image_tool: 'image',
-	adjust: 'image',
-	image_gen: 'image',
-	// Data
-	table: 'data',
-	chart: 'data',
-	postgres: 'data',
-	database: 'data',
-	// Net
-	http: 'net',
-	download: 'net',
-	net_tool: 'net',
-	// Logic & code
-	if: 'logic',
-	logic: 'logic',
-	for_each: 'logic',
-	router: 'logic',
-	sleep: 'logic',
-	code: 'logic',
-	subgraph: 'logic',
-	// Media
-	video: 'media',
+	adjust: 'image', // legacy, prefer image_filter
+	// Flow & code
+	for_each: 'flow',
+	code: 'flow',
+	sleep: 'flow',
+	subgraph: 'flow', // "Group boxes"
 	// Output
 	output: 'output',
 	save: 'output',
 }
 
 export function categoryOf(type: string): string {
-	return NODE_CATEGORY[type] ?? 'logic'
+	return NODE_CATEGORY[type] ?? 'flow'
 }

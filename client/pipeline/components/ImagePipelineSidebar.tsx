@@ -16,15 +16,21 @@ import { filterLibrary } from '../../../shared/libraryFilter'
 import { NODE_GROUP_LABELS, NODE_GROUP_ORDER } from '../../../shared/nodeGroups'
 import { $libraryRail } from '../../shell/shellState'
 import {
+	IconBranch,
 	IconChevronDown,
 	IconChevronRight,
+	IconCodeBrackets,
+	IconGlobe,
 	IconGroup,
-	IconPlay,
+	IconOutput,
+	IconPicture,
 	IconSidebarCollapse,
 	IconSidebarExpand,
 	IconSparkle,
 	IconTable,
+	IconText,
 	IconTrash,
+	IconUpload,
 	UiEmpty,
 	UiIconButton,
 	UiTextInput,
@@ -40,9 +46,15 @@ const GROUPS_KEY = 'oh-my-tldraw:library-groups'
 /** Kit icons that read better than the first node's icon. Other groups use that icon. */
 const GROUP_ICONS: Record<string, (props: { size?: number }) => ReactElement> = {
 	my: IconGroup,
-	llm: IconSparkle,
+	sources: IconUpload,
 	data: IconTable,
-	media: IconPlay,
+	text: IconText,
+	ai: IconSparkle,
+	decide: IconBranch,
+	web: IconGlobe,
+	image: IconPicture,
+	flow: IconCodeBrackets,
+	output: IconOutput,
 }
 
 type LibraryDef = ReturnType<typeof getNodeDefinitions>[keyof ReturnType<typeof getNodeDefinitions>]

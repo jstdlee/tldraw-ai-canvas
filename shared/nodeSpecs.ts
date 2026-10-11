@@ -8,6 +8,9 @@ import { NODE_PORTS } from './nodeCatalog'
 import { NODE_DESCRIPTIONS } from './nodeDescriptions'
 import { TABLE_OPS, opSpec } from './tableOps'
 import { TEXT_TOOL_OPS } from './textTools'
+import { TEXT_AI_OPERATIONS } from './textAiOps'
+import { CHART_KINDS } from './chartOption'
+import { JEV_KINDS } from './jevKinds'
 import { FILTER_PRESETS } from './imageFilters'
 
 export type FieldKind = 'text' | 'longtext' | 'code' | 'sql' | 'number' | 'boolean' | 'enum' | 'model' | 'json' | 'url'
@@ -53,10 +56,9 @@ function field(key: string, kind: FieldKind, label: string, description: string,
 	return { key, kind, label, description, options, default: def }
 }
 
-const TEXT_AI_OP_IDS = [
-	'summarize', 'bullets', 'translate', 'rewrite', 'fix', 'simplify', 'keywords',
-	'title', 'json', 'classify', 'questions', 'explain', 'prompt', 'custom',
-]
+const TEXT_AI_OP_IDS = TEXT_AI_OPERATIONS.map((o) => o.id)
+const CHART_KIND_IDS = CHART_KINDS.map((k) => k.id)
+const JEV_KIND_IDS = JEV_KINDS.map((k) => k.id)
 
 const TABLE_OP_IDS = TABLE_OPS.filter((spec) => !spec.hidden).map((spec) => spec.id)
 const FILTER_PRESET_NAMES = Object.keys(FILTER_PRESETS)
@@ -82,7 +84,7 @@ function purpose(type: string): string {
 import { NODE_CATEGORY } from './nodeGroups'
 
 function groupOf(type: string): string {
-	return NODE_CATEGORY[type] ?? 'logic'
+	return NODE_CATEGORY[type] ?? 'flow'
 }
 
 const llmFields = (modelLabel = 'Model'): FieldSpec[] => [
@@ -335,7 +337,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			port('final', 'text', 'Only emits on the winning branch (yes/no kind); use to gate downstream nodes.'),
 		],
 		fields: [
-			field('kind', 'enum', 'Kind', 'Yes/no, multiple choice, or a score.', ['noul', 'choice', 'score']),
+			field('kind', 'enum', 'Kind', 'Yes/no, multiple choice, or a score.', JEV_KIND_IDS),
 			field('question', 'longtext', 'Question', 'The question to decide.'),
 			field('options', 'longtext', 'Options', 'One option per line (choice), or one level per line, worst first (score).'),
 			field('filter', 'boolean', 'Pre-filter', 'Run an extra filter pass (filterInstruction/filterModel) before deciding.'),
@@ -723,7 +725,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		outputs: [port('output', 'text', 'Passes the input table through.')],
 		fields: [
 			field('text', 'longtext', 'Table text', 'Literal input table (CSV/TSV), used when the data port is not wired.'),
-			field('kind', 'enum', 'Kind', 'Chart type.', ['bar', 'line', 'pie']),
+			field('kind', 'enum', 'Kind', 'Chart type.', CHART_KIND_IDS),
 			field('xCol', 'text', 'X column', 'Column used for the category/x axis.'),
 			field('yCol', 'text', 'Y column(s)', 'Comma-separated column(s) to plot; one series per column.'),
 			field('dualScale', 'boolean', 'Dual axis', 'With 2+ y columns, plot the first on the left axis and the rest on the right.'),

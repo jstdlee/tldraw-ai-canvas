@@ -244,6 +244,18 @@
 	font-size: 12px;
 }
 
+.Palette-insert {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.Palette-insert-hint {
+	padding: 4px var(--tl-space-4) 2px;
+	font-size: 11px;
+	color: var(--tl-color-text-3);
+}
+
 .MapView {
 	position: fixed;
 	right: 16px;

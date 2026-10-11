@@ -1,7 +1,13 @@
 import {
+	ArrangeMenuSubmenu,
+	ClipboardMenuGroup,
+	ConversionsMenuGroup,
 	DefaultContextMenu,
-	DefaultContextMenuContent,
 	Editor,
+	EditMenuSubmenu,
+	MoveToPageMenu,
+	ReorderMenuSubmenu,
+	SelectAllMenuItem,
 	TLUiActionsContextType,
 	TLUiContextMenuProps,
 	TLUiOverrideHelpers,
@@ -40,9 +46,13 @@ import {
 	saveCustomNode,
 } from '../pipeline/customNodes'
 import { imagesKeepRatio, toggleImageRatio, toggleTextWrap } from './shapeOptions'
-import { startColorChord } from '../shell/shellState'
+import { $mapOpen, openInsertPaletteAtPointer, startColorChord } from '../shell/shellState'
 import { EXAMPLES } from '../../shared/examples'
 import { loadExample } from '../pipeline/loadExample'
+import { startExecution } from '../pipeline/execution/executionState'
+import { getNodeDefinitions, shouldSpillOutput } from '../pipeline/nodes/nodeTypes'
+import { createNodeAt } from '../pipeline/placeNode'
+import { NODE_GROUP_LABELS, NODE_GROUP_ORDER } from '../../shared/nodeGroups'
 
 /**
  * Delete the selection, skipping nodes whose "Lock delete" is on. Used by the
@@ -128,6 +138,7 @@ export function canvasActionOverrides(
 		...a('word-count', 'Word count', () => wordCount(editor, notify), '?w'),
 		...a('insert-date', 'Insert date & time', () => insertDateTime(editor), '?d'),
 		...a('find-on-canvas', 'Find on canvas', () => $findOpen.set(true), '$!f'),
+		...a('toggle-map', 'Map view', () => $mapOpen.set(!$mapOpen.get())),
 		...a('center-view', 'Center view', () => centerView(editor)),
 		...a('reset-zoom', 'Reset zoom', () => resetZoom(editor)),
 		...a('erase-selection', 'Delete (erase)', () => eraseSelection(editor, notify), '$e'),
@@ -216,10 +227,43 @@ export function canvasActionOverrides(
 			const s = editor.getOnlySelectedShape()
 			if (s?.type === 'node' && (s.props as any).node?.type === 'subgraph') unpack(editor, s.id)
 		}),
+		...a('run-node', 'Run card', () => {
+			const ids = selectedNodeIds(editor)
+			if (ids.size) void startExecution(editor, ids)
+		}),
+		...a('run-node-no-cache', 'Run without cache', () => {
+			const ids = selectedNodeIds(editor)
+			if (ids.size) void startExecution(editor, ids, { noCache: true })
+		}),
+		...a('toggle-spill', 'Put output on canvas', () => {
+			const shapes = editor.getSelectedShapes().filter((s) => s.type === 'node')
+			if (!shapes.length) return
+			// If any selected card isn't spilling yet, turn it on for all of them; otherwise off.
+			const anyOff = shapes.some((s) => !shouldSpillOutput(editor, s as any))
+			editor.run(() => {
+				for (const s of shapes) {
+					editor.updateShape({ id: s.id, type: 'node', props: { spill: anyOff ? 'always' : 'never' } })
+				}
+			})
+		}),
+		...a('insert-card-palette', 'Insert card…', () => openInsertPaletteAtPointer(editor)),
 	}
 }
 
-/** Right-click menu: AI and image items first, then tldraw's own items. */
+/** Every selected node shape's id, as a set `startExecution` can run. */
+function selectedNodeIds(editor: Editor) {
+	return new Set(editor.getSelectedShapes().filter((s) => s.type === 'node').map((s) => s.id))
+}
+
+/**
+ * Right-click menu, in this order (each section only when it applies):
+ * 1. Card — run, group as box / open / close / ungroup, save as my node, put output on canvas
+ * 2. AI — ask AI, build with AI, explain, text jobs (incl. image AI when an image is selected)
+ * 3. Insert — "Insert card…" (opens the palette at the pointer) + a submenu per card group
+ * 4. Edit — tldraw's own edit items, unchanged
+ * 5. Arrange — tldraw's own arrange/align items, plus Text wrap / Image ratio
+ * 6. Canvas — Find, Map view, Save canvas, Examples
+ */
 export function CanvasContextMenu(props: TLUiContextMenuProps) {
 	const editor = useEditor()
 	const hasSelection = useValue('has selection', () => editor.getSelectedShapeIds().length > 0, [editor])
@@ -237,25 +281,67 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 	const openBoxGroupId = useValue('open box group', () => findOpenBoxGroup(editor), [editor])
 	return (
 		<DefaultContextMenu {...props}>
-			<TldrawUiMenuGroup id="view-tools">
-				<TldrawUiMenuActionItem actionId="center-view" />
-				<TldrawUiMenuActionItem actionId="reset-zoom" />
-				{hasSelection && <TldrawUiMenuActionItem actionId="erase-selection" />}
+			{/* 1. Card */}
+			{(hasNodes || isPackedNode || openBoxGroupId) && (
+				<TldrawUiMenuGroup id="card-tools">
+					{hasNodes && <TldrawUiMenuActionItem actionId="run-node" />}
+					{hasNodes && <TldrawUiMenuActionItem actionId="run-node-no-cache" />}
+					{isPackedNode ? (
+						<>
+							<TldrawUiMenuActionItem actionId="open-group" />
+							<TldrawUiMenuActionItem actionId="unpack-node" />
+							<TldrawUiMenuActionItem actionId="export-node-file" />
+						</>
+					) : openBoxGroupId ? (
+						<TldrawUiMenuActionItem actionId="close-to-box" />
+					) : (
+						<TldrawUiMenuActionItem actionId="pack-nodes" />
+					)}
+					{hasNodes && <TldrawUiMenuActionItem actionId="save-custom-node" />}
+					{hasNodes && <TldrawUiMenuActionItem actionId="toggle-spill" />}
+				</TldrawUiMenuGroup>
+			)}
+			{/* 2. AI */}
+			{hasSelection && (
+				<TldrawUiMenuGroup id="ai-tools">
+					<TldrawUiMenuSubmenu id="ai-submenu" label="AI">
+						<TldrawUiMenuGroup id="ai-sel">
+							<TldrawUiMenuActionItem actionId="ai-ask" />
+							<TldrawUiMenuActionItem actionId="build-with-ai" />
+							<TldrawUiMenuActionItem actionId="ai-explain" />
+						</TldrawUiMenuGroup>
+						{isImage && (
+							<TldrawUiMenuGroup id="ai-image">
+								<TldrawUiMenuActionItem actionId="ai-describe-image" />
+								<TldrawUiMenuActionItem actionId="ai-extract-text" />
+							</TldrawUiMenuGroup>
+						)}
+						<TldrawUiMenuGroup id="ai-text">
+							<TldrawUiMenuActionItem actionId="ai-summarize" />
+							<TldrawUiMenuActionItem actionId="ai-translate" />
+							<TldrawUiMenuActionItem actionId="ai-improve" />
+							<TldrawUiMenuActionItem actionId="ai-brainstorm" />
+						</TldrawUiMenuGroup>
+					</TldrawUiMenuSubmenu>
+					{isImage && <TldrawUiMenuActionItem actionId="image-to-pipeline" />}
+					<TldrawUiMenuActionItem actionId="qr-code" />
+					<TldrawUiMenuActionItem actionId="word-count" />
+				</TldrawUiMenuGroup>
+			)}
+			{/* 3. Insert */}
+			<TldrawUiMenuGroup id="insert-tools">
+				<TldrawUiMenuActionItem actionId="insert-card-palette" />
+				<InsertCardSubmenus />
 			</TldrawUiMenuGroup>
-			{isImage && (
-				<TldrawUiMenuGroup id="image-tools">
-					<TldrawUiMenuActionItem actionId="edit-image" />
-					<TldrawUiMenuActionItem actionId="ai-describe-image" />
-					<TldrawUiMenuActionItem actionId="ai-extract-text" />
-					<TldrawUiMenuActionItem actionId="image-to-pipeline" />
-					<TldrawUiMenuActionItem actionId="toggle-image-ratio" />
-				</TldrawUiMenuGroup>
-			)}
-			{hasText && (
-				<TldrawUiMenuGroup id="text-tools">
-					<TldrawUiMenuActionItem actionId="toggle-text-wrap" />
-				</TldrawUiMenuGroup>
-			)}
+			{/* 4. Edit (tldraw's own items, unchanged) */}
+			<TldrawUiMenuGroup id="edit-tools">
+				<EditMenuSubmenu />
+			</TldrawUiMenuGroup>
+			<ClipboardMenuGroup />
+			<ConversionsMenuGroup />
+			<TldrawUiMenuGroup id="select-all">
+				<SelectAllMenuItem />
+			</TldrawUiMenuGroup>
 			{hasSelection && (
 				<TldrawUiMenuGroup id="group-tools">
 					<TldrawUiMenuActionItem actionId="group-shapes" />
@@ -264,52 +350,81 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 					<TldrawUiMenuActionItem actionId="leave-group" />
 				</TldrawUiMenuGroup>
 			)}
-			{(hasNodes || isPackedNode || openBoxGroupId) && (
-				<TldrawUiMenuGroup id="pack-tools">
-					{isPackedNode ? (
-						<>
-							<TldrawUiMenuActionItem actionId="open-group" />
-							<TldrawUiMenuActionItem actionId="unpack-node" />
-							<TldrawUiMenuActionItem actionId="save-custom-node" />
-							<TldrawUiMenuActionItem actionId="export-node-file" />
-						</>
-					) : openBoxGroupId ? (
-						<TldrawUiMenuActionItem actionId="close-to-box" />
-					) : (
-						<TldrawUiMenuActionItem actionId="pack-nodes" />
-					)}
-				</TldrawUiMenuGroup>
-			)}
-			{hasSelection ? (
-				<TldrawUiMenuGroup id="ai-tools">
-					<TldrawUiMenuSubmenu id="ai-submenu" label="AI">
-						<TldrawUiMenuGroup id="ai-sel">
-							<TldrawUiMenuActionItem actionId="ai-ask" />
-							<TldrawUiMenuActionItem actionId="build-with-ai" />
-							<TldrawUiMenuActionItem actionId="ai-explain" />
-						</TldrawUiMenuGroup>
-						<TldrawUiMenuGroup id="ai-text">
-							<TldrawUiMenuActionItem actionId="ai-summarize" />
-							<TldrawUiMenuActionItem actionId="ai-translate" />
-							<TldrawUiMenuActionItem actionId="ai-improve" />
-							<TldrawUiMenuActionItem actionId="ai-brainstorm" />
+			{/* 5. Arrange (tldraw's own items, plus Text wrap / Image ratio) */}
+			<TldrawUiMenuGroup id="arrange-tools">
+				<ArrangeMenuSubmenu />
+				<ReorderMenuSubmenu />
+				<MoveToPageMenu />
+				{hasText && <TldrawUiMenuActionItem actionId="toggle-text-wrap" />}
+				{isImage && <TldrawUiMenuActionItem actionId="toggle-image-ratio" />}
+				{isImage && <TldrawUiMenuActionItem actionId="edit-image" />}
+			</TldrawUiMenuGroup>
+			{/* 6. Canvas */}
+			<TldrawUiMenuGroup id="canvas-tools">
+				<TldrawUiMenuActionItem actionId="find-on-canvas" />
+				<TldrawUiMenuActionItem actionId="toggle-map" />
+				<TldrawUiMenuActionItem actionId="save-canvas-file" />
+				<ExamplesMenu />
+				{!hasSelection && (
+					<>
+						<TldrawUiMenuActionItem actionId="new-markdown" />
+						<TldrawUiMenuActionItem actionId="new-mermaid" />
+						<TldrawUiMenuActionItem actionId="insert-date" />
+						<TldrawUiMenuActionItem actionId="fetch-page" />
+					</>
+				)}
+				{hasSelection && <TldrawUiMenuActionItem actionId="erase-selection" />}
+				<TldrawUiMenuActionItem actionId="center-view" />
+				<TldrawUiMenuActionItem actionId="reset-zoom" />
+			</TldrawUiMenuGroup>
+		</DefaultContextMenu>
+	)
+}
+
+/** One submenu per card group, each listing that group's cards for a quick insert at the pointer. */
+function InsertCardSubmenus() {
+	const editor = useEditor()
+	const grouped = useValue(
+		'insert card groups',
+		() => {
+			const byGroup = new Map<string, { type: string; title: string }[]>()
+			for (const def of Object.values(getNodeDefinitions(editor))) {
+				if (def.hidden) continue
+				const list = byGroup.get(def.category) ?? []
+				list.push({ type: def.type, title: def.title })
+				byGroup.set(def.category, list)
+			}
+			return byGroup
+		},
+		[editor]
+	)
+	const insertType = (type: string) => {
+		const def = getNodeDefinitions(editor)[type as keyof ReturnType<typeof getNodeDefinitions>]
+		if (!def) return
+		const point = editor.inputs.getCurrentPagePoint?.() ?? editor.getViewportPageBounds().center
+		createNodeAt(editor, def.getDefault(), { near: point, select: true })
+	}
+	return (
+		<>
+			{NODE_GROUP_ORDER.map((groupId) => {
+				const defs = grouped.get(groupId)
+				if (!defs?.length) return null
+				return (
+					<TldrawUiMenuSubmenu key={groupId} id={`insert-group-${groupId}`} label={NODE_GROUP_LABELS[groupId] ?? groupId}>
+						<TldrawUiMenuGroup id={`insert-group-${groupId}-items`}>
+							{defs.map((def) => (
+								<TldrawUiMenuItem
+									key={def.type}
+									id={`insert-${def.type}`}
+									label={def.title}
+									onSelect={() => insertType(def.type)}
+								/>
+							))}
 						</TldrawUiMenuGroup>
 					</TldrawUiMenuSubmenu>
-					<TldrawUiMenuActionItem actionId="qr-code" />
-					<TldrawUiMenuActionItem actionId="word-count" />
-				</TldrawUiMenuGroup>
-			) : (
-				<TldrawUiMenuGroup id="canvas-tools">
-					<TldrawUiMenuActionItem actionId="new-markdown" />
-					<TldrawUiMenuActionItem actionId="new-mermaid" />
-					<TldrawUiMenuActionItem actionId="insert-date" />
-					<TldrawUiMenuActionItem actionId="fetch-page" />
-					<TldrawUiMenuActionItem actionId="qr-code" />
-					<TldrawUiMenuActionItem actionId="find-on-canvas" />
-				</TldrawUiMenuGroup>
-			)}
-			<DefaultContextMenuContent />
-		</DefaultContextMenu>
+				)
+			})}
+		</>
 	)
 }
 
@@ -337,32 +452,17 @@ export function ExamplesMenu() {
 
 /** "Canvas tools" submenu for the main menu. */
 export function CanvasToolsMenuGroup() {
+	// File and view items only: everything else (AI jobs, clip creation, find, word count,
+	// QR code, image edit, erase, colour chord's selection target) now lives in the
+	// context menu's Card/AI/Insert/Edit/Arrange/Canvas sections — see CanvasContextMenu
+	// above, kept in the same order here so there is exactly one place for each item.
 	return (
 		<TldrawUiMenuSubmenu id="canvas-tools-menu" label="Canvas tools">
-			<TldrawUiMenuGroup id="ct-clips">
-				<TldrawUiMenuActionItem actionId="new-markdown" />
-				<TldrawUiMenuActionItem actionId="new-mermaid" />
-				<TldrawUiMenuActionItem actionId="fetch-page" />
-			</TldrawUiMenuGroup>
-			<TldrawUiMenuGroup id="ct-ai">
-				<TldrawUiMenuActionItem actionId="ai-ask" />
-				<TldrawUiMenuActionItem actionId="build-with-ai" />
-				<TldrawUiMenuActionItem actionId="ai-explain" />
-				<TldrawUiMenuActionItem actionId="ai-summarize" />
-				<TldrawUiMenuActionItem actionId="ai-translate" />
-			</TldrawUiMenuGroup>
 			<TldrawUiMenuGroup id="ct-files">
-				<TldrawUiMenuActionItem actionId="save-canvas-file" />
 				<TldrawUiMenuActionItem actionId="open-canvas-file" />
 				<TldrawUiMenuActionItem actionId="import-node-file" />
 			</TldrawUiMenuGroup>
-			<TldrawUiMenuGroup id="ct-utils">
-				<TldrawUiMenuActionItem actionId="find-on-canvas" />
-				<TldrawUiMenuActionItem actionId="insert-date" />
-				<TldrawUiMenuActionItem actionId="word-count" />
-				<TldrawUiMenuActionItem actionId="qr-code" />
-				<TldrawUiMenuActionItem actionId="edit-image" />
-				<TldrawUiMenuActionItem actionId="erase-selection" />
+			<TldrawUiMenuGroup id="ct-view">
 				<TldrawUiMenuActionItem actionId="color-chord" />
 			</TldrawUiMenuGroup>
 		</TldrawUiMenuSubmenu>

@@ -1,6 +1,9 @@
-import { createShapeId, Editor, TLShapeId, VecLike } from 'tldraw'
+import { createBindingId, createShapeId, Editor, TLShapeId, VecLike } from 'tldraw'
 import { findFreeSpot, placeRightOf, type Box } from '../../shared/placement'
 import { NEW_NODE_FONT_PX } from './constants'
+import { getNextConnectionIndex } from './connection/keepConnectionsAtBottom'
+import { getNodePorts } from './nodes/nodePorts'
+import { findFirstCompatiblePort } from './ports/portCompatibility'
 import { isPacked } from './subgraph'
 import { NodeType } from './nodes/nodeTypes'
 
@@ -56,4 +59,52 @@ export function createNodeAt(
 		if (opts.select !== false) editor.select(shapeId)
 	})
 	return shapeId
+}
+
+/**
+ * Wire `fromId`'s first output port compatible with one of `toId`'s input ports to that
+ * input port. Used by "insert and wire" flows (the insert palette's Shift+Enter) where
+ * there is no in-progress wire drag to attach to, unlike `PointingPort`'s onClick.
+ * Returns the new connection's shape id, or null if neither side has a compatible port.
+ */
+export function wireNodes(editor: Editor, fromId: TLShapeId, toId: TLShapeId): TLShapeId | null {
+	const fromPorts = Object.values(getNodePorts(editor, fromId)).filter((p) => p.terminal === 'start')
+	const toPorts = Object.values(getNodePorts(editor, toId))
+
+	let fromPortId: string | null = null
+	let toPortId: string | null = null
+	for (const fromPort of fromPorts) {
+		const match = findFirstCompatiblePort(toPorts, 'end', fromPort.dataType)
+		if (match) {
+			fromPortId = fromPort.id
+			toPortId = match.id
+			break
+		}
+	}
+	if (!fromPortId || !toPortId) return null
+
+	const connectionId = createShapeId()
+	editor.run(() => {
+		editor.createShape({
+			id: connectionId,
+			type: 'connection',
+			index: getNextConnectionIndex(editor),
+			props: { start: { x: 0, y: 0 }, end: { x: 80, y: 0 } },
+		})
+		editor.createBinding({
+			id: createBindingId(),
+			type: 'connection',
+			fromId: connectionId,
+			toId: fromId,
+			props: { portId: fromPortId!, terminal: 'start', order: 0 },
+		})
+		editor.createBinding({
+			id: createBindingId(),
+			type: 'connection',
+			fromId: connectionId,
+			toId: toId,
+			props: { portId: toPortId!, terminal: 'end', order: 1 },
+		})
+	})
+	return connectionId
 }

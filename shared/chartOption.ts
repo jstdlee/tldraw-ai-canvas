@@ -3,6 +3,14 @@
 import { parseTable } from './tableOps'
 import type { Table } from './tableOps'
 
+/** Chart kinds the chart card supports. The card search deep entries ("Chart · Line", …)
+ *  are built from this list instead of a hand list. */
+export const CHART_KINDS = [
+	{ id: 'bar', label: 'Bar' },
+	{ id: 'line', label: 'Line' },
+	{ id: 'pie', label: 'Pie' },
+] as const
+
 /** Columns whose non-empty cells all parse as numbers (and at least one cell is filled). */
 function numericColumns(table: Table): string[] {
 	return table.headers.filter((_, index) => {

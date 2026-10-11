@@ -1,4 +1,5 @@
 import { NODE_GROUP_LABELS } from './nodeGroups'
+import { CardDoc, searchCards } from './cardSearch'
 
 /** One library row the sidebar can filter. `category` is the group id, such as `data`. */
 export interface LibraryEntry {
@@ -23,15 +24,28 @@ export const LIBRARY_KEYWORDS: Record<string, string> = {
 	image_gen: 'dall-e imagen flux stable diffusion openrouter txt2img',
 }
 
-function searchText(def: LibraryEntry): string {
+function toDoc(def: LibraryEntry): CardDoc {
 	const label = NODE_GROUP_LABELS[def.category] ?? def.category
 	const extra = def.keywords !== undefined ? def.keywords : (LIBRARY_KEYWORDS[def.type] ?? '')
-	return `${def.title}\n${def.type}\n${def.category}\n${label}\n${extra}`.toLowerCase()
+	return {
+		id: def.type,
+		type: def.type,
+		title: def.title,
+		group: def.category,
+		description: '',
+		keywords: [def.type, def.category, label, ...extra.split(/\s+/).filter(Boolean)],
+	}
 }
 
-/** Case-insensitive match on title, type id, and category label. An empty query returns every row. */
+/**
+ * Ranks every row against `query` with the shared card search engine
+ * (`shared/cardSearch.ts`): title, type id, category label, and extra keywords. An
+ * empty query returns every row, unranked, in its original order.
+ */
 export function filterLibrary<T extends LibraryEntry>(defs: readonly T[], query: string): T[] {
-	const q = query.trim().toLowerCase()
+	const q = query.trim()
 	if (!q) return [...defs]
-	return defs.filter((def) => searchText(def).includes(q))
+	const byType = new Map(defs.map((def) => [def.type, def]))
+	const ranked = searchCards(q, defs.map(toDoc))
+	return ranked.map((entry) => byType.get(entry.doc.type)!).filter(Boolean)
 }

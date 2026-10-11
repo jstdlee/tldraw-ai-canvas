@@ -81,6 +81,8 @@ export class PostgresNodeDefinition extends NodeDefinition<PostgresNode> {
 	heading = 'Postgres'
 	icon = <NumberIcon />
 	category = categoryOf('postgres')
+	// Superseded by the Database node (SQLite/PGlite); kept so old canvases still load.
+	override hidden = true
 	resultKeys = ['lastText', 'error'] as const
 	getDefault(): PostgresNode {
 		return { type: 'postgres', sql: DEFAULT_SQL, lastText: null, error: null, mode: 'sql', csv: '', sourceUrl: '', recipe: '' }

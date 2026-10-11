@@ -1,15 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DefaultColorStyle, Editor, TLDefaultColorStyle, TLShapeId, useActions, useEditor, useValue } from 'tldraw'
 import { FEATURE_ROWS } from '../../shared/featureList'
-import { getNodeDefinitions } from '../pipeline/nodes/nodeTypes'
-import { NEW_NODE_FONT_PX } from '../pipeline/constants'
-import { createShapeId } from 'tldraw'
+import { getNodeDefinitions, NodeType } from '../pipeline/nodes/nodeTypes'
 import { diveGroup, groupPlainText, leaveGroup } from '../pipeline/groups/groupActions'
 import { $findOpen } from '../clips/FindBar'
+import { createNodeAt, wireNodes } from '../pipeline/placeNode'
+import { CardDoc, getCardDocs, searchCards } from '../../shared/cardSearch'
+import { readPickerRecency, recordPick } from '../../shared/pickerRank'
+import { PickerRow } from '../pipeline/components/OnCanvasNodePicker'
+import { useJevRerank } from '../pipeline/components/useJevRerank'
+import { IconJevMark, IconSearch, UiTextInput } from '../ui'
 import {
 	$backup,
 	$colorChordOpen,
 	$featuresOpen,
+	$insertPalette,
 	$libraryRail,
 	$mapOpen,
 	$paletteOpen,
@@ -18,6 +23,7 @@ import {
 	cancelColorChord,
 	getColorChordStep,
 	loadBackup,
+	openInsertPaletteAtPointer,
 	startColorChord,
 } from './shellState'
 
@@ -123,6 +129,26 @@ export function ShellChrome() {
 				event.stopPropagation()
 				actions['erase-selection']?.onSelect('kbd')
 			}
+			// "/" opens the insert palette at the pointer: never while typing in a field, and
+			// never while tldraw itself is editing a shape (typing inside a text/node field).
+			if (
+				!typing &&
+				!event.metaKey &&
+				!event.ctrlKey &&
+				!event.altKey &&
+				event.key === '/' &&
+				editor.getEditingShapeId() === null
+			) {
+				event.preventDefault()
+				openInsertPaletteAtPointer(editor)
+				return
+			}
+			// Ctrl/Cmd+Shift+I opens the same insert palette from anywhere.
+			if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'i') {
+				event.preventDefault()
+				event.stopPropagation()
+				openInsertPaletteAtPointer(editor)
+			}
 		}
 		window.addEventListener('keydown', onKey, true)
 		return () => window.removeEventListener('keydown', onKey, true)
@@ -132,6 +158,7 @@ export function ShellChrome() {
 		<>
 			<GroupBack editor={editor} />
 			<CommandPalette editor={editor} />
+			<InsertPalette editor={editor} />
 			<MapView editor={editor} />
 			<FeaturePanel />
 			<BackupClock editor={editor} />
@@ -169,43 +196,108 @@ function GroupBack({ editor }: { editor: Editor }) {
 	)
 }
 
+/** Every non-hidden node type, as the one search engine's card documents. */
+function useVisibleCardDocs(editor: Editor) {
+	return useMemo(() => {
+		const visible = new Set<string>(
+			Object.values(getNodeDefinitions(editor))
+				.filter((def) => !def.hidden)
+				.map((def) => def.type)
+		)
+		return getCardDocs().filter((d) => visible.has(d.type))
+	}, [editor])
+}
+
+/** Insert `doc`'s card (preset per `doc.deep`, if any) at the viewport centre and select it. */
+function insertCard(editor: Editor, doc: CardDoc) {
+	const def = getNodeDefinitions(editor)[doc.type as keyof ReturnType<typeof getNodeDefinitions>]
+	if (!def) return
+	recordPick(doc.id)
+	const node = doc.deep ? { ...def.getDefault(), [doc.deep.field]: doc.deep.value } : def.getDefault()
+	createNodeAt(editor, node as NodeType, { near: 'viewport', select: true })
+}
+
+/** The JEV context line: the selected card's title, if there is exactly one selected. */
+function useSelectedCardTitle(editor: Editor): string {
+	return useValue(
+		'selected card title',
+		() => {
+			const shape = editor.getOnlySelectedShape()
+			if (shape?.type !== 'node') return 'No card selected'
+			const defs = getNodeDefinitions(editor)
+			const label = (shape.props as { label?: string }).label
+			const title =
+				(typeof label === 'string' && label.trim()) ||
+				defs[shape.props.node.type as keyof typeof defs]?.title ||
+				shape.props.node.type
+			return `Selected card: ${title}`
+		},
+		[editor]
+	)
+}
+
+/**
+ * Ctrl/Cmd+P: features, tools and, in an "Insert" section, every card from the one
+ * search engine (shared/cardSearch.ts) — the same ranking the library and the wire-drop
+ * picker use. Ctrl/Cmd+Shift+I / "/" open the narrower insert-mode palette instead
+ * (see `InsertPalette` below), which inserts at the pointer and can wire as it goes.
+ */
 function CommandPalette({ editor }: { editor: Editor }) {
 	const open = useValue('palette', () => $paletteOpen.get(), [])
 	const [query, setQuery] = useState('')
-	const items = useMemo(() => {
-		const nodes = Object.values(getNodeDefinitions(editor))
-			.filter((def) => !def.hidden)
-			.map((def) => ({ id: `node:${def.type}`, label: `Insert ${def.title}`, run: () => insertNode(editor, def.type) }))
-		const tools = [
+	const cardDocs = useVisibleCardDocs(editor)
+
+	const tools = useMemo(
+		() => [
 			{ id: 'find', label: 'Find on canvas', run: () => $findOpen.set(true) },
 			{ id: 'map', label: 'Map view', run: () => $mapOpen.set(!$mapOpen.get()) },
 			{ id: 'features', label: 'Features compared with tldraw', run: () => $featuresOpen.set(true) },
 			{ id: 'library', label: 'Collapse node library', run: () => $libraryRail.set(!$libraryRail.get()) },
-		]
+		],
+		[]
+	)
+
+	const matchedTools = useMemo(() => {
 		const q = query.trim().toLowerCase()
-		return [...tools, ...nodes].filter((item) => !q || item.label.toLowerCase().includes(q))
-	}, [editor, query])
+		return tools.filter((item) => !q || item.label.toLowerCase().includes(q))
+	}, [tools, query])
+
+	const localRanked = useMemo(() => {
+		if (!open) return []
+		return searchCards(query, cardDocs, { recency: readPickerRecency() }).slice(0, 20)
+	}, [open, query, cardDocs])
+	const selectedCardTitle = useSelectedCardTitle(editor)
+	const { ranked: cardResults, usedJev } = useJevRerank(query, localRanked, selectedCardTitle)
+
+	const runFirst = () => {
+		if (matchedTools[0]) {
+			matchedTools[0].run()
+		} else if (cardResults[0]) {
+			insertCard(editor, cardResults[0].doc)
+		} else {
+			return
+		}
+		$paletteOpen.set(false)
+	}
+
 	if (!open) return null
 	return (
 		<div className="Palette-backdrop" onPointerDown={(event) => event.target === event.currentTarget && $paletteOpen.set(false)}>
 			<div className="Palette" role="dialog" aria-label="Command palette">
 				<input
 					autoFocus
-					placeholder="Search features and nodes"
+					placeholder="Search features and cards"
 					value={query}
 					onPointerDown={stop}
 					onChange={(event) => setQuery(event.target.value)}
 					onKeyDown={(event) => {
 						event.stopPropagation()
 						if (event.key === 'Escape') $paletteOpen.set(false)
-						if (event.key === 'Enter' && items[0]) {
-							items[0].run()
-							$paletteOpen.set(false)
-						}
+						if (event.key === 'Enter') runFirst()
 					}}
 				/>
 				<div className="Palette-list">
-					{items.slice(0, 40).map((item) => (
+					{matchedTools.map((item) => (
 						<button
 							key={item.id}
 							type="button"
@@ -217,21 +309,128 @@ function CommandPalette({ editor }: { editor: Editor }) {
 							{item.label}
 						</button>
 					))}
+					{cardResults.length > 0 && (
+						<div className="NodeSearchPicker-section">
+							Insert
+							{usedJev && (
+								<span className="NodeSearchPicker-jev" title="Re-ranked with JEV">
+									<IconJevMark size={11} /> ranked
+								</span>
+							)}
+						</div>
+					)}
+					{cardResults.map((entry) => (
+						<PickerRow
+							key={entry.doc.id}
+							doc={entry.doc}
+							active={false}
+							onPick={() => {
+								insertCard(editor, entry.doc)
+								$paletteOpen.set(false)
+							}}
+						/>
+					))}
 				</div>
 			</div>
 		</div>
 	)
 }
 
-function insertNode(editor: Editor, type: string) {
-	const def = getNodeDefinitions(editor)[type as keyof ReturnType<typeof getNodeDefinitions>]
-	if (!def) return
-	const id = createShapeId()
-	const center = editor.getViewportPageBounds().center
-	editor.run(() => {
-		editor.createShape({ id, type: 'node', x: center.x - 130, y: center.y - 40, props: { node: def.getDefault(), fontSize: NEW_NODE_FONT_PX } })
-		editor.select(id)
-	})
+/**
+ * The "/" / Ctrl+Shift+I insert palette: searches every card (the same engine as
+ * `CommandPalette`'s "Insert" section) and inserts at the pointer with `createNodeAt`
+ * (free spot). Shift+Enter also wires the new card to the selected card's first
+ * compatible output port, mirroring the wire-drop picker's own "insert and wire" flow.
+ */
+function InsertPalette({ editor }: { editor: Editor }) {
+	const at = useValue('insert palette', () => $insertPalette.get(), [])
+	const [query, setQuery] = useState('')
+	const [activeIndex, setActiveIndex] = useState(0)
+	const inputRef = useRef<HTMLInputElement>(null)
+	const cardDocs = useVisibleCardDocs(editor)
+
+	useEffect(() => {
+		if (!at) return
+		setQuery('')
+		setActiveIndex(0)
+		inputRef.current?.focus()
+	}, [at])
+
+	const localRanked = useMemo(() => {
+		if (!at) return []
+		return searchCards(query, cardDocs, { recency: readPickerRecency() }).slice(0, 30)
+	}, [at, query, cardDocs])
+	const selectedCardTitle = useSelectedCardTitle(editor)
+	const { ranked: results, usedJev } = useJevRerank(query, localRanked, selectedCardTitle)
+
+	const close = () => $insertPalette.set(null)
+
+	const insert = (doc: CardDoc, wireToSelection: boolean) => {
+		const def = getNodeDefinitions(editor)[doc.type as keyof ReturnType<typeof getNodeDefinitions>]
+		if (!def || !at) return
+		recordPick(doc.id)
+		const node = doc.deep ? { ...def.getDefault(), [doc.deep.field]: doc.deep.value } : def.getDefault()
+		const selected = wireToSelection ? editor.getOnlySelectedShape() : null
+		const newId = createNodeAt(editor, node as NodeType, { near: at, select: true })
+		if (selected?.type === 'node') wireNodes(editor, selected.id, newId)
+		close()
+	}
+
+	if (!at) return null
+	return (
+		<div className="Palette-backdrop" onPointerDown={(event) => event.target === event.currentTarget && close()}>
+			<div className="Palette Palette-insert" role="dialog" aria-label="Insert card">
+				<div className="NodeSearchPicker-search">
+					<IconSearch size={14} />
+					<UiTextInput
+						ref={inputRef}
+						autoFocus
+						placeholder="Insert card…"
+						value={query}
+						onChange={setQuery}
+						onKeyDown={(event) => {
+							event.stopPropagation()
+							if (event.key === 'Escape') {
+								close()
+								return
+							}
+							if (event.key === 'ArrowDown') {
+								event.preventDefault()
+								setActiveIndex((i) => Math.min(results.length - 1, i + 1))
+								return
+							}
+							if (event.key === 'ArrowUp') {
+								event.preventDefault()
+								setActiveIndex((i) => Math.max(0, i - 1))
+								return
+							}
+							if (event.key === 'Enter') {
+								event.preventDefault()
+								const entry = results[activeIndex]
+								if (entry) insert(entry.doc, event.shiftKey)
+							}
+						}}
+					/>
+				</div>
+				<div className="Palette-list NodeSearchPicker-list" role="listbox">
+					{usedJev && results.length > 0 && (
+						<div className="NodeSearchPicker-section">
+							<span className="NodeSearchPicker-jev" title="Re-ranked with JEV">
+								<IconJevMark size={11} /> ranked
+							</span>
+						</div>
+					)}
+					{results.map((entry, i) => (
+						<PickerRow key={entry.doc.id} doc={entry.doc} active={i === activeIndex} onPick={() => insert(entry.doc, false)} />
+					))}
+					{results.length === 0 && <div className="NodeSearchPicker-empty">No matching cards</div>}
+				</div>
+				<div className="NodeSearchPicker-footer Palette-insert-hint">
+					Enter inserts · Shift+Enter inserts and wires from the selected card
+				</div>
+			</div>
+		</div>
+	)
 }
 
 function MapView({ editor }: { editor: Editor }) {

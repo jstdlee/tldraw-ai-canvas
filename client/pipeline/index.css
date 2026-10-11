@@ -685,6 +685,15 @@ body {
 
 .NodeSearchPicker-row-title {
 	font-size: 0.95em;
+	display: flex;
+	align-items: baseline;
+	gap: var(--tl-space-2);
+}
+
+.NodeSearchPicker-row-group {
+	font-size: 0.72em;
+	color: var(--tl-color-text-3);
+	font-weight: normal;
 }
 
 .NodeSearchPicker-row-desc {

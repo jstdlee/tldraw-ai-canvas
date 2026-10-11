@@ -321,3 +321,69 @@ export function IconJevMark({ size }: IconProps) {
 		</Svg>
 	)
 }
+
+/** A capital "T". The Text card group. */
+export function IconText({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M3 3.6h10" />
+			<path d="M8 3.6v8.8" />
+		</Svg>
+	)
+}
+
+/** A fork: one line splitting into two. The Decide card group. */
+export function IconBranch({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M5 2.4v4.2c0 1.6 1.3 2.4 3 2.4s3-.8 3-2.4V2.4" />
+			<path d="M8 8.6v4.8" />
+			<circle cx="5" cy="2.4" r="1" />
+			<circle cx="11" cy="2.4" r="1" />
+			<circle cx="8" cy="13.6" r="1" />
+		</Svg>
+	)
+}
+
+/** A globe. The Web card group. */
+export function IconGlobe({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<circle cx="8" cy="8" r="5.6" />
+			<path d="M2.4 8h11.2" />
+			<path d="M8 2.4c1.8 1.6 2.8 3.6 2.8 5.6s-1 4-2.8 5.6c-1.8-1.6-2.8-3.6-2.8-5.6s1-4 2.8-5.6Z" />
+		</Svg>
+	)
+}
+
+/** A mountain/picture frame. The Image card group. */
+export function IconPicture({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.2" />
+			<circle cx="5.6" cy="6.2" r="1.1" />
+			<path d="m3 12 3.6-4 2.6 2.8 1.8-2 2.4 3" />
+		</Svg>
+	)
+}
+
+/** Code brackets. The Flow & code card group. */
+export function IconCodeBrackets({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M6 3.6 2.6 8 6 12.4" />
+			<path d="M10 3.6 13.4 8 10 12.4" />
+		</Svg>
+	)
+}
+
+/** An arrow leaving a box. The Output card group. */
+export function IconOutput({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M3.2 2.8h5.2v10.4H3.2z" />
+			<path d="M8.4 8h4.4" />
+			<path d="m10.6 5.6 2.4 2.4-2.4 2.4" />
+		</Svg>
+	)
+}

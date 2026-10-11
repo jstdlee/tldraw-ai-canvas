@@ -28,10 +28,14 @@ const chat: PickerCandidate = {
 	keywords: ['ai', 'chat', 'conversation', 'message', 'llm'],
 }
 
+// WP18: scoreCandidate/rankCandidates are now thin wrappers over the shared card
+// search engine (shared/cardSearch.ts, tested on its own in tests/cardSearch.test.ts).
+// These tests check the relative behaviour a caller depends on, not the exact
+// coefficients of the old standalone formula.
 describe('scoreCandidate', () => {
-	it('scores a title prefix match higher than a contains-only match', () => {
+	it('scores a title-prefix match higher than a contains-only match', () => {
 		const prefix = scoreCandidate('sum', summarize, {})
-		// "summarize" title does not start with "ai", but text_ai's description contains "summarizes"
+		// "Summarize" starts with "sum"; text_ai's title does not, only its description does.
 		const containsOnly = scoreCandidate('sum', textAi, {})
 		expect(prefix).toBeGreaterThan(containsOnly)
 	})
@@ -52,10 +56,10 @@ describe('scoreCandidate', () => {
 		expect(scoreCandidate('zzzzz-no-match', summarize, {})).toBe(0)
 	})
 
-	it('falls back to a fuzzy subsequence match when nothing else matches', () => {
-		// "cht" is a subsequence of "chat message" but not a substring, keyword or description hit
+	it('gives a near-miss (typo-ish) query some credit via trigram similarity', () => {
+		// "cht" shares no whole word with "chat message" but shares character trigrams with it.
 		const score = scoreCandidate('cht', chat, {})
-		expect(score).toBeCloseTo(0.5, 5)
+		expect(score).toBeGreaterThan(0)
 	})
 })
 

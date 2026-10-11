@@ -16,14 +16,10 @@ import { getNodeDefinitions, NodeType } from '../nodes/nodeTypes'
 import { getNodeOutputPortInfo, getPortDataType } from '../nodes/nodePorts'
 import { arePortDataTypesCompatible } from '../ports/portCompatibility'
 import { isMultiInfoValue, NodeDefinition, STOP_EXECUTION } from '../nodes/types/shared'
-import { NODE_DESCRIPTIONS } from '../../../shared/nodeDescriptions'
-import {
-	PickerCandidate,
-	rankCandidates,
-	readPickerRecency,
-	RankedCandidate,
-	recordPick,
-} from '../../../shared/pickerRank'
+import { NODE_GROUP_LABELS } from '../../../shared/nodeGroups'
+import { CardDoc, getCardDocs, searchCards } from '../../../shared/cardSearch'
+import { readPickerRecency, recordPick } from '../../../shared/pickerRank'
+import { useJevRerank } from './useJevRerank'
 import { IconCheck, IconJevMark, IconSearch, UiCheckbox, UiTextInput } from '../../ui'
 import { EditorAtom } from '../utils'
 
@@ -38,29 +34,6 @@ export const onCanvasNodePickerState = new EditorAtom<OnCanvasNodePickerState | 
 	'on canvas node picker',
 	() => null
 )
-
-const SMART_RANKING_KEY = 'oh-my-tldraw:picker-smart-ranking'
-const JEV_DEBOUNCE_MS = 350
-const JEV_TIMEOUT_MS = 2500
-const JEV_MIN_QUERY_LENGTH = 3
-const JEV_MIN_CANDIDATES = 3
-const JEV_TOP_N = 8
-
-function readSmartRanking(): boolean {
-	try {
-		return localStorage.getItem(SMART_RANKING_KEY) !== 'off'
-	} catch {
-		return true
-	}
-}
-
-function writeSmartRanking(on: boolean) {
-	try {
-		localStorage.setItem(SMART_RANKING_KEY, on ? 'on' : 'off')
-	} catch {
-		// Private mode, or no localStorage: the choice just isn't remembered.
-	}
-}
 
 export function OnCanvasNodePicker() {
 	const editor = useEditor()
@@ -172,16 +145,6 @@ function OnCanvasNodePickerDialog({ onClose }: { onClose: () => void }) {
 	)
 }
 
-function candidateFor(def: NodeDefinition<NodeType>): PickerCandidate {
-	const described = NODE_DESCRIPTIONS[def.type]
-	return {
-		type: def.type,
-		title: described?.title ?? def.title,
-		description: described?.description ?? '',
-		keywords: described?.keywords ?? [],
-	}
-}
-
 function NodeSearchPicker({
 	state,
 	onClose,
@@ -196,8 +159,6 @@ function NodeSearchPicker({
 	const [query, setQuery] = useState('')
 	const [activeIndex, setActiveIndex] = useState(0)
 	const [othersOpen, setOthersOpen] = useState(false)
-	const [smartRanking, setSmartRanking] = useState(readSmartRanking)
-	const [jevOrder, setJevOrder] = useState<{ query: string; types: string[] } | null>(null)
 	const inputRef = useRef<HTMLInputElement>(null)
 
 	useEffect(() => {
@@ -209,114 +170,64 @@ function NodeSearchPicker({
 		() => Object.values(getNodeDefinitions(editor)).filter((def) => !def.hidden),
 		[editor]
 	)
-
-	const compatible = useMemo(
-		() =>
-			(allDefs as NodeDefinition<NodeType>[]).filter((def) => {
-				// Check every input port the node type would have once created, at its default values.
-				const defaultNode = def.getDefault()
-				const ports = def.getPorts({ props: { node: defaultNode } } as never, defaultNode)
-				return Object.values(ports).some(
-					(port) => port.terminal === 'end' && arePortDataTypesCompatible(sourceDataType, port.dataType)
-				)
-			}),
-		[allDefs, sourceDataType]
+	const visibleTypes = useMemo(
+		() => new Set<string>((allDefs as NodeDefinition<NodeType>[]).map((d) => d.type)),
+		[allDefs]
 	)
 
-	const candidates = useMemo(() => compatible.map(candidateFor), [compatible])
+	// Every input port each node type would have once created, at its default values.
+	const compatibleTypes = useMemo(() => {
+		const set = new Set<string>()
+		for (const def of allDefs as NodeDefinition<NodeType>[]) {
+			const defaultNode = def.getDefault()
+			const ports = def.getPorts({ props: { node: defaultNode } } as never, defaultNode)
+			const ok = Object.values(ports).some(
+				(port) => port.terminal === 'end' && arePortDataTypesCompatible(sourceDataType, port.dataType)
+			)
+			if (ok) set.add(def.type)
+		}
+		return set
+	}, [allDefs, sourceDataType])
+
+	// One search engine (shared/cardSearch.ts): plain cards plus deep entries ("DataPipe ·
+	// Pivot", "Chart · Line", …), hard-filtered to types whose input ports accept this wire.
+	const docs = useMemo(() => getCardDocs().filter((d) => visibleTypes.has(d.type)), [visibleTypes])
 	const recency = useMemo(() => readPickerRecency(), [])
 
-	const recentTypes = useMemo(() => {
+	const recentIds = useMemo(() => {
 		if (query.trim()) return []
 		return Object.entries(recency)
-			.filter(([type]) => candidates.some((c) => c.type === type))
+			.filter(([id]) => docs.some((d) => d.id === id && compatibleTypes.has(d.type)))
 			.sort((a, b) => b[1].last - a[1].last)
 			.slice(0, 5)
-			.map(([type]) => type)
-	}, [recency, candidates, query])
+			.map(([id]) => id)
+	}, [recency, docs, compatibleTypes, query])
 
 	const localRanked = useMemo(
-		() => rankCandidates(query, candidates, recency),
-		[query, candidates, recency]
+		() => searchCards(query, docs, { recency, compatibleTypes, requireCompatible: true }),
+		[query, docs, recency, compatibleTypes]
 	)
 
-	// JEV re-rank: debounce 350ms, only for a real query with enough candidates.
-	useEffect(() => {
-		const q = query.trim()
-		if (!smartRanking || q.length < JEV_MIN_QUERY_LENGTH || localRanked.length < JEV_MIN_CANDIDATES) {
-			return
-		}
-		const controller = new AbortController()
-		const timeout = window.setTimeout(() => {
-			const top = localRanked.slice(0, JEV_TOP_N)
-			const timer = window.setTimeout(() => controller.abort(), JEV_TIMEOUT_MS)
-			void fetch('/api/jev', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				signal: controller.signal,
-				body: JSON.stringify({
-					type: 'choice',
-					question: `Which node does the user want next? Query: "${q}"`,
-					context: source?.title
-						? `${source.title} output (${sourceDataType}): ${source.preview}`
-						: `A new node (${sourceDataType} output)`,
-					options: top.map(
-						(entry) => `${entry.candidate.type}: ${entry.candidate.title} — ${entry.candidate.description}`
-					),
-				}),
-			})
-				.then((response) => (response.ok ? response.json() : null))
-				.then((result: { probabilities?: Record<string, number> } | null) => {
-					if (!result?.probabilities) return
-					// Stale response (query changed meanwhile): ignore it.
-					if (query.trim() !== q) return
-					const order = Object.entries(result.probabilities)
-						.sort((a, b) => b[1] - a[1])
-						.map(([key]) => key.split(':')[0].trim())
-						.filter((type) => top.some((entry) => entry.candidate.type === type))
-					if (order.length) setJevOrder({ query: q, types: order })
-				})
-				.catch(() => {
-					// Timeout or network error: keep the local order silently.
-				})
-				.finally(() => window.clearTimeout(timer))
-		}, JEV_DEBOUNCE_MS)
-		return () => {
-			window.clearTimeout(timeout)
-			controller.abort()
-		}
-	}, [query, localRanked, smartRanking, source, sourceDataType])
-
-	const usedJev = smartRanking && jevOrder && jevOrder.query === query.trim()
-
-	const ranked = useMemo((): RankedCandidate[] => {
-		if (!usedJev) return localRanked
-		// Normalise both orders to 0..1 by rank, then blend: 0.6 local, 0.4 JEV.
-		const localNorm = new Map(localRanked.map((entry, i) => [entry.candidate.type, 1 - i / localRanked.length]))
-		const jevProb = new Map(jevOrder!.types.map((type, i) => [type, 1 - i / jevOrder!.types.length]))
-		const combined = localRanked.map((entry) => ({
-			candidate: entry.candidate,
-			score: 0.6 * (localNorm.get(entry.candidate.type) ?? 0) + 0.4 * (jevProb.get(entry.candidate.type) ?? 0),
-		}))
-		combined.sort((a, b) => b.score - a.score)
-		return combined
-	}, [usedJev, localRanked, jevOrder])
+	const jevContext = source?.title
+		? `${source.title} output (${sourceDataType}): ${source.preview}`
+		: `A new node (${sourceDataType} output)`
+	const { ranked, usedJev, smartRanking, setSmartRanking } = useJevRerank(query, localRanked, jevContext)
 
 	const recentCandidates = useMemo(
-		() => recentTypes.map((type) => candidates.find((c) => c.type === type)!).filter(Boolean),
-		[recentTypes, candidates]
+		() => recentIds.map((id) => docs.find((d) => d.id === id)!).filter(Boolean),
+		[recentIds, docs]
 	)
-	const recentSet = useMemo(() => new Set(recentTypes), [recentTypes])
-	const bestShown = query.trim() ? ranked : ranked.filter((entry) => !recentSet.has(entry.candidate.type))
+	const recentSet = useMemo(() => new Set(recentIds), [recentIds])
+	const bestShown = query.trim() ? ranked : ranked.filter((entry) => !recentSet.has(entry.doc.id))
 	const BEST_LIMIT = 8
 	const best = bestShown.slice(0, BEST_LIMIT)
 	const others = bestShown.slice(BEST_LIMIT)
 
 	const flatList = useMemo(
 		() => [
-			...recentCandidates.map((c) => ({ type: c.type })),
-			...best.map((entry) => ({ type: entry.candidate.type })),
-			...(othersOpen ? others.map((entry) => ({ type: entry.candidate.type })) : []),
+			...recentCandidates.map((c) => ({ id: c.id })),
+			...best.map((entry) => ({ id: entry.doc.id })),
+			...(othersOpen ? others.map((entry) => ({ id: entry.doc.id })) : []),
 		],
 		[recentCandidates, best, others, othersOpen]
 	)
@@ -324,8 +235,8 @@ function NodeSearchPicker({
 	useEffect(() => setActiveIndex(0), [query])
 
 	const pick = useCallback(
-		(type: string) => {
-			const def = (allDefs as NodeDefinition<NodeType>[]).find((d) => d.type === type)
+		(doc: CardDoc) => {
+			const def = (allDefs as NodeDefinition<NodeType>[]).find((d) => d.type === doc.type)
 			if (!def) return
 
 			const connection = editor.getShape(state.connectionShapeId)
@@ -340,8 +251,9 @@ function NodeSearchPicker({
 				.getShapePageTransform(connection)
 				.applyToPoint(terminalInConnectionSpace)
 
-			recordPick(type)
-			state.onPick(def.getDefault(), terminalInPageSpace)
+			recordPick(doc.id)
+			const node = doc.deep ? { ...def.getDefault(), [doc.deep.field]: doc.deep.value } : def.getDefault()
+			state.onPick(node as NodeType, terminalInPageSpace)
 			onClose()
 		},
 		[allDefs, editor, onClose, state]
@@ -364,7 +276,8 @@ function NodeSearchPicker({
 		if (event.key === 'Enter') {
 			event.preventDefault()
 			const active = flatList[activeIndex]
-			if (active) pick(active.type)
+			const doc = active && docs.find((d) => d.id === active.id)
+			if (doc) pick(doc)
 		}
 	}
 
@@ -385,12 +298,12 @@ function NodeSearchPicker({
 				{recentCandidates.length > 0 && (
 					<>
 						<div className="NodeSearchPicker-section">Recent</div>
-						{recentCandidates.map((candidate) => (
+						{recentCandidates.map((doc) => (
 							<PickerRow
-								key={candidate.type}
-								candidate={candidate}
-								active={flatList[activeIndex]?.type === candidate.type}
-								onPick={() => pick(candidate.type)}
+								key={doc.id}
+								doc={doc}
+								active={flatList[activeIndex]?.id === doc.id}
+								onPick={() => pick(doc)}
 							/>
 						))}
 					</>
@@ -405,10 +318,10 @@ function NodeSearchPicker({
 				</div>
 				{best.map((entry) => (
 					<PickerRow
-						key={entry.candidate.type}
-						candidate={entry.candidate}
-						active={flatList[activeIndex]?.type === entry.candidate.type}
-						onPick={() => pick(entry.candidate.type)}
+						key={entry.doc.id}
+						doc={entry.doc}
+						active={flatList[activeIndex]?.id === entry.doc.id}
+						onPick={() => pick(entry.doc)}
 					/>
 				))}
 				{best.length === 0 && <div className="NodeSearchPicker-empty">No matching nodes</div>}
@@ -424,38 +337,31 @@ function NodeSearchPicker({
 				{othersOpen &&
 					others.map((entry) => (
 						<PickerRow
-							key={entry.candidate.type}
-							candidate={entry.candidate}
-							active={flatList[activeIndex]?.type === entry.candidate.type}
-							onPick={() => pick(entry.candidate.type)}
+							key={entry.doc.id}
+							doc={entry.doc}
+							active={flatList[activeIndex]?.id === entry.doc.id}
+							onPick={() => pick(entry.doc)}
 						/>
 					))}
 			</div>
 			<div className="NodeSearchPicker-footer">
-				<UiCheckbox
-					checked={smartRanking}
-					label="Smart ranking"
-					onChange={(on) => {
-						setSmartRanking(on)
-						writeSmartRanking(on)
-					}}
-				/>
+				<UiCheckbox checked={smartRanking} label="Smart ranking" onChange={setSmartRanking} />
 			</div>
 		</div>
 	)
 }
 
-function PickerRow({
-	candidate,
+export function PickerRow({
+	doc,
 	active,
 	onPick,
 }: {
-	candidate: PickerCandidate
+	doc: CardDoc
 	active: boolean
 	onPick: () => void
 }) {
 	const editor = useEditor()
-	const def = (getNodeDefinitions(editor) as Record<string, NodeDefinition<NodeType>>)[candidate.type]
+	const def = (getNodeDefinitions(editor) as Record<string, NodeDefinition<NodeType>>)[doc.type]
 	return (
 		<button
 			type="button"
@@ -469,10 +375,11 @@ function PickerRow({
 				{def?.icon}
 			</span>
 			<span className="NodeSearchPicker-row-text">
-				<span className="NodeSearchPicker-row-title">{candidate.title}</span>
-				{candidate.description && (
-					<span className="NodeSearchPicker-row-desc">{candidate.description}</span>
-				)}
+				<span className="NodeSearchPicker-row-title">
+					{doc.title}
+					<span className="NodeSearchPicker-row-group">{NODE_GROUP_LABELS[doc.group] ?? doc.group}</span>
+				</span>
+				{doc.description && <span className="NodeSearchPicker-row-desc">{doc.description}</span>}
 			</span>
 			{active && <IconCheck size={12} />}
 		</button>

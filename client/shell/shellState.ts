@@ -1,6 +1,15 @@
-import { atom, TLShapeId } from 'tldraw'
+import { atom, Editor, TLShapeId, VecLike } from 'tldraw'
 
 export const $paletteOpen = atom('command palette', false)
+
+/** The insert-mode palette ("/" on canvas, Ctrl/Cmd+Shift+I): open with the page point to insert at. */
+export const $insertPalette = atom<VecLike | null>('insert palette', null)
+
+/** Open the insert palette at the pointer (or the viewport centre if it's not over the canvas). */
+export function openInsertPaletteAtPointer(editor: Editor) {
+	const point = editor.inputs.getCurrentPagePoint?.() ?? editor.getViewportPageBounds().center
+	$insertPalette.set({ x: point.x, y: point.y })
+}
 
 // --- Colour chord: Ctrl/Cmd+B, then C, then a colour key (G/K/D/B/R/Y). ---
 // Shared (not per-component) so the shortcuts-dialog/menu entry and the global key
