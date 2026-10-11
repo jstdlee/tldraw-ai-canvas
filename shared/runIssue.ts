@@ -15,7 +15,7 @@ export function missingRunInput(
 			if (!has('url') && !String(node.url ?? '').trim()) return 'URL is required'
 			return null
 		case 'load_image':
-			if (!node.imageUrl && !String(node.source ?? '').trim()) return 'Choose an image, URL, or path'
+			if (!has('url') && !node.imageUrl && !String(node.source ?? '').trim()) return 'Choose an image, URL, or path'
 			return null
 		case 'postgres':
 			if (!String(node.sql ?? '').trim()) return 'SQL is required'
