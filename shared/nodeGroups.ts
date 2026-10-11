@@ -41,6 +41,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	database: 'data',
 	postgres: 'data', // superseded by database, kept hidden for old canvases
 	chart: 'data',
+	profile: 'data',
 	// Text
 	prompt_concat: 'text',
 	text_tool: 'text',

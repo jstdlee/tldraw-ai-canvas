@@ -48,6 +48,7 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	// are shown and get ports"). "text"/"format"/"op" are never wired: see the note below.
 	table: [...new Set(TABLE_OPS.flatMap((spec) => spec.params.map((p) => p.field)))],
 	chart: ['text', 'kind', 'xCol', 'yCol', 'dualScale'],
+	profile: ['text', 'format'],
 	openrouter: ['model'],
 	raw_model: ['url', 'system', 'temperature', 'thinking', 'maxTokens'],
 	video: ['autoplay'],

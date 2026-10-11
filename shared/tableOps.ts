@@ -1,5 +1,7 @@
 /** CSV and TSV column tools. No network. Used by the DataPipe node and by tests. */
 
+import { evaluateFormula } from './formula'
+
 export interface Table {
 	headers: string[]
 	rows: string[][]
@@ -17,6 +19,9 @@ export interface TableJob {
 	with: string
 	name: string
 	extra: string
+	// New, optional (WP11): pivot totals, and a second multi-column field (unpivot's value columns).
+	totals?: boolean
+	columns2?: string
 }
 
 const SEP: Record<string, string> = { tsv: '\t', csv: ',' }
@@ -114,77 +119,47 @@ function toNumber(value: string): number {
 	return Number((value ?? '').replace(/,/g, ''))
 }
 
-/** Small string formula. Columns are names. + adds numbers or joins text. */
+/** The DataPipe formula column. Delegates to the real engine in shared/formula.ts (tokenizer +
+ * parser + evaluator); kept as a thin wrapper so old canvases' stored formulas keep working
+ * unchanged (same entry point, same two-argument shape). */
 export function evalFormula(expr: string, row: Record<string, string>): string {
-	const source = expr.trim()
-	const call = /^([a-z]+)\((.*)\)$/i.exec(source)
-	if (call) {
-		const fn = call[1].toLowerCase()
-		const args = splitArgs(call[2]).map((arg) => evalFormula(arg, row))
-		if (fn === 'upper') return (args[0] ?? '').toUpperCase()
-		if (fn === 'lower') return (args[0] ?? '').toLowerCase()
-		if (fn === 'trim') return (args[0] ?? '').trim()
-		if (fn === 'len') return String((args[0] ?? '').length)
-		if (fn === 'concat') return args.join('')
-		if (fn === 'replace') {
-			const pattern = args[1] ?? ''
-			return (args[0] ?? '').replace(new RegExp(pattern, 'g'), args[2] ?? '')
-		}
-		throw new Error(`Unknown function ${fn}`)
-	}
-	if (source.includes('+')) {
-		const parts = source.split('+').map((part) => evalFormula(part.trim(), row))
-		if (parts.every(isNumber)) return String(parts.reduce((sum, part) => sum + Number(part), 0))
-		return parts.join('')
-	}
-	if ((source.startsWith('"') && source.endsWith('"')) || (source.startsWith("'") && source.endsWith("'"))) {
-		return source.slice(1, -1)
-	}
-	if (Object.prototype.hasOwnProperty.call(row, source)) return row[source] ?? ''
-	return source
+	return evaluateFormula(expr, row)
 }
 
-function splitArgs(body: string): string[] {
-	const args: string[] = []
-	let current = ''
-	let depth = 0
-	let quote = ''
-	for (const char of body) {
-		if (quote) {
-			current += char
-			if (char === quote) quote = ''
-			continue
-		}
-		if (char === '"' || char === "'") {
-			quote = char
-			current += char
-		} else if (char === '(') {
-			depth++
-			current += char
-		} else if (char === ')') {
-			depth--
-			current += char
-		} else if (char === ',' && depth === 0) {
-			args.push(current.trim())
-			current = ''
-		} else current += char
-	}
-	if (current.trim()) args.push(current.trim())
-	return args
+function median(nums: number[]): number {
+	const sorted = [...nums].sort((a, b) => a - b)
+	const mid = Math.floor(sorted.length / 2)
+	return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
-/** Aggregate rows by a column: groupBy column + agg like "score:sum". Returns group + one column per agg. */
-export function aggregateTable(table: Table, groupBy: string, aggs: { column: string; fn: string; as?: string }[]): Table {
-	const groupIndex = indexOf(table, groupBy)
+/** One summary spec for Group and summarise: "col:fn" or "col:fn:alias" (old canvases wrote
+ * only "col:fn"; the parser in runTable accepts both). "*" as the column needs no real column
+ * (used by count). */
+export interface AggSpec {
+	column: string
+	fn: string
+	as?: string
+}
+
+/** Aggregate rows by one or more group columns + agg specs like "score:sum" or "score:sum:total".
+ * Returns the group columns followed by one output column per agg. */
+export function aggregateTable(table: Table, groupBy: string[], aggs: AggSpec[]): Table {
+	if (!groupBy.length) throw new Error('Group and summarise: choose at least one group column')
+	const groupIndexes = groupBy.map((name) => indexOf(table, name))
 	// "*:count" counts members without needing a real column.
 	const parsed = aggs.map((a) => ({ ...a, index: a.column === '*' ? -1 : indexOf(table, a.column) }))
 	const groups = new Map<string, string[][]>()
+	const groupKeys = new Map<string, string[]>()
 	for (const row of table.rows) {
-		const key = row[groupIndex] ?? ''
-		if (!groups.has(key)) groups.set(key, [])
+		const keyParts = groupIndexes.map((index) => row[index] ?? '')
+		const key = keyParts.join('\u0001')
+		if (!groups.has(key)) {
+			groups.set(key, [])
+			groupKeys.set(key, keyParts)
+		}
 		groups.get(key)!.push(row)
 	}
-	const headers = [groupBy, ...parsed.map((a) => a.as || `${a.fn}_${a.column}`)]
+	const headers = [...groupBy, ...parsed.map((a) => a.as || `${a.fn}_${a.column}`)]
 	const rows = [...groups.entries()].map(([key, members]) => {
 		const cells = parsed.map((a) => {
 			const values = members.map((m) => m[a.index] ?? '')
@@ -192,52 +167,116 @@ export function aggregateTable(table: Table, groupBy: string, aggs: { column: st
 			switch (a.fn) {
 				case 'count':
 					return String(members.length)
+				case 'count_distinct':
+					return String(new Set(values).size)
 				case 'sum':
 					return String(nums.reduce((s, n) => s + n, 0))
 				case 'avg':
 					return nums.length ? String(nums.reduce((s, n) => s + n, 0) / nums.length) : ''
+				case 'median':
+					return nums.length ? String(median(nums)) : ''
 				case 'min':
 					return nums.length ? String(Math.min(...nums)) : ''
 				case 'max':
 					return nums.length ? String(Math.max(...nums)) : ''
+				case 'first':
+					return values[0] ?? ''
+				case 'last':
+					return values[values.length - 1] ?? ''
 				case 'list':
 					return values.filter(Boolean).join(' | ')
 				default:
-					throw new Error(`Unknown aggregation ${a.fn}`)
+					throw new Error(`Group and summarise: unknown summary function "${a.fn}"`)
 			}
 		})
-		return [key, ...cells]
+		return [...groupKeys.get(key)!, ...cells]
 	})
 	return { headers, rows }
 }
 
-/** Pivot: rows become distinct index values, columns become distinct column values, cells aggregated. */
-export function pivotTable(table: Table, index: string, column: string, value: string, fn: string): Table {
-	const indexIndex = indexOf(table, index)
+function pivotAggregate(fn: string, nums: number[]): string {
+	if (fn === 'count') return String(nums.length)
+	if (!nums.length) return ''
+	if (fn === 'sum') return String(nums.reduce((s, n) => s + n, 0))
+	if (fn === 'avg') return String(nums.reduce((s, n) => s + n, 0) / nums.length)
+	if (fn === 'count_distinct') return String(new Set(nums).size)
+	if (fn === 'min') return String(Math.min(...nums))
+	if (fn === 'max') return String(Math.max(...nums))
+	throw new Error(`Pivot: unknown summary function "${fn}"`)
+}
+
+/** Pivot: one or more row-key columns become distinct index rows, one column becomes new
+ * headers, and a value column is aggregated into each cell. `fill` replaces empty cells (default
+ * ''); `totals` adds a totals row and column (sum for sum/count/count_distinct, otherwise blank). */
+export function pivotTable(
+	table: Table,
+	indexCols: string[],
+	column: string,
+	value: string,
+	fn: string,
+	fill = '',
+	totals = false
+): Table {
+	if (!indexCols.length) throw new Error('Pivot: choose at least one row column')
+	const indexIndexes = indexCols.map((name) => indexOf(table, name))
 	const columnIndex = indexOf(table, column)
 	const valueIndex = indexOf(table, value)
 	const columns = [...new Set(table.rows.map((row) => row[columnIndex] ?? ''))]
 	const buckets = new Map<string, Map<string, number[]>>()
+	const rowKeys = new Map<string, string[]>()
 	for (const row of table.rows) {
-		const r = row[indexIndex] ?? ''
+		const keyParts = indexIndexes.map((index) => row[index] ?? '')
+		const key = keyParts.join('\u0001')
 		const c = row[columnIndex] ?? ''
 		const n = toNumber(row[valueIndex] ?? '')
-		if (!buckets.has(r)) buckets.set(r, new Map())
-		const cell = buckets.get(r)!
+		if (!buckets.has(key)) {
+			buckets.set(key, new Map())
+			rowKeys.set(key, keyParts)
+		}
+		const cell = buckets.get(key)!
 		if (!cell.has(c)) cell.set(c, [])
 		if (Number.isFinite(n)) cell.get(c)!.push(n)
 	}
-	const aggregate = (nums: number[]): string => {
-		if (fn === 'count') return String(nums.length)
-		if (!nums.length) return ''
-		if (fn === 'sum') return String(nums.reduce((s, n) => s + n, 0))
-		if (fn === 'avg') return String(nums.reduce((s, n) => s + n, 0) / nums.length)
-		if (fn === 'min') return String(Math.min(...nums))
-		if (fn === 'max') return String(Math.max(...nums))
-		throw new Error(`Unknown aggregation ${fn}`)
+	const cellText = (nums: number[] | undefined): string => {
+		const text = pivotAggregate(fn, nums ?? [])
+		return text === '' ? fill : text
 	}
-	const rows = [...buckets.entries()].map(([r, cell]) => [r, ...columns.map((c) => aggregate(cell.get(c) ?? []))])
-	return { headers: [index, ...columns], rows }
+	const rows = [...buckets.entries()].map(([key, cell]) => {
+		const cells = columns.map((c) => cellText(cell.get(c)))
+		if (totals) {
+			const all = columns.flatMap((c) => cell.get(c) ?? [])
+			cells.push(cellText(all))
+		}
+		return [...rowKeys.get(key)!, ...cells]
+	})
+	const headers = [...indexCols, ...columns, ...(totals ? ['Total'] : [])]
+	if (totals) {
+		const totalsRow = columns.map((c) => {
+			const all = [...buckets.values()].flatMap((cell) => cell.get(c) ?? [])
+			return cellText(all)
+		})
+		const grandAll = [...buckets.values()].flatMap((cell) => columns.flatMap((c) => cell.get(c) ?? []))
+		rows.push([...indexCols.map(() => 'Total'), ...totalsRow, cellText(grandAll)])
+	}
+	return { headers, rows }
+}
+
+/** Columns to rows: the opposite of pivot. `idCols` stay as-is on every output row; each of
+ * `valueCols` becomes one row, with its column name in `keyName` and its value in `valueName`. */
+export function unpivotTable(table: Table, idCols: string[], valueCols: string[], keyName: string, valueName: string): Table {
+	if (!idCols.length) throw new Error('Columns to rows: choose at least one id column')
+	if (!valueCols.length) throw new Error('Columns to rows: choose at least one value column')
+	const idIndexes = idCols.map((name) => indexOf(table, name))
+	const valueIndexes = valueCols.map((name) => indexOf(table, name))
+	const headers = [...idCols, keyName || 'key', valueName || 'value']
+	const rows: string[][] = []
+	for (const row of table.rows) {
+		const idCells = idIndexes.map((index) => row[index] ?? '')
+		for (let i = 0; i < valueCols.length; i++) {
+			rows.push([...idCells, valueCols[i], row[valueIndexes[i]] ?? ''])
+		}
+	}
+	return { headers, rows }
 }
 
 function mapColumn(table: Table, name: string, fn: (value: string, row: string[], index: number) => string): Table {
@@ -252,15 +291,35 @@ function mapColumn(table: Table, name: string, fn: (value: string, row: string[]
 	}
 }
 
+/** Appends one new column, computed per row (used by the New column ops). */
+function addColumn(table: Table, name: string, compute: (row: string[], rowIndex: number) => string): Table {
+	return {
+		headers: [...table.headers, name],
+		rows: table.rows.map((row, rowIndex) => [...row, compute(row, rowIndex)]),
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Operation registry: read by the DataPipe UI (only the chosen op's params
 // show) and by the AI (WP7).
 // ---------------------------------------------------------------------------
 
-export type ParamKind = 'column' | 'columns' | 'text' | 'number' | 'enum' | 'formula' | 'regex'
+export type ParamKind =
+	| 'column'
+	| 'columns'
+	| 'text'
+	| 'number'
+	| 'enum'
+	| 'formula'
+	| 'regex'
+	| 'boolean'
+	/** Group and summarise's "+ Add summary" rows editor (stored in `columns` as "col:fn[:alias], …"). */
+	| 'summaries'
+	/** New column "Map values"' from/to rows editor (stored in `pattern` as a JSON array of pairs). */
+	| 'mapping'
 
 export interface OpParam {
-	field: 'columns' | 'column' | 'as' | 'expr' | 'sep' | 'pattern' | 'with' | 'name'
+	field: 'columns' | 'columns2' | 'column' | 'as' | 'expr' | 'sep' | 'pattern' | 'with' | 'name' | 'totals'
 	label: string
 	kind: ParamKind
 	options?: { value: string; label: string }[]
@@ -487,6 +546,95 @@ export const TABLE_OPS: OpSpec[] = [
 		second: { label: 'Values, one per line', hint: 'one line per row' },
 	},
 	{
+		id: 'datepart',
+		label: 'Date part',
+		group: 'New column',
+		description: 'Adds a column with one part of a date column (year, month, day…).',
+		params: [
+			{ field: 'column', label: 'Column', kind: 'column', required: true },
+			{
+				field: 'as',
+				label: 'Part',
+				kind: 'enum',
+				options: [
+					{ value: 'year', label: 'Year' },
+					{ value: 'month', label: 'Month' },
+					{ value: 'day', label: 'Day' },
+					{ value: 'weekday', label: 'Weekday (1–7, Mon=1)' },
+					{ value: 'week', label: 'Week (ISO)' },
+					{ value: 'quarter', label: 'Quarter' },
+					{ value: 'hour', label: 'Hour' },
+					{ value: 'date', label: 'Date (YYYY-MM-DD)' },
+				],
+			},
+			{ field: 'name', label: 'New name', kind: 'text', placeholder: 'e.g. month' },
+		],
+	},
+	{
+		id: 'bin',
+		label: 'Bucket numbers',
+		group: 'New column',
+		description: 'Adds a column labelling each value by the bucket it falls in, e.g. "10–50".',
+		params: [
+			{ field: 'column', label: 'Column', kind: 'column', required: true },
+			{ field: 'with', label: 'Size or edges', kind: 'text', required: true, placeholder: 'e.g. 10, or 0,10,50,100' },
+			{ field: 'name', label: 'New name', kind: 'text', placeholder: 'e.g. bucket' },
+		],
+	},
+	{
+		id: 'case',
+		label: 'Map values',
+		group: 'New column',
+		description: 'Adds a column mapping each value through a from → to lookup, with a default.',
+		params: [
+			{ field: 'column', label: 'Column', kind: 'column', required: true },
+			{ field: 'pattern', label: 'Mapping', kind: 'mapping' },
+			{ field: 'with', label: 'Default', kind: 'text', hint: 'used when no row matches' },
+			{ field: 'name', label: 'New name', kind: 'text', placeholder: 'e.g. mapped' },
+		],
+	},
+	{
+		id: 'rank',
+		label: 'Rank',
+		group: 'New column',
+		description: 'Adds a column with each row’s rank by a column’s value.',
+		params: [
+			{ field: 'column', label: 'Column', kind: 'column', required: true },
+			{
+				field: 'as',
+				label: 'Order',
+				kind: 'enum',
+				options: [
+					{ value: 'desc', label: 'Highest first' },
+					{ value: 'asc', label: 'Lowest first' },
+				],
+			},
+			{ field: 'name', label: 'New name', kind: 'text', placeholder: 'e.g. rank' },
+		],
+	},
+	{
+		id: 'cumsum',
+		label: 'Running total',
+		group: 'New column',
+		description: 'Adds a column with the running total of a column, top to bottom (optionally per group).',
+		params: [
+			{ field: 'column', label: 'Column', kind: 'column', required: true },
+			{ field: 'with', label: 'Group by', kind: 'column', hint: 'optional — resets the total per group' },
+			{ field: 'name', label: 'New name', kind: 'text', placeholder: 'e.g. running_total' },
+		],
+	},
+	{
+		id: 'pct',
+		label: 'Percent of total',
+		group: 'New column',
+		description: 'Adds a column with each row’s share of the column’s total (optionally per group).',
+		params: [
+			{ field: 'column', label: 'Column', kind: 'column', required: true },
+			{ field: 'with', label: 'Group by', kind: 'column', hint: 'optional — percent of the group’s total' },
+			{ field: 'name', label: 'New name', kind: 'text', placeholder: 'e.g. pct_of_total' },
+		],
+	},
+	{
 		id: 'append',
 		label: 'Append rows of second table',
 		group: 'Combine',
@@ -518,10 +666,10 @@ export const TABLE_OPS: OpSpec[] = [
 		id: 'groupby',
 		label: 'Group and summarise',
 		group: 'Summarise',
-		description: 'Groups rows by a column and summarises the rest, e.g. score:sum.',
+		description: 'Groups rows by one or more columns and summarises the rest, e.g. score:sum.',
 		params: [
-			{ field: 'column', label: 'Group by', kind: 'column', required: true },
-			{ field: 'columns', label: 'Summaries', kind: 'text', placeholder: 'score:sum, *:count' },
+			{ field: 'column', label: 'Group by', kind: 'columns', required: true },
+			{ field: 'columns', label: 'Summaries', kind: 'summaries', placeholder: 'score:sum, *:count' },
 		],
 	},
 	{
@@ -530,12 +678,12 @@ export const TABLE_OPS: OpSpec[] = [
 		group: 'Summarise',
 		description: 'Turns distinct values of one column into new columns.',
 		params: [
-			{ field: 'column', label: 'Row key', kind: 'column', required: true },
-			{ field: 'columns', label: 'Header column', kind: 'column', required: true },
-			{ field: 'name', label: 'Value column', kind: 'column' },
+			{ field: 'column', label: 'Rows', kind: 'columns', required: true },
+			{ field: 'columns', label: 'Columns', kind: 'column', required: true },
+			{ field: 'name', label: 'Values', kind: 'column' },
 			{
 				field: 'as',
-				label: 'Summarise with',
+				label: 'Summary',
 				kind: 'enum',
 				options: [
 					{ value: 'sum', label: 'Sum' },
@@ -543,8 +691,23 @@ export const TABLE_OPS: OpSpec[] = [
 					{ value: 'min', label: 'Min' },
 					{ value: 'max', label: 'Max' },
 					{ value: 'count', label: 'Count' },
+					{ value: 'count_distinct', label: 'Count distinct' },
 				],
 			},
+			{ field: 'with', label: 'Fill empty with', kind: 'text' },
+			{ field: 'totals', label: 'Add totals', kind: 'boolean' },
+		],
+	},
+	{
+		id: 'unpivot',
+		label: 'Columns to rows',
+		group: 'Summarise',
+		description: 'Turns several value columns into key/value row pairs (the opposite of pivot).',
+		params: [
+			{ field: 'columns', label: 'Id columns', kind: 'columns', required: true },
+			{ field: 'columns2', label: 'Value columns', kind: 'columns', required: true },
+			{ field: 'name', label: 'Key column name', kind: 'text', placeholder: 'key' },
+			{ field: 'as', label: 'Value column name', kind: 'text', placeholder: 'value' },
 		],
 	},
 ]
@@ -732,7 +895,11 @@ export function runTable(text: string, job: TableJob, second?: string): string {
 		table.rows = table.rows.map((row) => {
 			const next = row.slice()
 			while (next.length < table.headers.length) next.push('')
-			next[index] = evalFormula(job.expr, record(table, next))
+			try {
+				next[index] = evalFormula(job.expr, record(table, next))
+			} catch (error) {
+				throw new Error(`Formula column: ${(error as Error).message}`)
+			}
 			return next
 		})
 	} else if (op === 'concat' || op === 'join') {
@@ -746,8 +913,119 @@ export function runTable(text: string, job: TableJob, second?: string): string {
 		const values = (second ?? job.extra).split(/\r?\n/)
 		table.headers.push(name)
 		table.rows = table.rows.map((row, index) => {
-			const made = job.expr ? evalFormula(job.expr, record(table, row)) : (values[index] ?? '')
-			return [...row, made]
+			if (!job.expr) return [...row, values[index] ?? '']
+			try {
+				return [...row, evalFormula(job.expr, record(table, row))]
+			} catch (error) {
+				throw new Error(`Column from lines: ${(error as Error).message}`)
+			}
+		})
+	} else if (op === 'datepart') {
+		if (!job.column) throw new Error('Date part: choose a column')
+		const index = indexOf(table, job.column)
+		const part = job.as || 'year'
+		const name = job.name || `${part}_${job.column}`
+		table = addColumn(table, name, (row) => {
+			const value = row[index] ?? ''
+			if (!value.trim()) return ''
+			try {
+				return evalFormula(`${part}(x)`, { x: value })
+			} catch (error) {
+				throw new Error(`Date part: ${(error as Error).message}`)
+			}
+		})
+	} else if (op === 'bin') {
+		if (!job.column) throw new Error('Bucket numbers: choose a column')
+		const index = indexOf(table, job.column)
+		const spec = (job.with || '').trim()
+		if (!spec) throw new Error('Bucket numbers: give a bucket size, or a list of edges')
+		const name = job.name || `${job.column}_bin`
+		let edges: number[]
+		if (spec.includes(',')) {
+			edges = splitList(spec).map(Number)
+			if (edges.some((n) => !Number.isFinite(n))) throw new Error('Bucket numbers: edges must be numbers, e.g. 0,10,50,100')
+			edges = [...edges].sort((a, b) => a - b)
+		} else {
+			const size = Number(spec)
+			if (!Number.isFinite(size) || size <= 0) throw new Error('Bucket numbers: the size must be a positive number')
+			const nums = table.rows.map((row) => toNumber(row[index] ?? '')).filter((n) => Number.isFinite(n))
+			const max = nums.length ? Math.max(...nums) : 0
+			edges = []
+			for (let edge = 0; edge <= max + size; edge += size) edges.push(edge)
+		}
+		table = addColumn(table, name, (row) => {
+			const n = toNumber(row[index] ?? '')
+			if (!Number.isFinite(n)) return ''
+			if (n < edges[0]) return `<${edges[0]}`
+			if (n >= edges[edges.length - 1]) return `${edges[edges.length - 1]}+`
+			for (let i = 0; i < edges.length - 1; i++) {
+				if (n >= edges[i] && n < edges[i + 1]) return `${edges[i]}–${edges[i + 1]}`
+			}
+			return ''
+		})
+	} else if (op === 'case') {
+		if (!job.column) throw new Error('Map values: choose a column')
+		const index = indexOf(table, job.column)
+		const name = job.name || `${job.column}_mapped`
+		let pairs: { from: string; to: string }[] = []
+		if (job.pattern && job.pattern.trim()) {
+			try {
+				const parsed = JSON.parse(job.pattern)
+				if (Array.isArray(parsed)) {
+					pairs = parsed.filter((p): p is { from: string; to: string } => !!p && typeof p === 'object' && 'from' in p && 'to' in p)
+				}
+			} catch {
+				throw new Error('Map values: the mapping is corrupted')
+			}
+		}
+		table = addColumn(table, name, (row) => {
+			const value = row[index] ?? ''
+			const match = pairs.find((p) => p.from === value)
+			return match ? match.to : job.with ?? ''
+		})
+	} else if (op === 'rank') {
+		if (!job.column) throw new Error('Rank: choose a column')
+		const index = indexOf(table, job.column)
+		const desc = job.as !== 'asc'
+		const name = job.name || `${job.column}_rank`
+		const order = table.rows
+			.map((row, rowIndex) => ({ rowIndex, n: toNumber(row[index] ?? '') }))
+			.sort((a, b) => (desc ? b.n - a.n : a.n - b.n))
+		const ranks = new Array<number>(table.rows.length)
+		order.forEach((entry, position) => {
+			ranks[entry.rowIndex] = position + 1
+		})
+		table = addColumn(table, name, (_row, rowIndex) => String(ranks[rowIndex]))
+	} else if (op === 'cumsum') {
+		if (!job.column) throw new Error('Running total: choose a column')
+		const index = indexOf(table, job.column)
+		const groupIndex = job.with ? indexOf(table, job.with) : -1
+		const name = job.name || `${job.column}_cumsum`
+		const running = new Map<string, number>()
+		table = addColumn(table, name, (row) => {
+			const key = groupIndex >= 0 ? row[groupIndex] ?? '' : ''
+			const n = toNumber(row[index] ?? '')
+			const next = (running.get(key) ?? 0) + (Number.isFinite(n) ? n : 0)
+			running.set(key, next)
+			return String(next)
+		})
+	} else if (op === 'pct') {
+		if (!job.column) throw new Error('Percent of total: choose a column')
+		const index = indexOf(table, job.column)
+		const groupIndex = job.with ? indexOf(table, job.with) : -1
+		const name = job.name || `${job.column}_pct`
+		const totals = new Map<string, number>()
+		for (const row of table.rows) {
+			const key = groupIndex >= 0 ? row[groupIndex] ?? '' : ''
+			const n = toNumber(row[index] ?? '')
+			totals.set(key, (totals.get(key) ?? 0) + (Number.isFinite(n) ? n : 0))
+		}
+		table = addColumn(table, name, (row) => {
+			const key = groupIndex >= 0 ? row[groupIndex] ?? '' : ''
+			const n = toNumber(row[index] ?? '')
+			const total = totals.get(key) ?? 0
+			if (!total) return ''
+			return String((100 * (Number.isFinite(n) ? n : 0)) / total)
 		})
 	} else if (op === 'append') {
 		const extra = second ?? job.extra
@@ -800,20 +1078,28 @@ export function runTable(text: string, job: TableJob, second?: string): string {
 		}
 		table = { headers, rows }
 	} else if (op === 'groupby') {
-		// Columns: "score:sum, score:avg, *:count". Column: the group key.
-		if (!job.column) throw new Error('Group and summarise: name the group column')
-		const aggs = splitList(job.columns || '*:count').map((spec) => {
-			const [column, fn] = spec.split(':').map((s) => s.trim())
-			if (!column || !fn) throw new Error('Group and summarise: a summary looks like score:sum')
-			return { column, fn }
+		// Column: "a,b" (one or more group-by columns). Columns: "score:sum, score:avg:avg_score, *:count"
+		// (old canvases wrote only "col:fn"; the ":alias" suffix is new and optional).
+		if (!job.column) throw new Error('Group and summarise: choose at least one group column')
+		const groupCols = splitList(job.column)
+		const aggs: AggSpec[] = splitList(job.columns || '*:count').map((spec) => {
+			const [column, fn, alias] = spec.split(':').map((s) => s.trim())
+			if (!column || !fn) throw new Error('Group and summarise: a summary looks like score:sum (or score:sum:alias)')
+			return { column, fn, as: alias }
 		})
-		table = aggregateTable(table, job.column, aggs)
+		table = aggregateTable(table, groupCols, aggs)
 	} else if (op === 'pivot') {
-		// Column: row key. Columns: the column whose values become headers. Name/extra: value column.
-		if (!job.column || !job.columns) throw new Error('Pivot: name the row and header columns')
+		// Column: row key column(s), comma list. Columns: the column whose values become headers.
+		// Name: the value column. As: the summary function. With: fill-empty value. Totals: totals row/column.
+		const rowCols = splitList(job.column)
+		if (!rowCols.length || !job.columns) throw new Error('Pivot: choose the row and header columns')
 		const valueCol = job.extra || job.name
-		if (!valueCol) throw new Error('Pivot: name the value column')
-		table = pivotTable(table, job.column, splitList(job.columns)[0], valueCol, job.as || 'sum')
+		if (!valueCol) throw new Error('Pivot: choose the value column')
+		table = pivotTable(table, rowCols, splitList(job.columns)[0], valueCol, job.as || 'sum', job.with ?? '', !!job.totals)
+	} else if (op === 'unpivot') {
+		const idCols = splitList(job.columns)
+		const valueCols = splitList(job.columns2 ?? '')
+		table = unpivotTable(table, idCols, valueCols, job.name || 'key', job.as || 'value')
 	} else throw new Error('Choose an operation')
 	return formatTable(table, format)
 }

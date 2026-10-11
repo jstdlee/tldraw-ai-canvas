@@ -124,8 +124,99 @@ describe('lookup', () => {
 
 describe('every visible op has a spec entry', () => {
 	it('covers the table', () => {
-		for (const id of ['select', 'drop', 'rename', 'filter', 'regexp', 'sort', 'dedupe', 'head', 'replicate', 'convert', 'replace', 'fill', 'split', 'formula', 'concat', 'newcol', 'append', 'lookup', 'groupby', 'pivot']) {
+		for (const id of [
+			'select', 'drop', 'rename', 'filter', 'regexp', 'sort', 'dedupe', 'head', 'replicate', 'convert', 'replace',
+			'fill', 'split', 'formula', 'concat', 'newcol', 'datepart', 'bin', 'case', 'rank', 'cumsum', 'pct', 'append',
+			'lookup', 'groupby', 'pivot', 'unpivot',
+		]) {
 			expect(TABLE_OPS.some((spec) => spec.id === id)).toBe(true)
 		}
+	})
+})
+
+describe('New column ops (WP11 Part B)', () => {
+	it('datepart adds a date part column', () => {
+		const data = 'name,joined\nAda,2024-03-14\nLin,2024-07-01'
+		expect(runTable(data, job({ op: 'datepart', column: 'joined', as: 'month', name: 'month' }))).toBe(
+			'name,joined,month\nAda,2024-03-14,3\nLin,2024-07-01,7'
+		)
+	})
+
+	it('bin buckets numbers by a fixed size', () => {
+		const data = 'score\n3\n15\n55'
+		expect(runTable(data, job({ op: 'bin', column: 'score', with: '10,50', name: 'bucket' }))).toBe(
+			'score,bucket\n3,<10\n15,10–50\n55,50+'
+		)
+	})
+
+	it('bin accepts explicit edges', () => {
+		const data = 'score\n5\n25\n75'
+		expect(runTable(data, job({ op: 'bin', column: 'score', with: '0,10,50,100', name: 'bucket' }))).toBe(
+			'score,bucket\n5,0–10\n25,10–50\n75,50–100'
+		)
+	})
+
+	it('case maps values with a default', () => {
+		const data = 'status\nA\nB\nZ'
+		const pattern = JSON.stringify([
+			{ from: 'A', to: 'Active' },
+			{ from: 'B', to: 'Blocked' },
+		])
+		expect(runTable(data, job({ op: 'case', column: 'status', pattern, with: 'Unknown', name: 'label' }))).toBe(
+			'status,label\nA,Active\nB,Blocked\nZ,Unknown'
+		)
+	})
+
+	it('rank orders rows, highest first by default', () => {
+		const data = 'name,score\nAda,3\nLin,9\nBea,5'
+		expect(runTable(data, job({ op: 'rank', column: 'score', name: 'rank' }))).toBe(
+			'name,score,rank\nAda,3,3\nLin,9,1\nBea,5,2'
+		)
+	})
+
+	it('cumsum keeps a running total, optionally per group', () => {
+		const data = 'g,v\na,1\na,2\nb,5'
+		expect(runTable(data, job({ op: 'cumsum', column: 'v', name: 'total' }))).toBe('g,v,total\na,1,1\na,2,3\nb,5,8')
+		expect(runTable(data, job({ op: 'cumsum', column: 'v', with: 'g', name: 'total' }))).toBe('g,v,total\na,1,1\na,2,3\nb,5,5')
+	})
+
+	it('pct computes percent of total, optionally per group', () => {
+		const data = 'g,v\na,1\na,3\nb,4'
+		expect(runTable(data, job({ op: 'pct', column: 'v', name: 'pct' }))).toBe('g,v,pct\na,1,12.5\na,3,37.5\nb,4,50')
+	})
+})
+
+describe('Group and summarise (WP11 Part C)', () => {
+	it('accepts multiple group columns and new summary functions', () => {
+		const data = 'region,month,score\nE,1,3\nE,1,7\nW,1,5'
+		expect(runTable(data, job({ op: 'groupby', column: 'region,month', columns: 'score:sum,score:count_distinct' }))).toBe(
+			'region,month,sum_score,count_distinct_score\nE,1,10,2\nW,1,5,1'
+		)
+	})
+
+	it('median, first and last', () => {
+		const data = 'g,v\na,1\na,2\na,3'
+		expect(runTable(data, job({ op: 'groupby', column: 'g', columns: 'v:median,v:first,v:last' }))).toBe(
+			'g,median_v,first_v,last_v\na,2,1,3'
+		)
+	})
+
+	it('accepts an alias with col:fn:alias', () => {
+		const data = 'g,v\na,1\na,3'
+		expect(runTable(data, job({ op: 'groupby', column: 'g', columns: 'v:sum:total' }))).toBe('g,total\na,4')
+	})
+})
+
+describe('Pivot totals and unpivot (WP11 Part D)', () => {
+	it('pivot can fill empty cells and add totals', () => {
+		const data = 'name,q,score\nAda,q1,3\nAda,q2,5\nLin,q1,4'
+		const out = runTable(data, job({ op: 'pivot', column: 'name', columns: 'q', extra: 'score', as: 'sum', with: '0', totals: true }))
+		expect(out).toBe('name,q1,q2,Total\nAda,3,5,8\nLin,4,0,4\nTotal,7,5,12')
+	})
+
+	it('unpivot turns value columns into key/value rows', () => {
+		const data = 'name,q1,q2\nAda,3,5\nLin,4,6'
+		const out = runTable(data, job({ op: 'unpivot', columns: 'name', columns2: 'q1,q2', name: 'quarter', as: 'score' }))
+		expect(out).toBe('name,quarter,score\nAda,q1,3\nAda,q2,5\nLin,q1,4\nLin,q2,6')
 	})
 })

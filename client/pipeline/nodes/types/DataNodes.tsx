@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { chartOption, resolveColumns } from '../../../../shared/chartOption'
-import { opSpec, parseTable, runTable, splitList, TABLE_OPS } from '../../../../shared/tableOps'
+import { detectFormat, evalFormula, formatTable, opSpec, parseTable, runTable, splitList, TABLE_OPS } from '../../../../shared/tableOps'
 import type { TableJob } from '../../../../shared/tableOps'
+import { profileTable } from '../../../../shared/profile'
+import type { ColumnProfile } from '../../../../shared/profile'
 import { createShapeId, Editor, TLShapeId, T, useEditor, useValue } from 'tldraw'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
@@ -14,9 +16,21 @@ import { storeFile, loadFileBytes } from '../../fileStore'
 import { sleep } from '../../utils/sleep'
 import { getNodeInputPortValues, isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiButton, UiCheckbox, UiEmpty, UiField, UiSegmented, UiSelect, UiTable, UiTextArea, UiTextInput } from '../../../ui'
-import { IconPlus, IconTable, IconUpload } from '../../../ui/icons'
-import { NodeMultiSelect, PortRow, stopEvent, NodeSelect, useInputConnected, WireField, WireFieldHeader } from './fields'
+import {
+	UiButton,
+	UiCheckbox,
+	UiChip,
+	UiEmpty,
+	UiField,
+	UiIconButton,
+	UiSegmented,
+	UiSelect,
+	UiTable,
+	UiTextArea,
+	UiTextInput,
+} from '../../../ui'
+import { IconChevronDown, IconChevronRight, IconClose, IconGroup, IconPlus, IconTable, IconUpload } from '../../../ui/icons'
+import { NodeMultiSelect, PortRow, stopEvent, NodeSelect, useInputConnected, useWireField, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
@@ -76,6 +90,9 @@ export const TableNode = T.object({
 	sheets: T.arrayOf(T.string).optional(),
 	lastOutput: T.string.nullable().optional(),
 	lastInfo: T.string.optional(),
+	// New, optional (WP11): pivot's totals checkbox, and unpivot's second multi-column field.
+	totals: T.boolean.optional(),
+	columns2: T.string.optional(),
 })
 
 /** Where DataPipe's rows land, so ports and body height agree. */
@@ -100,6 +117,9 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 	heading = 'DataPipe'
 	icon = <IconTable />
 	category = categoryOf('table')
+	// WP11: these are result fields, not settings — excluded from the input-hash cache key
+	// (otherwise every run changes its own hash and the cache never hits).
+	resultKeys = ['error', 'lastOutput', 'lastInfo'] as const
 	override showsOutput = true
 	override defaultWidthPx = 440
 	getDefault(): TableNode {
@@ -124,17 +144,28 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 			sheets: [],
 			lastOutput: null,
 			lastInfo: '',
+			totals: false,
+			columns2: '',
 		}
 	}
 	getBodyHeightPx(shape: NodeShape, node: TableNode) {
 		const dataWired = isInputWired(this.editor, shape.id, 'data')
-		const { rowsCount } = layout(node, dataWired)
+		const { rowsCount, params } = layout(node, dataWired)
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		// The inline textarea only renders when the data port is not wired (same condition as the component).
 		const inlineExtra = !dataWired && (node.source ?? 'inline') === 'inline' ? 90 : 0
 		const descriptionExtra = 20
 		// A real preview table needs room to show rows; the empty placeholder is much shorter.
 		const previewExtra = node.lastOutput ? 240 : 64
-		return getNodeRowHeightPx(shape.props.fontSize) * rowsCount + inlineExtra + descriptionExtra + previewExtra
+		// Structured editors (formula live preview, Group's summary rows, Map values' mapping
+		// rows) render more than the one row `rowsCount` budgets per param.
+		const structuredExtra = params.reduce((sum, param) => {
+			if (param.kind === 'formula') return sum + rowPx * 2.5
+			if (param.kind === 'summaries') return sum + rowPx * 2
+			if (param.kind === 'mapping') return sum + rowPx * 3
+			return sum
+		}, 0)
+		return rowPx * rowsCount + inlineExtra + descriptionExtra + previewExtra + structuredExtra
 	}
 	getPorts(shape: NodeShape, node: TableNode): Record<string, ShapePort> {
 		const dataWired = isInputWired(this.editor, shape.id, 'data')
@@ -180,7 +211,8 @@ const OP_OPTIONS = TABLE_OPS.filter((spec) => !spec.hidden).map((spec) => ({
 }))
 
 /** A column picker backed by the input table's real headers, falling back to free text. Every
- * DataPipe param is wirable (WP17): `fieldKey` is its op param field, e.g. "column", "with". */
+ * DataPipe param is wirable (WP17): `fieldKey` is its op param field, e.g. "column", "with".
+ * `allowEmpty` adds a "(none)" choice, for an optional column such as cumsum/pct's group-by. */
 function ColumnField({
 	shapeId,
 	fieldKey,
@@ -188,6 +220,8 @@ function ColumnField({
 	value,
 	headers,
 	onChange,
+	allowEmpty,
+	hint,
 }: {
 	shapeId: TLShapeId
 	fieldKey: string
@@ -195,22 +229,20 @@ function ColumnField({
 	value: string
 	headers: string[]
 	onChange: (value: string) => void
+	allowEmpty?: boolean
+	hint?: string
 }) {
 	if (!headers.length) {
 		return (
-			<WireField shapeId={shapeId} fieldKey={fieldKey} label={label}>
+			<WireField shapeId={shapeId} fieldKey={fieldKey} label={label} hint={hint}>
 				<UiTextInput value={value} onChange={onChange} placeholder="column name" />
 			</WireField>
 		)
 	}
+	const options = allowEmpty ? [{ value: '', label: '(none)' }, ...headers.map((h) => ({ value: h, label: h }))] : headers.map((h) => ({ value: h, label: h }))
 	return (
-		<WireField shapeId={shapeId} fieldKey={fieldKey} label={label}>
-			<UiSelect
-				value={value}
-				placeholder="Choose a column"
-				options={headers.map((h) => ({ value: h, label: h }))}
-				onChange={onChange}
-			/>
+		<WireField shapeId={shapeId} fieldKey={fieldKey} label={label} hint={hint}>
+			<UiSelect value={value} placeholder="Choose a column" options={options} onChange={onChange} />
 		</WireField>
 	)
 }
@@ -249,23 +281,320 @@ function ColumnsField({
 	)
 }
 
+/** Insert-function menu for the formula editor, grouped the same way as the language guide
+ * (WP11 Part B): Text / Number / Logic / Date. Each entry inserts "name(" plus a one-line hint. */
+const FORMULA_FUNCTIONS: { value: string; label: string; group: string; hint: string }[] = [
+	{ value: 'upper', label: 'upper', group: 'Text', hint: 'upper(s)' },
+	{ value: 'lower', label: 'lower', group: 'Text', hint: 'lower(s)' },
+	{ value: 'trim', label: 'trim', group: 'Text', hint: 'trim(s)' },
+	{ value: 'len', label: 'len', group: 'Text', hint: 'len(s)' },
+	{ value: 'left', label: 'left', group: 'Text', hint: 'left(s, n)' },
+	{ value: 'right', label: 'right', group: 'Text', hint: 'right(s, n)' },
+	{ value: 'mid', label: 'mid', group: 'Text', hint: 'mid(s, start, n)' },
+	{ value: 'replace', label: 'replace', group: 'Text', hint: 'replace(s, find, with)' },
+	{ value: 'contains', label: 'contains', group: 'Text', hint: 'contains(s, x)' },
+	{ value: 'startswith', label: 'startswith', group: 'Text', hint: 'startswith(s, x)' },
+	{ value: 'endswith', label: 'endswith', group: 'Text', hint: 'endswith(s, x)' },
+	{ value: 'split', label: 'split', group: 'Text', hint: 'split(s, sep, i)' },
+	{ value: 'concat', label: 'concat', group: 'Text', hint: 'concat(a, b, …)' },
+	{ value: 'text', label: 'text', group: 'Text', hint: 'text(x)' },
+	{ value: 'number', label: 'number', group: 'Number', hint: 'number(x)' },
+	{ value: 'round', label: 'round', group: 'Number', hint: 'round(x, d)' },
+	{ value: 'floor', label: 'floor', group: 'Number', hint: 'floor(x)' },
+	{ value: 'ceil', label: 'ceil', group: 'Number', hint: 'ceil(x)' },
+	{ value: 'abs', label: 'abs', group: 'Number', hint: 'abs(x)' },
+	{ value: 'min', label: 'min', group: 'Number', hint: 'min(a, b, …)' },
+	{ value: 'max', label: 'max', group: 'Number', hint: 'max(a, b, …)' },
+	{ value: 'pow', label: 'pow', group: 'Number', hint: 'pow(x, y)' },
+	{ value: 'sqrt', label: 'sqrt', group: 'Number', hint: 'sqrt(x)' },
+	{ value: 'if', label: 'if', group: 'Logic', hint: 'if(cond, a, b)' },
+	{ value: 'ifs', label: 'ifs', group: 'Logic', hint: 'ifs(c1, v1, …, else)' },
+	{ value: 'coalesce', label: 'coalesce', group: 'Logic', hint: 'coalesce(a, b, …)' },
+	{ value: 'isempty', label: 'isempty', group: 'Logic', hint: 'isempty(x)' },
+	{ value: 'date', label: 'date', group: 'Date', hint: 'date(x)' },
+	{ value: 'year', label: 'year', group: 'Date', hint: 'year(x)' },
+	{ value: 'month', label: 'month', group: 'Date', hint: 'month(x)' },
+	{ value: 'day', label: 'day', group: 'Date', hint: 'day(x)' },
+	{ value: 'weekday', label: 'weekday', group: 'Date', hint: 'weekday(x) — 1–7, Mon=1' },
+	{ value: 'week', label: 'week', group: 'Date', hint: 'week(x) — ISO week' },
+	{ value: 'quarter', label: 'quarter', group: 'Date', hint: 'quarter(x)' },
+	{ value: 'hour', label: 'hour', group: 'Date', hint: 'hour(x)' },
+	{ value: 'datediff', label: 'datediff', group: 'Date', hint: 'datediff(a, b, "day")' },
+	{ value: 'dateadd', label: 'dateadd', group: 'Date', hint: 'dateadd(x, n, "day")' },
+	{ value: 'today', label: 'today', group: 'Date', hint: 'today()' },
+]
+const FORMULA_FUNCTION_OPTIONS = FORMULA_FUNCTIONS.map((fn) => ({ value: fn.value, label: fn.label, group: fn.group, hint: fn.hint }))
+
+/** Formula column's editor (WP11 Part B): the formula input, a column-chip row that inserts a
+ * reference at the cursor, an "insert function" menu, and a live preview (first input row's
+ * computed value, or the error in danger colour) debounced 200ms so typing doesn't thrash. */
+function FormulaField({
+	shapeId,
+	fieldKey,
+	label,
+	value,
+	headers,
+	sampleRows,
+	onChange,
+	hint,
+}: {
+	shapeId: TLShapeId
+	fieldKey: string
+	label: string
+	value: string
+	headers: string[]
+	sampleRows: Record<string, string>[]
+	onChange: (value: string) => void
+	hint?: string
+}) {
+	const { wired } = useWireField(shapeId, fieldKey)
+	const inputRef = useRef<HTMLInputElement>(null)
+	const [debounced, setDebounced] = useState(value)
+	useEffect(() => {
+		const timer = window.setTimeout(() => setDebounced(value), 200)
+		return () => window.clearTimeout(timer)
+	}, [value])
+
+	const insert = (text: string) => {
+		const el = inputRef.current
+		const start = el?.selectionStart ?? value.length
+		const end = el?.selectionEnd ?? value.length
+		const next = value.slice(0, start) + text + value.slice(end)
+		onChange(next)
+		requestAnimationFrame(() => {
+			el?.focus()
+			el?.setSelectionRange(start + text.length, start + text.length)
+		})
+	}
+	const insertColumn = (name: string) => insert(/[^A-Za-z0-9_]/.test(name) ? `[${name}]` : name)
+
+	// Live preview: the first 3 input rows -> their computed value, or the error (not a run
+	// error — shown here in danger colour, never as the card's own error banner).
+	const preview = useMemo(() => {
+		if (!debounced.trim() || !sampleRows.length) return null
+		const results: string[] = []
+		for (const row of sampleRows.slice(0, 3)) {
+			try {
+				results.push(evalFormula(debounced, row))
+			} catch (error) {
+				return { ok: false as const, text: (error as Error).message }
+			}
+		}
+		return { ok: true as const, text: results.map((r) => r || '(empty)').join(', ') }
+	}, [debounced, sampleRows])
+
+	return (
+		<>
+			<WireField shapeId={shapeId} fieldKey={fieldKey} label={label} hint={hint}>
+				<UiTextInput ref={inputRef} mono value={value} onChange={onChange} placeholder="e.g. upper(name), round(score * 1.2, 1)" />
+			</WireField>
+			{!wired && (
+				<>
+					{headers.length > 0 && (
+						<NodeRow className="FormulaField-chips">
+							{headers.map((h) => (
+								<UiChip key={h} label={h} onClick={() => insertColumn(h)} />
+							))}
+						</NodeRow>
+					)}
+					<NodeRow>
+						<UiSelect
+							value=""
+							placeholder="Insert function…"
+							options={FORMULA_FUNCTION_OPTIONS}
+							onChange={(fn) => insert(`${fn}(`)}
+						/>
+					</NodeRow>
+					{preview && (
+						<div className={preview.ok ? 'NodeHint FormulaField-preview' : 'FormulaField-error'}>
+							{preview.ok ? `= ${preview.text}` : preview.text}
+						</div>
+					)}
+				</>
+			)}
+		</>
+	)
+}
+
+const SUMMARY_FNS = [
+	{ value: 'count', label: 'Count' },
+	{ value: 'count_distinct', label: 'Count distinct' },
+	{ value: 'sum', label: 'Sum' },
+	{ value: 'avg', label: 'Average' },
+	{ value: 'median', label: 'Median' },
+	{ value: 'min', label: 'Min' },
+	{ value: 'max', label: 'Max' },
+	{ value: 'first', label: 'First' },
+	{ value: 'last', label: 'Last' },
+	{ value: 'list', label: 'List' },
+]
+
+interface SummaryRow {
+	column: string
+	fn: string
+	as: string
+}
+
+function parseSummaries(value: string): SummaryRow[] {
+	return splitList(value).map((spec) => {
+		const [column = '*', fn = 'count', as = ''] = spec.split(':').map((s) => s.trim())
+		return { column, fn, as }
+	})
+}
+
+function stringifySummaries(rows: SummaryRow[]): string {
+	return rows.map((r) => [r.column || '*', r.fn || 'count', r.as].filter(Boolean).join(':')).join(',')
+}
+
+/** Group and summarise's "Summaries" editor (WP11 Part C): a row per summary — column, function,
+ * "as" name, remove — stored in the existing `col:fn[:alias]` text form so old canvases that
+ * wrote it by hand (or just "col:fn") keep working. */
+function GroupSummariesField({
+	shapeId,
+	fieldKey,
+	label,
+	value,
+	headers,
+	onChange,
+}: {
+	shapeId: TLShapeId
+	fieldKey: string
+	label: string
+	value: string
+	headers: string[]
+	onChange: (value: string) => void
+}) {
+	const { wired } = useWireField(shapeId, fieldKey)
+	const rows = parseSummaries(value)
+	const set = (next: SummaryRow[]) => onChange(stringifySummaries(next))
+	const columnOptions = [{ value: '*', label: '(any column)' }, ...headers.map((h) => ({ value: h, label: h }))]
+	return (
+		<>
+			<WireFieldHeader shapeId={shapeId} fieldKey={fieldKey} label={label} />
+			{!wired && (
+				<>
+					{rows.map((row, i) => (
+						<NodeRow key={i} className="GroupSummaryRow">
+							<UiSelect
+								value={row.column || '*'}
+								options={columnOptions}
+								onChange={(column) => set(rows.map((r, j) => (j === i ? { ...r, column } : r)))}
+							/>
+							<UiSelect value={row.fn} options={SUMMARY_FNS} onChange={(fn) => set(rows.map((r, j) => (j === i ? { ...r, fn } : r)))} />
+							<UiTextInput
+								value={row.as}
+								placeholder="as name"
+								onChange={(as) => set(rows.map((r, j) => (j === i ? { ...r, as } : r)))}
+							/>
+							<UiIconButton icon={<IconClose />} title="Remove this summary" onClick={() => set(rows.filter((_, j) => j !== i))} />
+						</NodeRow>
+					))}
+					<NodeRow>
+						<UiButton
+							size="sm"
+							variant="low"
+							icon={<IconPlus />}
+							label="+ Add summary"
+							onClick={() => set([...rows, { column: headers[0] ?? '*', fn: 'count', as: '' }])}
+						/>
+					</NodeRow>
+				</>
+			)}
+		</>
+	)
+}
+
+interface MapPair {
+	from: string
+	to: string
+}
+
+function parseMapping(value: string): MapPair[] {
+	if (!value || !value.trim()) return []
+	try {
+		const parsed = JSON.parse(value)
+		if (!Array.isArray(parsed)) return []
+		return parsed.filter((p): p is MapPair => !!p && typeof p === 'object' && 'from' in p && 'to' in p)
+	} catch {
+		return []
+	}
+}
+
+/** New column "Map values"' from → to rows editor (WP11 Part B), stored as a JSON array of
+ * pairs in the `pattern` field. */
+function CaseMappingField({
+	shapeId,
+	fieldKey,
+	label,
+	value,
+	onChange,
+}: {
+	shapeId: TLShapeId
+	fieldKey: string
+	label: string
+	value: string
+	onChange: (value: string) => void
+}) {
+	const { wired } = useWireField(shapeId, fieldKey)
+	const pairs = parseMapping(value)
+	const set = (next: MapPair[]) => onChange(JSON.stringify(next))
+	return (
+		<>
+			<WireFieldHeader shapeId={shapeId} fieldKey={fieldKey} label={label} />
+			{!wired && (
+				<>
+					{pairs.map((pair, i) => (
+						<NodeRow key={i} className="MappingRow">
+							<UiTextInput
+								value={pair.from}
+								placeholder="from"
+								onChange={(from) => set(pairs.map((p, j) => (j === i ? { ...p, from } : p)))}
+							/>
+							<span className="MappingRow-arrow">→</span>
+							<UiTextInput value={pair.to} placeholder="to" onChange={(to) => set(pairs.map((p, j) => (j === i ? { ...p, to } : p)))} />
+							<UiIconButton icon={<IconClose />} title="Remove this row" onClick={() => set(pairs.filter((_, j) => j !== i))} />
+						</NodeRow>
+					))}
+					<NodeRow>
+						<UiButton size="sm" variant="low" icon={<IconPlus />} label="+ Add row" onClick={() => set([...pairs, { from: '', to: '' }])} />
+					</NodeRow>
+				</>
+			)}
+		</>
+	)
+}
+
 function ParamField({
 	shapeId,
 	param,
 	node,
 	headers,
+	sampleRows,
 	set,
 }: {
 	shapeId: TLShapeId
 	param: ReturnType<typeof layout>['params'][number]
 	node: TableNode
 	headers: string[]
+	sampleRows: Record<string, string>[]
 	set: (patch: Partial<TableNode>) => void
 }) {
-	const value = (node as unknown as Record<string, string>)[param.field] ?? ''
+	const raw = (node as unknown as Record<string, unknown>)[param.field]
+	const value = typeof raw === 'string' ? raw : ''
 	const onChange = (next: string) => set({ [param.field]: next } as Partial<TableNode>)
 	if (param.kind === 'column') {
-		return <ColumnField shapeId={shapeId} fieldKey={param.field} label={param.label} value={value} headers={headers} onChange={onChange} />
+		return (
+			<ColumnField
+				shapeId={shapeId}
+				fieldKey={param.field}
+				label={param.label}
+				value={value}
+				headers={headers}
+				onChange={onChange}
+				allowEmpty={!param.required}
+				hint={param.hint}
+			/>
+		)
 	}
 	if (param.kind === 'columns') {
 		return <ColumnsField shapeId={shapeId} fieldKey={param.field} label={param.label} value={value} headers={headers} onChange={onChange} />
@@ -274,6 +603,14 @@ function ParamField({
 		return (
 			<WireField shapeId={shapeId} fieldKey={param.field} label={param.label} hint={param.hint}>
 				<UiSelect value={value || param.options?.[0]?.value || ''} options={param.options ?? []} onChange={onChange} />
+			</WireField>
+		)
+	}
+	if (param.kind === 'boolean') {
+		const checked = typeof raw === 'boolean' ? raw : value === 'true'
+		return (
+			<WireField shapeId={shapeId} fieldKey={param.field} label={param.label} hint={param.hint}>
+				<UiCheckbox checked={checked} onChange={(next) => set({ [param.field]: next } as Partial<TableNode>)} />
 			</WireField>
 		)
 	}
@@ -286,7 +623,27 @@ function ParamField({
 			</WireField>
 		)
 	}
-	// 'formula' and 'regex' both render as a mono text input.
+	if (param.kind === 'formula') {
+		return (
+			<FormulaField
+				shapeId={shapeId}
+				fieldKey={param.field}
+				label={param.label}
+				value={value}
+				headers={headers}
+				sampleRows={sampleRows}
+				onChange={onChange}
+				hint={param.hint}
+			/>
+		)
+	}
+	if (param.kind === 'summaries') {
+		return <GroupSummariesField shapeId={shapeId} fieldKey={param.field} label={param.label} value={value} headers={headers} onChange={onChange} />
+	}
+	if (param.kind === 'mapping') {
+		return <CaseMappingField shapeId={shapeId} fieldKey={param.field} label={param.label} value={value} onChange={onChange} />
+	}
+	// 'regex' renders as a mono text input.
 	return (
 		<WireField shapeId={shapeId} fieldKey={param.field} label={param.label} hint={param.hint}>
 			<UiTextInput mono value={value} onChange={onChange} placeholder={param.placeholder} />
@@ -326,13 +683,19 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 		},
 		[editor, shape.id, node.text]
 	)
-	const headers = useMemo(() => {
+	const inputTable = useMemo(() => {
 		try {
-			return parseTable(effectiveText, 'auto').headers
+			return parseTable(effectiveText, 'auto')
 		} catch {
-			return []
+			return null
 		}
 	}, [effectiveText])
+	const headers = inputTable?.headers ?? []
+	// Formula column's live preview (WP11 Part B): the op's own input rows, before this step runs.
+	const sampleRows = useMemo(() => {
+		if (!inputTable) return []
+		return inputTable.rows.slice(0, 3).map((row) => Object.fromEntries(inputTable.headers.map((h, i) => [h, row[i] ?? ''])))
+	}, [inputTable])
 
 	const uploadFile = async (file: File) => {
 		setBusy(true)
@@ -373,13 +736,17 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 		}
 	}
 
-	const addStep = () => {
+	// WP11 Part F: "Add next step" opens the same grouped op list the operation picker uses,
+	// instead of always chaining a bare "Keep columns" step.
+	const addStep = (op: string) => {
+		if (!op) return
 		editor.run(() => {
 			const nextShapeId = createNodeAt(
 				editor,
 				{
 					type: 'table',
 					...TableDefaultForChain(),
+					op,
 				},
 				{ rightOf: shape.id }
 			)
@@ -395,6 +762,15 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 			return null
 		}
 	}, [node.lastOutput])
+	// WP11 Part F: column type badges in the preview header, from shared/profile.ts.
+	const previewTypes = useMemo(() => {
+		if (!preview) return []
+		try {
+			return profileTable(preview, 0).map((p) => p.type)
+		} catch {
+			return []
+		}
+	}, [preview])
 
 	return (
 		<>
@@ -458,13 +834,20 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 			</UiField>
 			<div className="NodeHint">{spec.description}</div>
 			{spec.params.map((param) => (
-				<ParamField key={param.field} shapeId={shape.id} param={param} node={node} headers={headers} set={set} />
+				<ParamField key={param.field} shapeId={shape.id} param={param} node={node} headers={headers} sampleRows={sampleRows} set={set} />
 			))}
 			{spec.second && (
 				<PortRow shapeId={shape.id} portId="extra" label={spec.second.label} dataType="text" hint={spec.second.hint} />
 			)}
 			{preview ? (
 				<>
+					{previewTypes.length > 0 && (
+						<NodeRow className="DataPipe-typeBadges">
+							{preview.headers.map((h, i) => (
+								<UiChip key={h} label={`${h}: ${previewTypes[i]}`} />
+							))}
+						</NodeRow>
+					)}
 					<UiTable columns={preview.headers} rows={preview.rows} maxRows={50} />
 					<div className="NodeHint">{node.lastInfo}</div>
 				</>
@@ -472,7 +855,7 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 				<UiEmpty text="Press Run to see the result" />
 			)}
 			<NodeRow>
-				<UiButton size="sm" variant="low" icon={<IconPlus />} label="Add next step" onClick={addStep} />
+				<UiSelect placeholder="Add next step…" value="" options={OP_OPTIONS} onChange={addStep} />
 			</NodeRow>
 		</>
 	)
@@ -500,6 +883,8 @@ function TableDefaultForChain(): Omit<TableNode, 'type'> {
 		sheets: [],
 		lastOutput: null,
 		lastInfo: '',
+		totals: false,
+		columns2: '',
 	}
 }
 
@@ -528,6 +913,7 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	heading = 'Chart'
 	icon = icon
 	category = categoryOf('chart')
+	resultKeys = ['error'] as const
 	override showsOutput = true
 	override defaultWidthPx = 440
 	getDefault(): ChartNode {
@@ -663,5 +1049,214 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 			</WireField>
 			<div ref={ref} className="ChartNode-view" />
 		</div>
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Profile (WP11 Part E): what's in a table before working on it.
+// ---------------------------------------------------------------------------
+
+export type ProfileNode = T.TypeOf<typeof ProfileNode>
+export const ProfileNode = T.object({
+	type: T.literal('profile'),
+	text: T.string,
+	format: T.string,
+	error: T.string.nullable(),
+	lastOutput: T.string.nullable().optional(),
+})
+
+function formatFileSize(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+export class ProfileNodeDefinition extends NodeDefinition<ProfileNode> {
+	static type = 'profile'
+	static validator = ProfileNode
+	title = 'Profile'
+	heading = 'Profile'
+	icon = <IconGroup />
+	category = categoryOf('profile')
+	resultKeys = ['error', 'lastOutput'] as const
+	override showsOutput = true
+	override defaultWidthPx = 480
+	getDefault(): ProfileNode {
+		return { type: 'profile', text: SAMPLE, format: 'auto', error: null, lastOutput: null }
+	}
+	getBodyHeightPx(shape: NodeShape) {
+		// Header row (data port) + the format row + the header line + a scrollable column list.
+		return getNodeRowHeightPx(shape.props.fontSize) * 3 + 360
+	}
+	getPorts(shape: NodeShape, node: ProfileNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		return { data: end('data', 0, rowPx), output: out(this.getWidthPx(shape, node)) }
+	}
+	async execute(shape: NodeShape, node: ProfileNode, inputs: InputValues): Promise<ExecutionResult> {
+		const text = getInputText(inputs, 'data') || node.text
+		try {
+			const table = parseTable(text, detectFormat(text, node.format))
+			const profiles = profileTable(table)
+			const headers = ['column', 'type', 'filled_pct', 'empty_count', 'distinct_count', 'min', 'max', 'mean', 'top']
+			const rows = profiles.map((p) => [
+				p.name,
+				p.type,
+				String(p.filledPct),
+				String(p.emptyCount),
+				String(p.distinctCount),
+				p.min ?? '',
+				p.max ?? '',
+				p.mean != null ? String(p.mean) : '',
+				p.top.map((t) => `${t.value} (${t.count})`).join('; '),
+			])
+			const output = formatTable({ headers, rows }, 'csv')
+			updateNode<ProfileNode>(this.editor, shape, (n) => ({ ...n, error: null, lastOutput: output }), false)
+			return { output }
+		} catch (error) {
+			updateNode<ProfileNode>(this.editor, shape, (n) => ({ ...n, error: (error as Error).message }), false)
+			throw error
+		}
+	}
+	getOutputInfo(shape: NodeShape, node: ProfileNode, inputs: InfoValues): InfoValues {
+		return info(shape, node.lastOutput ?? null, inputs)
+	}
+	Component = ProfileComponent
+}
+
+const TYPE_COLORS: Record<string, string> = {
+	number: 'var(--tl-color-selected)',
+	integer: 'var(--tl-color-selected)',
+	date: 'var(--tl-color-warning)',
+	boolean: 'var(--tl-color-success)',
+	text: 'var(--tl-color-muted-2)',
+}
+
+function MiniHistogram({ histogram }: { histogram: number[] }) {
+	const max = Math.max(1, ...histogram)
+	const barWidth = 100 / histogram.length
+	return (
+		<svg className="Profile-histogram" viewBox="0 0 100 24" preserveAspectRatio="none">
+			{histogram.map((count, i) => {
+				const h = (count / max) * 22
+				return (
+					<rect
+						key={i}
+						x={i * barWidth + 0.5}
+						y={24 - h}
+						width={Math.max(0, barWidth - 1)}
+						height={h}
+						fill="var(--tl-color-primary)"
+					/>
+				)
+			})}
+		</svg>
+	)
+}
+
+function ProfileColumnRow({ column, table }: { column: ColumnProfile; table: { headers: string[]; rows: string[][] } }) {
+	const [open, setOpen] = useState(false)
+	const topN = useMemo(() => {
+		if (!open) return column.top
+		const index = table.headers.indexOf(column.name)
+		if (index < 0) return column.top
+		return profileTable(table, 10).find((p) => p.name === column.name)?.top ?? column.top
+	}, [open, column, table])
+	return (
+		<div className="Profile-column">
+			<button type="button" className="Profile-column-head" onPointerDown={stopEvent} onClick={() => setOpen((v) => !v)}>
+				{open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+				<span className="Profile-column-name">{column.name}</span>
+				<UiChip label={column.type} />
+				<span className="Profile-column-stat">{column.filledPct}% filled</span>
+				<span className="Profile-column-stat">{column.distinctCount} distinct</span>
+				{(column.min != null || column.max != null) && (
+					<span className="Profile-column-stat">
+						{column.min} – {column.max}
+					</span>
+				)}
+				{column.mean != null && <span className="Profile-column-stat">mean {column.mean.toFixed(2)}</span>}
+			</button>
+			{column.histogram && <MiniHistogram histogram={column.histogram} />}
+			{open && (
+				<div className="Profile-top">
+					{topN.map((t) => (
+						<span key={t.value} className="Profile-top-item" title={`${t.count} rows`}>
+							{t.value || '(empty)'} <b>{t.count}</b>
+						</span>
+					))}
+				</div>
+			)}
+			{!open && (
+				<div className="Profile-top">
+					{column.top.map((t) => (
+						<span key={t.value} className="Profile-top-item" title={`${t.count} rows`}>
+							{t.value || '(empty)'} <b>{t.count}</b>
+						</span>
+					))}
+				</div>
+			)}
+		</div>
+	)
+}
+
+function ProfileComponent({ shape, node }: NodeComponentProps<ProfileNode>) {
+	const editor = useEditor()
+	const dataWired = useInputConnected(shape.id, 'data')
+	const set = (patch: Partial<ProfileNode>) => updateNode<ProfileNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
+	const effectiveText = useValue(
+		'profile input text',
+		() => {
+			const wired = getNodeInputPortValues(editor, shape.id).data?.value
+			if (typeof wired === 'string' && wired.trim()) return wired
+			return node.text
+		},
+		[editor, shape.id, node.text]
+	)
+	const table = useMemo(() => {
+		try {
+			return parseTable(effectiveText, detectFormat(effectiveText, node.format))
+		} catch {
+			return null
+		}
+	}, [effectiveText, node.format])
+	const columns = useMemo(() => (table ? profileTable(table) : []), [table])
+	const fileSize = useMemo(() => formatFileSize(new TextEncoder().encode(effectiveText).length), [effectiveText])
+	return (
+		<>
+			{dataWired ? (
+				<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
+			) : (
+				<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Table" />
+			)}
+			{!dataWired && (
+				<UiTextArea className="NodeField-textarea" mono rows={4} value={node.text} onChange={(text) => set({ text })} />
+			)}
+			<WireField shapeId={shape.id} fieldKey="format" label="Format">
+				<UiSelect
+					value={node.format}
+					options={[
+						{ value: 'auto', label: 'Auto' },
+						{ value: 'csv', label: 'CSV' },
+						{ value: 'tsv', label: 'TSV' },
+					]}
+					onChange={(format) => set({ format })}
+				/>
+			</WireField>
+			{table ? (
+				<>
+					<div className="NodeHint">
+						{table.rows.length} row{table.rows.length === 1 ? '' : 's'} × {table.headers.length} column
+						{table.headers.length === 1 ? '' : 's'} · {fileSize}
+					</div>
+					<div className="Profile-list NodeScroll" onPointerDown={stopEvent}>
+						{columns.map((column) => (
+							<ProfileColumnRow key={column.name} column={column} table={table} />
+						))}
+					</div>
+				</>
+			) : (
+				<UiEmpty text="Give this card a table to profile" />
+			)}
+		</>
 	)
 }

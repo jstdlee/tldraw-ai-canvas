@@ -226,6 +226,10 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'c', toPort: 'data' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'extra' },
 	]),
+	step('profile-table', 'Profile a table', 'The same CSV feeds Profile: column types, fill rate, distinct values and a histogram.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
+		{ id: 'b', type: 'profile', x: 460, y: 0, props: { format: 'csv' } },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'data' }]),
 	step('chart-bars', 'Bar chart', 'The same CSV feeds Chart. ECharts draws name and score.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 		{ id: 'b', type: 'chart', x: 460, y: 0, props: { format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score' } },

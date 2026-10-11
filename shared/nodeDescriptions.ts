@@ -177,6 +177,11 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'Draws a bar, line or pie chart from a table.',
 		keywords: ['chart', 'graph', 'plot', 'visualization', 'bar', 'line', 'pie'],
 	},
+	profile: {
+		title: 'Profile',
+		description: 'Shows what is in a table: column types, fill rate, distinct values, min/max and a histogram.',
+		keywords: ['profile', 'stats', 'statistics', 'summary', 'types', 'histogram', 'quality', 'data quality'],
+	},
 	database: {
 		title: 'Database',
 		description: 'Opens a SQLite/.db file and runs a query against it. Click a table to query it.',

@@ -26,7 +26,7 @@ import { NumberNodeDefinition } from './types/NumberNode'
 import { PromptConcatNodeDefinition } from './types/PromptConcatNode'
 import { PromptNodeDefinition } from './types/PromptNode'
 import { RouterNodeDefinition } from './types/RouterNode'
-import { ChartNodeDefinition, TableNodeDefinition } from './types/DataNodes'
+import { ChartNodeDefinition, ProfileNodeDefinition, TableNodeDefinition } from './types/DataNodes'
 import { DatabaseNodeDefinition } from './types/DatabaseNode'
 import { FileInNodeDefinition, UrlInNodeDefinition } from './types/InputNodes'
 import { ImageGenNodeDefinition } from './types/ImageGenNode'
@@ -99,6 +99,7 @@ export const NodeDefinitions = {
 	save: SaveNodeDefinition,
 	table: TableNodeDefinition,
 	chart: ChartNodeDefinition,
+	profile: ProfileNodeDefinition,
 	database: DatabaseNodeDefinition,
 	openrouter: OpenRouterNodeDefinition,
 	raw_model: RawModelNodeDefinition,
