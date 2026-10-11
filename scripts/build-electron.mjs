@@ -16,6 +16,8 @@ await build({
 	...common,
 	entryPoints: ['server/index.ts'],
 	outfile: 'dist-electron/server.cjs',
+	// Native module: shipped as a runtime dependency (package.json "dependencies"), not bundled.
+	external: ['@duckdb/node-api'],
 })
 
 await build({

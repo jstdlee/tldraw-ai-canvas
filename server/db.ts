@@ -4,7 +4,7 @@
  * built-in Postgres via PGlite) stay in the client; this module is for the "Postgres" and
  * "DuckDB" sources, which read and write a real external database with full SQL.
  */
-import { DuckDBInstance, DuckDBConnection } from '@duckdb/node-api'
+import type { DuckDBInstance, DuckDBConnection } from '@duckdb/node-api'
 import { homedir } from 'node:os'
 import { Pool, PoolClient } from 'pg'
 import {
@@ -100,12 +100,28 @@ function pgErrorMessage(error: unknown): string {
 
 const duckInstances = new Map<string, Promise<DuckDBInstance>>()
 
+/**
+ * DuckDB is a native module: it is loaded on first use (and kept out of the esbuild bundles),
+ * so a build without it still starts and only DuckDB sources report that it is missing.
+ */
+let duckModule: Promise<typeof import('@duckdb/node-api')> | null = null
+function loadDuck() {
+	duckModule ??= import('@duckdb/node-api').catch((error) => {
+		duckModule = null
+		throw new DbError(`DuckDB is not available in this build (${(error as Error).message.split('\n')[0]})`)
+	})
+	return duckModule
+}
+
 function getDuckInstance(conn: DuckDbConn): Promise<DuckDBInstance> {
 	validateDuckDbPath(conn.path, homedir())
 	const key = `${conn.path}|${conn.readOnly ? 'ro' : 'rw'}`
 	let instance = duckInstances.get(key)
 	if (!instance) {
-		instance = DuckDBInstance.create(conn.path, conn.readOnly ? { access_mode: 'READ_ONLY' } : undefined)
+		instance = loadDuck().then(({ DuckDBInstance }) =>
+			DuckDBInstance.create(conn.path, conn.readOnly ? { access_mode: 'READ_ONLY' } : undefined)
+		)
+		instance.catch(() => duckInstances.delete(key))
 		duckInstances.set(key, instance)
 	}
 	return instance

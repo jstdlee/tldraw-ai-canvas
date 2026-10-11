@@ -98,6 +98,8 @@ async function stage() {
 		logLevel: 'info',
 		entryPoints: [path.join(root, 'server/index.ts')],
 		outfile: path.join(root, 'dist-electron/server.cjs'),
+		// Native module, not bundled: MyGo builds report DuckDB as unavailable instead of failing.
+		external: ['@duckdb/node-api'],
 	})
 	await rm(path.join(resDir, 'dist'), { recursive: true, force: true })
 	await mkdir(resDir, { recursive: true })
