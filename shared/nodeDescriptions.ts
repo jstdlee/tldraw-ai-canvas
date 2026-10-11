@@ -144,8 +144,8 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 	},
 	for_each: {
 		title: 'For each',
-		description: 'Runs the rest of the graph once per item in a list.',
-		keywords: ['loop', 'iterate', 'list', 'each', 'repeat'],
+		description: 'Runs the rest of the graph once per item in a list, or once per number in a range.',
+		keywords: ['loop', 'iterate', 'list', 'each', 'repeat', 'range', 'count', 'numbers'],
 	},
 	router: {
 		title: 'Router',

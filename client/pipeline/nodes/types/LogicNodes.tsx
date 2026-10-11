@@ -1,6 +1,6 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
-import { evaluateCondition, isTruthy, resolveLoopItemResult, splitItems } from '../../../../shared/logic'
+import { evaluateCondition, isTruthy, rangeItems, resolveLoopItemResult, splitItems } from '../../../../shared/logic'
 import { IteratorIcon } from '../../components/icons/IteratorIcon'
 import { RouterIcon } from '../../components/icons/RouterIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
@@ -10,7 +10,7 @@ import { clearNodeRun } from '../../execution/nodeRunState'
 import { Port, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiTextInput } from '../../../ui'
+import { UiNumberInput, UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect, WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -267,6 +267,11 @@ export const ForEachNode = T.object({
 	// WP21 Part B: what happens to an item whose path never reaches "result" (e.g. an If branch
 	// that wasn't wired back). Optional: an old saved canvas without it behaves as "skip".
 	noResult: T.string.optional(),
+	// split = "range": integers rangeFrom..rangeTo (both included) by rangeStep. Optional so
+	// canvases saved before the range mode still load.
+	rangeFrom: T.number.optional(),
+	rangeTo: T.number.optional(),
+	rangeStep: T.number.optional(),
 	progress: T.string.nullable(),
 	lastResults: T.string.nullable(),
 	error: T.string.nullable(),
@@ -283,24 +288,26 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 	category = categoryOf('for_each')
 	resultKeys = ['progress', 'lastResults', 'error'] as const
 	getDefault(): ForEachNode {
-		return { type: 'for_each', split: 'lines', separator: ',', joiner: '\\n', noResult: 'skip', progress: null, lastResults: null, error: null }
+		return { type: 'for_each', split: 'lines', separator: ',', joiner: '\\n', noResult: 'skip', rangeFrom: 1, rangeTo: 10, rangeStep: 1, progress: null, lastResults: null, error: null }
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		// +1 row (WP21 Part B): the noResult control.
-		return getNodeRowHeightPx(shape.props.fontSize) * 7 + 18
+		// +1 row (WP21 Part B): the noResult control. Range mode: From / To / Step replace the
+		// one Separator row (+2 rows).
+		const extra = isRangeMode(shape) ? 2 : 0
+		return getNodeRowHeightPx(shape.props.fontSize) * (7 + extra) + 18
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		const extra = isRangeMode(shape) ? 2 : 0
 		return {
 			list: { id: 'list', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
 			// Loop body: "item" → … → back into "result".
-			item: { id: 'item', x: NODE_WIDTH_PX, y: portY(3, rowPx), terminal: 'start', dataType: 'text' },
-			result: { id: 'result', x: 0, y: portY(4, rowPx), terminal: 'end', dataType: 'any', feedback: true },
+			item: { id: 'item', x: NODE_WIDTH_PX, y: portY(3 + extra, rowPx), terminal: 'start', dataType: 'text' },
+			result: { id: 'result', x: 0, y: portY(4 + extra, rowPx), terminal: 'end', dataType: 'any', feedback: true },
 			output: { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
 		}
 	}
 	async execute(shape: NodeShape, node: ForEachNode, inputs: InputValues): Promise<ExecutionResult> {
-		const items = splitItems(coerceToText(getInput(inputs, 'list')), node.split, node.separator)
 		const set = (patch: Partial<ForEachNode>, outOfDate = true) =>
 			updateNode<ForEachNode>(this.editor, this.editor.getShape<NodeShape>(shape.id) ?? shape, (n) => ({ ...n, ...patch }), outOfDate)
 		const generation = executionGeneration(this.editor)
@@ -308,6 +315,10 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 		const joinResults = (results: string[]) =>
 			node.split === 'json' ? JSON.stringify(results) : results.join(node.joiner.replace(/\\n/g, '\n'))
 		try {
+			const items =
+				node.split === 'range'
+					? rangeItems(node.rangeFrom ?? 1, node.rangeTo ?? 10, node.rangeStep)
+					: splitItems(coerceToText(getInput(inputs, 'list')), node.split, node.separator)
 			const results: string[] = []
 			for (let i = 0; i < items.length; i++) {
 				// Stop pressed (or a new Play started): keep what finished and end cleanly.
@@ -353,6 +364,10 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 	Component = ForEachNodeComponent
 }
 
+function isRangeMode(shape: NodeShape): boolean {
+	return (shape.props.node as { split?: string }).split === 'range'
+}
+
 /** A short, single-line preview of a loop item for error messages. */
 function previewItem(item: string): string {
 	const one = item.replace(/\s+/g, ' ').trim()
@@ -390,8 +405,22 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 					<option value="paragraphs">per paragraph</option>
 					<option value="json">JSON array items</option>
 					<option value="regex">per regex match</option>
+					<option value="range">number range</option>
 				</NodeSelect>
 			</WireField>
+			{node.split === 'range' ? (
+				<>
+					<WireField shapeId={shape.id} fieldKey="rangeFrom" label="From">
+						<UiNumberInput step={1} value={node.rangeFrom ?? 1} onChange={(v) => set({ rangeFrom: v ?? 1 })} />
+					</WireField>
+					<WireField shapeId={shape.id} fieldKey="rangeTo" label="To">
+						<UiNumberInput step={1} value={node.rangeTo ?? 10} onChange={(v) => set({ rangeTo: v ?? 10 })} />
+					</WireField>
+					<WireField shapeId={shape.id} fieldKey="rangeStep" label="Step">
+						<UiNumberInput step={1} value={node.rangeStep ?? 1} onChange={(v) => set({ rangeStep: v ?? 1 })} />
+					</WireField>
+				</>
+			) : (
 			<WireField shapeId={shape.id} fieldKey="separator" label="Separator">
 				{node.split === 'separator' || node.split === 'regex' ? (
 					<UiTextInput
@@ -403,6 +432,7 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 					<span className="NodeRow-disconnected">empty items are skipped</span>
 				)}
 			</WireField>
+			)}
 			<ForEachItemRow shapeId={shape.id} />
 			<PortRow shapeId={shape.id} portId="result" label="← Result" dataType="any" hint="end of the loop body" />
 			<WireField shapeId={shape.id} fieldKey="joiner" label="Join with">

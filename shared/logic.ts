@@ -89,6 +89,23 @@ export function splitItems(input: string, mode: string, separator: string): stri
 	return items.map((s) => s.trim()).filter(Boolean)
 }
 
+/** Most items a For each range may produce, so a typo (1 to 1e9) cannot hang the canvas. */
+export const MAX_RANGE_ITEMS = 10000
+
+/** For each "number range": integers from `from` to `to`, both included, by `step`. A missing
+ * step counts up or down toward `to`. */
+export function rangeItems(from: unknown, to: unknown, step?: unknown): string[] {
+	const start = Number(from)
+	const end = Number(to)
+	if (!Number.isInteger(start) || !Number.isInteger(end)) throw new Error('Range "from" and "to" must be whole numbers')
+	const rawStep = step == null || step === '' ? (end >= start ? 1 : -1) : Number(step)
+	if (!Number.isInteger(rawStep) || rawStep === 0) throw new Error('Range "step" must be a whole number, not 0')
+	if ((end - start) * rawStep < 0) return []
+	const count = Math.floor((end - start) / rawStep) + 1
+	if (count > MAX_RANGE_ITEMS) throw new Error(`Range has ${count} items; the limit is ${MAX_RANGE_ITEMS}`)
+	return Array.from({ length: count }, (_, i) => String(start + i * rawStep))
+}
+
 /** WP21 Part B ("logic inside For each"): what a For each item contributes to the loop's
  * results list. `result` is what reached the loop body's feedback `result` port for this item
  * — null when nothing did (e.g. the item's path ended in a branch, such as an `If`'s `else`,

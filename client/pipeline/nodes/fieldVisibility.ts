@@ -21,6 +21,9 @@ export function hiddenFieldKeys(node: NodeType): Set<string> {
 			const tool = IMAGE_TOOLS.find((t) => t.id === node.tool)
 			return node.tool === 'look' || !tool || !('b' in tool) ? new Set(['b']) : new Set()
 		}
+		case 'for_each':
+			// Range mode (From / To / Step) replaces the Separator row.
+			return node.split === 'range' ? new Set(['separator']) : new Set(['rangeFrom', 'rangeTo', 'rangeStep'])
 		case 'jev':
 			return node.kind === 'noul' ? new Set(['options']) : new Set()
 		case 'text_ai': {

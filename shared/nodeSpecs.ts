@@ -650,17 +650,20 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('for_each'),
 		purpose: purpose('for_each'),
 		useWhen: 'Use to run the rest of the graph once per item in a list, then collect the results.',
-		inputs: [port('list', 'text', 'The list to iterate; split by the separator.'), port('result', 'any', 'Wire the per-item result back in here.')],
+		inputs: [port('list', 'text', 'The list to iterate; split by the separator. Not used in "range" mode.'), port('result', 'any', 'Wire the per-item result back in here.')],
 		outputs: [port('item', 'text', 'The current item.'), port('output', 'text', 'All collected results, joined.')],
 		fields: [
-			field('split', 'enum', 'Split by', 'How the list field is split into items.', ['lines', 'separator', 'json', 'regex']),
+			field('split', 'enum', 'Split by', 'How the list field is split into items; "range" loops over whole numbers instead.', ['lines', 'separator', 'paragraphs', 'json', 'regex', 'range']),
 			field('separator', 'text', 'Separator', 'Custom split separator.'),
+			field('rangeFrom', 'number', 'From', 'Range mode: the first number (included).'),
+			field('rangeTo', 'number', 'To', 'Range mode: the last number (included).'),
+			field('rangeStep', 'number', 'Step', 'Range mode: the step, e.g. 2 or -1; never 0.'),
 			field('joiner', 'text', 'Join with', 'How collected results are joined back together.'),
 			field('noResult', 'enum', 'No result', 'What happens to an item whose body never wires back to "result".', ['skip', 'keep', 'error']),
 		],
 		assistant: {
 			role: 'You set how the list is split and the results re-joined.',
-			chips: ['One per line', 'Comma separated', 'Join results with…'],
+			chips: ['One per line', 'Comma separated', 'Numbers 1 to 10', 'Join results with…'],
 		},
 	},
 	router: {

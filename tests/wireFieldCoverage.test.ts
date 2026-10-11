@@ -42,7 +42,7 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	random: ['mode'],
 	if: ['condition', 'operand'],
 	logic: ['op'],
-	for_each: ['split', 'separator', 'joiner', 'noResult'],
+	for_each: ['split', 'separator', 'rangeFrom', 'rangeTo', 'rangeStep', 'joiner', 'noResult'],
 	router: ['outputCount'],
 	code: ['lang', 'code', 'inputCount', 'outputCount'],
 	output: ['kind'],
