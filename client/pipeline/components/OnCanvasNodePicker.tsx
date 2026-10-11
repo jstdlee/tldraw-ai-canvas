@@ -180,7 +180,14 @@ function NodeSearchPicker({
 		const set = new Set<string>()
 		for (const def of allDefs as NodeDefinition<NodeType>[]) {
 			const defaultNode = def.getDefault()
-			const ports = def.getPorts({ props: { node: defaultNode } } as never, defaultNode)
+			// A stand-in for a card that does not exist yet (no id on the page, so no wires).
+			const preview = { id: 'shape:picker-preview', type: 'node', props: { node: defaultNode, fontSize: 16 } }
+			let ports: ReturnType<typeof def.getPorts>
+			try {
+				ports = def.getPorts(preview as never, defaultNode)
+			} catch {
+				continue // one card type's preview failing must not break the picker
+			}
 			const ok = Object.values(ports).some(
 				(port) => port.terminal === 'end' && arePortDataTypesCompatible(sourceDataType, port.dataType)
 			)
