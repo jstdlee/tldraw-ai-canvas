@@ -8,7 +8,7 @@ GitHub/CI cards, no extra embedded database engines.
 |---|---|
 | No headless run outside tldraw | dropped |
 | Embedded engines: only PGlite and SQLite (WASM) | keep what exists; nothing new embedded |
-| Connect to external Postgres and DuckDB | WP13 (server-side drivers, connect only) |
+| Connect to external Postgres and DuckDB with full SQL (CRUD, DDL, transactions) | WP13 |
 | No GitHub/CI cards | dropped |
 | Core = import, column work (pivot, group, new column), charts | WP11, WP12 |
 
@@ -26,10 +26,11 @@ Read from / Database ──► DataPipe steps ──► Chart
 |---|---|---|
 | WP11 | Column work: a real formula language, structured editors for New column / Group / Pivot, date and number derive ops, Profile card | L |
 | WP12 | Chart card: more chart kinds, series from a column, built-in aggregate, sort / top N, titles and labels, place as image | M |
-| WP13 | Database card connects to external Postgres and DuckDB (server side), next to SQLite file and built-in PGlite | M |
+| WP13 | Database card: external Postgres and DuckDB with full SQL (CRUD, DDL, transactions, load rows), next to SQLite file and built-in PGlite | M |
 | WP14 | Run behaviour: Run pulls stale upstream cards, input-hash cache, default-model health check | S |
+| WP15 | Fine-tuning seen in testing: results inside cards, one error place, shorter LLM cards, group box wording/placement, lighter DataPipe files, chrome, hot-reload cycle | M |
 
-Order: WP14 (small, fixes daily friction) → WP11 → WP12 → WP13.
+Order: WP14 → WP15 (both fix daily friction) → WP11 → WP12 → WP13.
 RULES.md applies unchanged. Every WP is checked in the browser by the planner.
 
 ## Out of scope (decided)
