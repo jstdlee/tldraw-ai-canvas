@@ -3,6 +3,7 @@ import { findFreeSpot } from '../../shared/placement'
 import { closeGroup, isBoxOpen, isPacked } from './subgraph'
 import { NodeShape } from './nodes/NodeShapeUtil'
 import type { SubgraphNode } from './nodes/types/SubgraphNode'
+import { withNodeDefaults } from './nodes/definitionStore'
 
 /**
  * Custom nodes: a packed group saved under a name, so it can be added to any
@@ -99,7 +100,7 @@ export function instantiateTemplate(editor: Editor, template: CustomNodeTemplate
 		editor.markHistoryStoppingPoint('add custom node')
 		editor.createShapes(
 			template.shapes.map((s) => ({
-				...structuredClone(s),
+				...withTemplateNodeDefaults(structuredClone(s)),
 				id: map(s.id),
 				parentId: pageId,
 				x: s.x - minX + point.x,
@@ -245,4 +246,11 @@ export async function openCanvasFile(editor: Editor) {
 	if (!snapshot?.document) throw new Error('Not a canvas file')
 	editor.loadSnapshot(snapshot)
 	return true
+}
+
+/** A template saved by an older version can miss now-required node fields: fill them. */
+function withTemplateNodeDefaults(shape: TLShape): TLShape {
+	const props = shape.props as { node?: { type: string } }
+	if (shape.type !== 'node' || !props.node) return shape
+	return { ...shape, props: { ...props, node: withNodeDefaults(props.node) } } as TLShape
 }

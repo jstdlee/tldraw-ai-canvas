@@ -2,6 +2,8 @@ import classNames from 'classnames'
 import { useCallback, useRef, useState } from 'react'
 import {
 	Circle2d,
+	createShapePropsMigrationIds,
+	createShapePropsMigrationSequence,
 	getColorValue,
 	Group2d,
 	HTMLContainer,
@@ -50,6 +52,7 @@ import { Port } from '../ports/Port'
 import { getNodeOutputPortInfo, getNodePorts } from './nodePorts'
 import { getNodeHeightPx, getNodeWidthPx, NodeBody, shouldSpillOutput } from './nodeTypes'
 import { getNodeDefinition, NodeType } from './registry'
+import { withNodeDefaults } from './definitionStore'
 import { resizeNode } from './resizeNode'
 import { openGroup } from '../subgraph'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../placeOnCanvas'
@@ -107,8 +110,31 @@ declare module 'tldraw' {
 
 export type NodeShape = TLShape<typeof NODE_TYPE>
 
+const nodeShapeVersions = createShapePropsMigrationIds(NODE_TYPE, {
+	FillRequiredNodeFields: 1,
+})
+
+/**
+ * Canvases saved by an older app version (browser storage, canvas files) can miss node fields
+ * that are now required. Each step fills them from the node type's defaults. When a new
+ * required node field is added, add a new step here (tests/e2e/legacy-canvas.spec.ts and
+ * tests/nodeRequiredFields.test.ts check this).
+ */
+const nodeShapeMigrations = createShapePropsMigrationSequence({
+	sequence: [
+		{
+			id: nodeShapeVersions.FillRequiredNodeFields,
+			up(props: any) {
+				if (props?.node) props.node = withNodeDefaults(props.node)
+				if (typeof props?.isOutOfDate !== 'boolean') props.isOutOfDate = true
+			},
+		},
+	],
+})
+
 export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 	static override type = NODE_TYPE
+	static override migrations = nodeShapeMigrations
 	static override props: RecordProps<NodeShape> = {
 		node: NodeType,
 		isOutOfDate: T.boolean,

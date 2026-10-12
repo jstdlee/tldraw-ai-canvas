@@ -49,3 +49,55 @@ export function getNodeDefinition<N extends { type: string }>(
 ): NodeDefinition<N> {
 	return getNodeDefinitions<N>(editor)[typeof node === 'string' ? node : node.type]
 }
+
+/**
+ * A node type's fields that the validator requires (not optional), with their default values.
+ * `getDefault()` never touches the editor, so no editor is needed here. Cached per type.
+ */
+const requiredDefaultsCache = new Map<string, Record<string, unknown> | null>()
+
+function requiredDefaults(type: string): Record<string, unknown> | null {
+	if (requiredDefaultsCache.has(type)) return requiredDefaultsCache.get(type)!
+	let result: Record<string, unknown> | null = null
+	const ctor = definitionClasses?.[type]
+	if (ctor) {
+		try {
+			const config = (ctor.validator as unknown as { config?: Record<string, { validate(v: unknown): unknown }> }).config
+			const defaults = new ctor(null as unknown as Editor).getDefault() as Record<string, unknown>
+			if (config) {
+				result = {}
+				for (const key of Object.keys(config)) {
+					try {
+						config[key].validate(undefined)
+					} catch {
+						if (key in defaults) result[key] = defaults[key]
+					}
+				}
+			}
+		} catch {
+			result = null
+		}
+	}
+	requiredDefaultsCache.set(type, result)
+	return result
+}
+
+/**
+ * A node saved by an older version can miss a field that is now required (e.g. a v0.2.0 Chart
+ * has no `dualScale`), and tldraw then refuses the whole canvas. Fill only the missing
+ * *required* fields from the type's defaults; optional fields stay absent, because "absent"
+ * often keeps its own legacy meaning. Used by the node shape migration and by templates.
+ */
+export function withNodeDefaults<N extends { type: string }>(node: N): N {
+	if (!node || typeof node !== 'object') return node
+	const defaults = requiredDefaults(node.type)
+	if (!defaults) return node
+	let filled: Record<string, unknown> | null = null
+	for (const key in defaults) {
+		if ((node as Record<string, unknown>)[key] === undefined) {
+			filled ??= { ...node }
+			filled[key] = structuredClone(defaults[key])
+		}
+	}
+	return (filled ?? node) as N
+}

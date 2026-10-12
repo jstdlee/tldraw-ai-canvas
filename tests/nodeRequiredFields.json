@@ -1,0 +1,374 @@
+{
+	"adjust": [
+		"brightness",
+		"contrast",
+		"lastResultUrl",
+		"saturation",
+		"type"
+	],
+	"camera": [
+		"error",
+		"lastResultUrl",
+		"type"
+	],
+	"capture": [
+		"h",
+		"lastCaptureUrl",
+		"type",
+		"w"
+	],
+	"chart": [
+		"dualScale",
+		"error",
+		"format",
+		"kind",
+		"text",
+		"type",
+		"xCol",
+		"yCol"
+	],
+	"chat": [
+		"assistantMessage",
+		"error",
+		"model",
+		"type",
+		"userMessage"
+	],
+	"code": [
+		"code",
+		"description",
+		"error",
+		"inputCount",
+		"lang",
+		"lastOutputs",
+		"logs",
+		"outputCount",
+		"request",
+		"showAI",
+		"type"
+	],
+	"crop": [
+		"aspect",
+		"error",
+		"h",
+		"lastResultUrl",
+		"type",
+		"w",
+		"x",
+		"y"
+	],
+	"database": [
+		"error",
+		"fileName",
+		"fileSize",
+		"fileUrl",
+		"lastInfo",
+		"lastOutput",
+		"sql",
+		"tables",
+		"type"
+	],
+	"decision_switch": [
+		"bands",
+		"error",
+		"lastDecisionJson",
+		"lastOptions",
+		"margin",
+		"mode",
+		"options",
+		"threshold",
+		"type"
+	],
+	"download": [
+		"error",
+		"fileName",
+		"lastImageUrl",
+		"lastInfo",
+		"lastPath",
+		"lastText",
+		"type",
+		"url"
+	],
+	"file_in": [
+		"action",
+		"content",
+		"error",
+		"fileName",
+		"hash",
+		"lastText",
+		"mode",
+		"path",
+		"type"
+	],
+	"for_each": [
+		"error",
+		"joiner",
+		"lastResults",
+		"progress",
+		"separator",
+		"split",
+		"type"
+	],
+	"generate_text": [
+		"lastResultText",
+		"model",
+		"type"
+	],
+	"http": [
+		"body",
+		"error",
+		"extractText",
+		"headers",
+		"lastImageUrl",
+		"lastStatus",
+		"lastText",
+		"method",
+		"type",
+		"url"
+	],
+	"if": [
+		"condition",
+		"lastResult",
+		"lastValue",
+		"operand",
+		"type"
+	],
+	"image_filter": [
+		"blur",
+		"brightness",
+		"contrast",
+		"error",
+		"flipX",
+		"flipY",
+		"grayscale",
+		"hue",
+		"invert",
+		"lastResultUrl",
+		"rotate",
+		"saturate",
+		"sepia",
+		"type"
+	],
+	"image_gen": [
+		"error",
+		"images",
+		"lastUsage",
+		"model",
+		"n",
+		"negative",
+		"prompt",
+		"referenceImage",
+		"seed",
+		"size",
+		"type"
+	],
+	"image_resize": [
+		"error",
+		"lastResultUrl",
+		"mode",
+		"type",
+		"value",
+		"value2"
+	],
+	"image_tool": [
+		"a",
+		"b",
+		"error",
+		"lastResultUrl",
+		"lastText",
+		"tool",
+		"type"
+	],
+	"jev": [
+		"error",
+		"filter",
+		"filterInstruction",
+		"filterModel",
+		"kind",
+		"lastFinal",
+		"lastResult",
+		"model",
+		"options",
+		"question",
+		"type"
+	],
+	"load_image": [
+		"imageUrl",
+		"type"
+	],
+	"logic": [
+		"lastResult",
+		"op",
+		"type"
+	],
+	"model_source": [
+		"baseURL",
+		"error",
+		"filter",
+		"model",
+		"models",
+		"type"
+	],
+	"net_tool": [
+		"error",
+		"lastMs",
+		"lastOutput",
+		"option",
+		"target",
+		"tool",
+		"type"
+	],
+	"number": [
+		"type",
+		"value"
+	],
+	"openrouter": [
+		"model",
+		"type"
+	],
+	"output": [
+		"kind",
+		"lastValue",
+		"type"
+	],
+	"postgres": [
+		"error",
+		"lastText",
+		"sql",
+		"type"
+	],
+	"profile": [
+		"error",
+		"format",
+		"text",
+		"type"
+	],
+	"prompt": [
+		"text",
+		"type"
+	],
+	"prompt_concat": [
+		"separator",
+		"type"
+	],
+	"random": [
+		"a",
+		"b",
+		"lastValue",
+		"list",
+		"mode",
+		"type"
+	],
+	"raw_model": [
+		"apiKey",
+		"error",
+		"lastText",
+		"lastUsage",
+		"maxTokens",
+		"model",
+		"system",
+		"temperature",
+		"thinking",
+		"type",
+		"url"
+	],
+	"router": [
+		"outputCount",
+		"type"
+	],
+	"save": [
+		"error",
+		"fileName",
+		"lastPath",
+		"lastPreview",
+		"type"
+	],
+	"sleep": [
+		"ms",
+		"type"
+	],
+	"subgraph": [
+		"error",
+		"innerIds",
+		"inputs",
+		"lastOutputs",
+		"outputs",
+		"thumbnail",
+		"title",
+		"type"
+	],
+	"summarize": [
+		"error",
+		"focus",
+		"format",
+		"language",
+		"lastKind",
+		"lastResultText",
+		"length",
+		"model",
+		"type"
+	],
+	"table": [
+		"as",
+		"column",
+		"columns",
+		"error",
+		"expr",
+		"format",
+		"name",
+		"op",
+		"pattern",
+		"sep",
+		"text",
+		"type",
+		"with"
+	],
+	"table_view": [
+		"error",
+		"filterText",
+		"lastInfo",
+		"lastJson",
+		"lastOutput",
+		"sortColumn",
+		"sortDir",
+		"text",
+		"type"
+	],
+	"text_ai": [
+		"error",
+		"instruction",
+		"lastResultText",
+		"model",
+		"operation",
+		"option",
+		"type"
+	],
+	"text_tool": [
+		"a",
+		"b",
+		"error",
+		"lastResultText",
+		"op",
+		"type"
+	],
+	"url_in": [
+		"error",
+		"fetchBody",
+		"lastText",
+		"type",
+		"url"
+	],
+	"video": [
+		"autoplay",
+		"type",
+		"url"
+	],
+	"web_search": [
+		"count",
+		"error",
+		"lastResultsJson",
+		"provider",
+		"query",
+		"type"
+	]
+}
