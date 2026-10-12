@@ -35,6 +35,7 @@ import {
 } from './canvasFeatures'
 import { openBuildPanel } from '../pipeline/aiBuild'
 import { $findOpen } from './FindBar'
+import { compareTargets, copyDocument, keepVariant, openCompare, openRewrite, retryVariant, selectedVariant, splitIntoParagraphs } from './rewrite'
 import { $imageEditorTarget } from './ImageEditor'
 import { diveGroup, groupSelection, leaveGroup, renameSelection } from '../pipeline/groups/groupActions'
 import { closeGroup, openGroup, packSelection, unpack } from '../pipeline/subgraph'
@@ -128,6 +129,12 @@ export function canvasActionOverrides(
 		...a('ai-translate', 'Translate text…', () => aiTextJob(editor, notify, 'translate')),
 		...a('ai-improve', 'Improve writing', () => aiTextJob(editor, notify, 'improve')),
 		...a('ai-brainstorm', 'Brainstorm ideas', () => aiTextJob(editor, notify, 'brainstorm')),
+		...a('rewrite-split', 'Split into paragraphs', () => splitIntoParagraphs(editor, notify)),
+		...a('rewrite-open', 'Rewrite…', () => openRewrite(editor, notify), '?b'),
+		...a('compare', 'Compare (diff)', () => openCompare(editor, notify), '?c'),
+		...a('rewrite-use', 'Use this version', () => keepVariant(editor, notify)),
+		...a('rewrite-retry', 'Rewrite again (same instruction)', () => retryVariant(editor, notify)),
+		...a('rewrite-copy', 'Copy document as Markdown', () => copyDocument(editor, notify)),
 		...a('edit-image', 'Edit image…', () => {
 			const image = selectedImage(editor)
 			if (!image) return notify('Select one image first', 'warning')
@@ -278,6 +285,9 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 		},
 		[editor]
 	)
+	const isVariant = useValue('rewrite variant', () => !!selectedVariant(editor), [editor])
+	const canCompare = useValue('can compare', () => !!compareTargets(editor), [editor])
+	const isFrame = useValue('one frame', () => editor.getOnlySelectedShape()?.type === 'frame', [editor])
 	const openBoxGroupId = useValue('open box group', () => findOpenBoxGroup(editor), [editor])
 	return (
 		<DefaultContextMenu {...props}>
@@ -322,8 +332,21 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 							<TldrawUiMenuActionItem actionId="ai-improve" />
 							<TldrawUiMenuActionItem actionId="ai-brainstorm" />
 						</TldrawUiMenuGroup>
+						<TldrawUiMenuGroup id="ai-rewrite">
+							<TldrawUiMenuActionItem actionId="rewrite-open" />
+							{isVariant ? (
+								<>
+									<TldrawUiMenuActionItem actionId="rewrite-use" />
+									<TldrawUiMenuActionItem actionId="rewrite-retry" />
+								</>
+							) : (
+								<TldrawUiMenuActionItem actionId="rewrite-split" />
+							)}
+							{isFrame && <TldrawUiMenuActionItem actionId="rewrite-copy" />}
+						</TldrawUiMenuGroup>
 					</TldrawUiMenuSubmenu>
 					{isImage && <TldrawUiMenuActionItem actionId="image-to-pipeline" />}
+					{canCompare && <TldrawUiMenuActionItem actionId="compare" />}
 					<TldrawUiMenuActionItem actionId="qr-code" />
 					<TldrawUiMenuActionItem actionId="word-count" />
 				</TldrawUiMenuGroup>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AssetRecordType, atom, Editor, TLImageShape, TLShapeId, useValue } from 'tldraw'
 import { placeImageOnCanvas } from '../pipeline/placeOnCanvas'
+import { linkDerived } from './derivedLink'
 
 /** The image shape being edited, or null. */
 export const $imageEditorTarget = atom<TLShapeId | null>('image editor target', null)
@@ -170,7 +171,8 @@ function ImageEditorDialog({
 			const canvas = render(img, edit)
 			const url = await uploadCanvas(canvas)
 			if (asCopy) {
-				await placeImageOnCanvas(editor, shape, url, { maxSize: Math.max(shape.props.w, shape.props.h) })
+				const copyId = await placeImageOnCanvas(editor, shape, url, { maxSize: Math.max(shape.props.w, shape.props.h) })
+				linkDerived(editor, shape.id, copyId, 'Edited copy')
 			} else {
 				const assetId = AssetRecordType.createId()
 				const turned = edit.rotate === 90 || edit.rotate === 270

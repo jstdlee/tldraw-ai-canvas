@@ -1,11 +1,35 @@
 import { AssetRecordType, Box, createShapeId, Editor, TLShape, toRichText } from 'tldraw'
 
+/** Room between a shape and a result placed next to it: enough for a labelled link arrow. */
+export const NEXT_TO_GAP = 160
+
 /** A free spot to the right of a shape (or the viewport centre). */
-function spotNextTo(editor: Editor, shape: TLShape | null, w: number, h: number) {
+export function spotNextTo(editor: Editor, shape: TLShape | null, w: number, h: number) {
 	const bounds = shape ? editor.getShapePageBounds(shape.id) : null
-	if (bounds) return { x: bounds.maxX + 40, y: bounds.minY }
-	const c = editor.getViewportPageBounds().center
-	return { x: c.x - w / 2, y: c.y - h / 2 }
+	if (!bounds) {
+		const c = editor.getViewportPageBounds().center
+		return { x: c.x - w / 2, y: c.y - h / 2 }
+	}
+	return freeSpot(editor, bounds.maxX + NEXT_TO_GAP, bounds.minY, w, h)
+}
+
+/** Start at (x, y) and move down past any shape in the way, so results never cover each other. */
+export function freeSpot(editor: Editor, x: number, y: number, w: number, h: number) {
+	const others = editor
+		.getCurrentPageShapes()
+		.filter((s) => s.type !== 'arrow' && s.type !== 'connection' && s.type !== 'frame')
+		.map((s) => editor.getShapePageBounds(s.id))
+		.filter((b): b is Box => !!b)
+	for (let moved = true, guard = 0; moved && guard < 200; guard++) {
+		moved = false
+		for (const b of others) {
+			if (x < b.maxX && x + w > b.minX && y < b.maxY && y + h > b.minY) {
+				y = b.maxY + 24
+				moved = true
+			}
+		}
+	}
+	return { x, y }
 }
 
 function loadSize(src: string): Promise<{ w: number; h: number }> {

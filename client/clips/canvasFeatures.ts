@@ -18,6 +18,7 @@ import { isMermaid, looksLikeMarkdown } from '../../shared/clipText'
 import { pastePatch } from '../../shared/pasteTarget'
 import { NodeShape } from '../pipeline/nodes/NodeShapeUtil'
 import { shapeText } from './shapeText'
+import { derivedSources, linkAllDerived } from './derivedLink'
 
 export { shapeText }
 
@@ -103,10 +104,12 @@ async function runAI(
 	placeAs: 'text' | 'markdown' = 'markdown'
 ) {
 	const near = anchor(editor)
+	const sources = derivedSources(editor)
 	notify(`${label}…`)
 	try {
 		const { text } = await apiGenerateText({ input, prompt })
-		placeTextOnCanvas(editor, near, text, placeAs)
+		const id = placeTextOnCanvas(editor, near, text, placeAs)
+		linkAllDerived(editor, sources, id, label)
 		notify(`${label}: done`, 'success')
 	} catch (e) {
 		notify(`${label} failed: ${(e as Error).message}`, 'error')
@@ -146,7 +149,7 @@ export async function aiTextJob(editor: Editor, notify: Notify, job: 'summarize'
 	if (job === 'translate') {
 		const language = window.prompt('Translate into which language?', 'English')
 		if (!language) return
-		return runAI(editor, notify, 'Translate', text, `Translate the input into ${language}. Keep the formatting. Return only the translation.`)
+		return runAI(editor, notify, `Translate → ${language}`, text, `Translate the input into ${language}. Keep the formatting. Return only the translation.`)
 	}
 	const prompts = {
 		summarize: 'Summarize the input as a short title line and 3-6 bullet points. Use Markdown.',
@@ -163,11 +166,13 @@ export async function aiTextJob(editor: Editor, notify: Notify, job: 'summarize'
 
 export async function makeQrCode(editor: Editor, notify: Notify) {
 	let text = selectionText(editor).trim()
+	const sources = text ? derivedSources(editor) : []
 	if (!text) text = window.prompt('Text or link for the QR code:') ?? ''
 	if (!text) return
 	if (text.length > 1500) return notify('Too much text for a QR code (max ~1500 characters)', 'warning')
 	const dataUrl = await QRCode.toDataURL(text, { margin: 1, width: 512, errorCorrectionLevel: 'M' })
-	await placeImageOnCanvas(editor, anchor(editor), dataUrl, { maxSize: 200, name: 'qr-code.png' })
+	const id = await placeImageOnCanvas(editor, anchor(editor), dataUrl, { maxSize: 200, name: 'qr-code.png' })
+	linkAllDerived(editor, sources, id, 'QR code')
 }
 
 export function insertDateTime(editor: Editor) {

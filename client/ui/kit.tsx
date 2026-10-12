@@ -300,6 +300,8 @@ function SelectTrigger({
 	onPointerDown,
 	onFocus,
 	buttonRef,
+	ref,
+	...radix
 }: {
 	shown: string
 	title?: string
@@ -308,20 +310,32 @@ function SelectTrigger({
 	onPointerDown?: (event: PointerEvent<HTMLButtonElement>) => void
 	onFocus?: () => void
 	buttonRef?: Ref<HTMLButtonElement>
+	ref?: Ref<HTMLButtonElement>
+	onKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void
+	[prop: string]: unknown
 }) {
+	const { onPointerDown: radixPointerDown, onKeyDown: radixKeyDown, ...rest } = radix as {
+		onPointerDown?: (event: PointerEvent<HTMLButtonElement>) => void
+		onKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void
+	}
 	return (
 		<TldrawUiButton
-			ref={buttonRef}
+			{...rest}
+			ref={ref ?? buttonRef}
 			type="normal"
 			className={classNames('UiSelect-trigger', className)}
 			title={title ?? shown}
 			disabled={disabled}
 			onPointerDown={(event) => {
 				stopPointer(event)
+				radixPointerDown?.(event)
 				onPointerDown?.(event)
 				onFocus?.()
 			}}
-			onKeyDown={stopKey}
+			onKeyDown={(event) => {
+				stopKey(event)
+				radixKeyDown?.(event)
+			}}
 		>
 			<span className="UiSelect-label">{shown}</span>
 			<IconChevronDown size={14} />

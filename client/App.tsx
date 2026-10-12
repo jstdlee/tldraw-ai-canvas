@@ -68,6 +68,8 @@ import { ShellChrome } from './shell/ShellChrome'
 import { $featuresOpen, $libraryRail, $mapOpen, saveBackup, writeLibraryRail } from './shell/shellState'
 import { FloatingPanel, IconClose, IconSparkle, UiIconButton } from './ui'
 import { ImageEditorModal } from './clips/ImageEditor'
+import { RewriteDialogs } from './clips/RewriteDialogs'
+import { $presetsEditorOpen } from './clips/rewrite'
 import { RatioImageShapeUtil } from './clips/shapeOptions'
 
 // Every tldraw asset (fonts, icons, translations) is bundled, so the app works offline.
@@ -236,6 +238,13 @@ function App() {
 							onSelect={() => openProvidersDialog()}
 						/>
 						<TldrawUiMenuItem
+							id="rewrite-presets"
+							label="Rewrite presets…"
+							onSelect={() => {
+								$presetsEditorOpen.set(true)
+							}}
+						/>
+						<TldrawUiMenuItem
 							id="toggle-node-library"
 							label="Show/hide node library"
 							kbd="shift+n"
@@ -321,6 +330,7 @@ function App() {
 					>
 						<TldrawAgentAppProvider onMount={setApp} onUnmount={handleUnmount} />
 						<CanvasExtras />
+						<RewriteDialogs />
 					</Tldraw>
 				</div>
 				<ProvidersModal editor={editor} />

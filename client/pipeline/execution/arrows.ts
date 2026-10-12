@@ -23,7 +23,11 @@ import { ShapePort } from '../ports/Port'
  *  - shape ──arrow──▶ node : the shape's text / image becomes a node input
  *  - node  ──arrow──▶ shape: the node's output is written into the shape
  *    (an arrow that ends on empty canvas creates a fitting shape there)
+ * A "derived from" link (meta.derived, see clips/derivedLink.ts) only shows where a
+ * result came from; it is never a wire.
  */
+
+const isDerivedLink = (editor: Editor, arrowId: TLShapeId) => !!editor.getShape(arrowId)?.meta?.derived
 
 function arrowBindings(editor: Editor, arrowId: TLShapeId) {
 	const bindings = editor.getBindingsFromShape<TLArrowBinding>(arrowId, 'arrow')
@@ -90,7 +94,7 @@ export async function getArrowInputs(editor: Editor, nodeId: TLShapeId): Promise
 	)
 	const result: Record<string, PipelineValue> = {}
 	for (const binding of editor.getBindingsToShape<TLArrowBinding>(nodeId, 'arrow')) {
-		if (binding.props.terminal !== 'end') continue
+		if (binding.props.terminal !== 'end' || isDerivedLink(editor, binding.fromId)) continue
 		const source = arrowBindings(editor, binding.fromId).start
 		if (!source) continue
 		const sourceShape = editor.getShape(source.toId)
@@ -112,7 +116,7 @@ export async function writeArrowOutputs(
 	const node = editor.getShape<NodeShape>(nodeId)
 	if (!node) return
 	for (const binding of editor.getBindingsToShape<TLArrowBinding>(nodeId, 'arrow')) {
-		if (binding.props.terminal !== 'start') continue
+		if (binding.props.terminal !== 'start' || isDerivedLink(editor, binding.fromId)) continue
 		const port = nearestPort(editor, node, 'start', binding.props.normalizedAnchor.y)
 		const raw = port ? outputs[port.id] : Object.values(outputs).find((v) => v != null && v !== STOP_EXECUTION)
 		if (raw == null || raw === STOP_EXECUTION) continue

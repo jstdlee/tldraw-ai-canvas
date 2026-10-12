@@ -19,3 +19,4 @@ mygo/resources/darwin-*/
 # Playwright run output
 test-results/
 playwright-report/
+.playwright-mcp/
