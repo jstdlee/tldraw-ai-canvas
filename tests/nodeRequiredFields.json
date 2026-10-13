@@ -114,6 +114,25 @@
 		"model",
 		"type"
 	],
+	"html_form": [
+		"css",
+		"error",
+		"html",
+		"js",
+		"lastHtml",
+		"lastSubmissionJson",
+		"text",
+		"type"
+	],
+	"html_preview": [
+		"css",
+		"error",
+		"html",
+		"js",
+		"lastHtml",
+		"text",
+		"type"
+	],
 	"http": [
 		"body",
 		"error",
@@ -369,6 +388,18 @@
 		"lastResultsJson",
 		"provider",
 		"query",
+		"type"
+	],
+	"agent": [
+		"error",
+		"lastOutput",
+		"lastStepsJson",
+		"maxSteps",
+		"mcpServers",
+		"model",
+		"search",
+		"skills",
+		"task",
 		"type"
 	]
 }

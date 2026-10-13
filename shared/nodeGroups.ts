@@ -36,6 +36,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	capture: 'sources',
 	random: 'sources',
 	number: 'sources',
+	html_form: 'sources',
 	// Data: tables, databases, charts
 	table: 'data',
 	database: 'data',
@@ -48,8 +49,8 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	// AI models
 	generate_text: 'ai',
 	text_ai: 'ai',
-	summarize: 'ai',
 	chat: 'ai',
+	agent: 'ai',
 	raw_model: 'ai',
 	model_source: 'ai',
 	openrouter: 'ai',
@@ -81,6 +82,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	output: 'output',
 	save: 'output',
 	table_view: 'output',
+	html_preview: 'output',
 }
 
 export function categoryOf(type: string): string {

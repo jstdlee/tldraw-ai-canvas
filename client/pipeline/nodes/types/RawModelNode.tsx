@@ -5,10 +5,10 @@ import { formatLlmUsage } from '../../../../shared/llmUsage'
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { parseModelValue } from '../../../../shared/modelRef'
 import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
-import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, GROW_FIELD_EXTRA_PX, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiButton, UiSecretInput, UiTextArea, UiTextInput } from '../../../ui'
+import { UiButton, UiGrowingInput, UiSecretInput, UiTextArea, UiTextInput } from '../../../ui'
 import { apiProviderModels, apiSaveSecret } from '../../api/pipelineApi'
 import { parseModelsList, type ModelListEntry } from './ModelSourceNode'
 import { currentRunSignal } from '../../execution/executionState'
@@ -94,8 +94,10 @@ export class RawModelNodeDefinition extends NodeDefinition<RawModelNode> {
 		// Rows: prompt, model, URL, model id, "Fetch models" + fetched-models filter/select
 		// (WP21 Part D, 2 rows), key, system label (WP17), temp, max tokens, think = 11, plus
 		// the system-prompt text box (72), the {{var}} rows, and the result area.
+		// WP27 Part B: URL and Model id wrap/grow instead of a single-line cutoff — reserve
+		// their max-rows cap on top of the one row each already has.
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
-		return rowPx * 11 + 72 + llmVarsHeight(this.vars(node), rowPx) + RESULT_HEIGHT_PX
+		return rowPx * 11 + 72 + llmVarsHeight(this.vars(node), rowPx) + RESULT_HEIGHT_PX + GROW_FIELD_EXTRA_PX * 2
 	}
 	getPorts(shape: NodeShape, node: RawModelNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -170,16 +172,14 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 	const [filter, setFilter] = useState('')
 	const [fetchError, setFetchError] = useState<string | null>(null)
 	const set = (patch: Partial<RawModelNode>) => updateNode<RawModelNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
-	const text = (key: 'url' | 'model' | 'temperature' | 'maxTokens', placeholder: string, type = 'text') => (
-		<UiTextInput
-			type={type}
-			inputMode={type === 'number' ? 'decimal' : 'text'}
-			placeholder={placeholder}
-			autoComplete="off"
-			value={node[key]}
-			onChange={(next) => set({ [key]: next })}
-		/>
-	)
+	// WP27 Part B: the URL/model id fields wrap and grow (a long endpoint or model id
+	// shouldn't just cut off); the numeric fields stay plain single-line inputs.
+	const text = (key: 'url' | 'model' | 'temperature' | 'maxTokens', placeholder: string, type = 'text') =>
+		type === 'number' ? (
+			<UiTextInput type={type} inputMode="decimal" placeholder={placeholder} autoComplete="off" value={node[key]} onChange={(next) => set({ [key]: next })} />
+		) : (
+			<UiGrowingInput maxRows={3} placeholder={placeholder} value={node[key]} onChange={(next) => set({ [key]: next })} />
+		)
 	const models: ModelListEntry[] = parseModelsList({ models: node.models ?? '' })
 	const filtered = filter.trim()
 		? models.filter((m) => (m.label ?? m.id).toLowerCase().includes(filter.trim().toLowerCase()))
@@ -198,8 +198,8 @@ function RawModelComponent({ shape, node }: NodeComponentProps<RawModelNode>) {
 		<>
 			<PortRow shapeId={shape.id} portId="prompt" label="Prompt" dataType="text" />
 			<PortRow shapeId={shape.id} portId="model" label="Model id" dataType="model" hint="or type below" />
-			<WireField shapeId={shape.id} fieldKey="url" label="URL">{text('url', 'https://api.openai.com/v1')}</WireField>
-			<NodeRow>
+			<WireField shapeId={shape.id} fieldKey="url" label="URL" grow>{text('url', 'https://api.openai.com/v1')}</WireField>
+			<NodeRow className="WireField_grow">
 				<span className="NodeInputRow-label">Model</span>
 				{text('model', 'model id, or wire one')}
 			</NodeRow>

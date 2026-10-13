@@ -214,6 +214,23 @@ body {
 	padding: var(--tl-space-2) var(--tl-space-4);
 	position: relative;
 
+	/* WP27 Part B: a row holding a `UiGrowingInput` (via `WireField`'s `grow` prop) sizes to its
+	   content (up to the input's own max-rows cap) instead of clipping it at the usual fixed
+	   row height. The label/port top-align with the control's first line instead of centering
+	   against the now-taller box. */
+	&.WireField_grow {
+		height: auto;
+		min-height: var(--node-row-h, 44px);
+		align-items: flex-start;
+		padding-top: var(--tl-space-3);
+		padding-bottom: var(--tl-space-3);
+
+		.NodePortLabel,
+		.Port {
+			margin-top: 0.25em;
+		}
+	}
+
 	input[type='text'],
 	select {
 		align-self: stretch;
@@ -299,9 +316,15 @@ body {
 	color: var(--tl-color-text-3);
 	flex: 1 1 auto;
 	text-align: right;
+	min-width: 0;
+	/* WP27 Part B: up to 2 lines (fits the row's existing fixed height) instead of a hard
+	   single-line ellipsis, so a moderately long wired value or label reads instead of cutting
+	   off after a few characters — still bounded, so it never grows the row/card. */
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	word-break: break-word;
 }
 
 .NodeRow-disconnected {
@@ -311,6 +334,12 @@ body {
 	flex: 1 1 auto;
 	text-align: right;
 	font-style: italic;
+	min-width: 0;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
+	word-break: break-word;
 }
 
 .NodeRow-source {
@@ -330,10 +359,24 @@ body {
 }
 
 .NodePortLabel {
-	/* Tinted per port data type via inline style (PORT_TYPE_COLORS), not a flat text color. */
+	/* Tinted per port data type via inline style (PORT_TYPE_COLORS), not a flat text color.
+	   WP27 Part B: a fixed-width column (~32% of the card) so every row's label lines up,
+	   however long one gets — the overflow ellipsises, and NodePortLabel sets `title` so the
+	   full text is still reachable on hover. */
 	font-size: var(--fs-label);
 	font-weight: 500;
-	flex: 0 0 auto;
+	flex: 0 0 32%;
+	max-width: 32%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* A label used in a right-aligned row (OutputPortRow, port-only rows) still shouldn't eat a
+   third of the row when there's no control to line up with — it can hug its own content. */
+.NodeRow-right > .NodePortLabel {
+	flex: 0 1 auto;
+	max-width: 70%;
 }
 
 .NodeValue_placeholder {
@@ -738,6 +781,50 @@ body {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* WP27 Part A: scroll-arrow bars for any overflowing menu (UiSelect/UiMultiSelect's dropdown,
+   the FallbackMenu portal, and tldraw's own .tlui-menu). Sticky to the scrolling ancestor, so
+   they sit at the visible top/bottom edge without needing a positioned wrapper. */
+.MenuScrollArrow {
+	position: sticky;
+	left: 0;
+	right: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 1.4em;
+	border: none;
+	padding: 0;
+	cursor: pointer;
+	color: var(--tl-color-text-3);
+	background: linear-gradient(var(--tl-color-panel), color-mix(in srgb, var(--tl-color-panel) 70%, transparent));
+}
+
+.MenuScrollArrow_up {
+	top: 0;
+	background: linear-gradient(color-mix(in srgb, var(--tl-color-panel) 70%, transparent), var(--tl-color-panel));
+}
+
+.MenuScrollArrow_down {
+	bottom: 0;
+}
+
+.MenuScrollArrow:hover {
+	color: var(--tl-color-text-1);
+	background-color: var(--tl-color-hint);
+}
+
+/* WP27 Part C: the optional keyboard shortcut on a command row (Find, Map view, …). */
+.NodeSearchPicker-row-shortcut {
+	flex: 0 0 auto;
+	font-size: 0.72em;
+	color: var(--tl-color-text-3);
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-1);
+	padding: 1px 5px;
 }
 
 .NodeSearchPicker-others {
@@ -2428,6 +2515,25 @@ body {
 .NodeBranch.is-active {
 	color: var(--tl-color-text-1);
 	border-color: var(--tl-color-selected);
+	background: color-mix(in srgb, var(--tl-color-selected) 12%, transparent);
+}
+
+.NodeBranch-value {
+	color: var(--tl-color-text-3);
+	font-style: italic;
+}
+
+/* WP27 Part D: the If card's "reads as a sentence" line. */
+.IfNode-sentence {
+	color: var(--tl-color-text-3);
+	font-size: var(--fs-meta);
+	white-space: normal;
+	line-height: 1.4;
+}
+
+.IfNode-sentence strong {
+	color: var(--tl-color-text-1);
+	font-weight: 600;
 }
 
 /* Chat node: send icon inside the message box */
@@ -2974,4 +3080,61 @@ body {
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
+}
+
+/* ---- HTML preview / HTML form (WP29) ---- */
+
+.HtmlPreviewNode-frameWrap {
+	margin: var(--tl-space-2) var(--tl-space-4);
+	border-radius: var(--tl-radius-3);
+	overflow: hidden;
+	background: var(--tl-color-muted-0);
+	border: 1px solid var(--tl-color-divider);
+}
+
+.HtmlPreviewNode-frame {
+	width: 100%;
+	height: 100%;
+	border: none;
+	display: block;
+	background: #fff;
+}
+
+.HtmlPreviewNode-frame_zoom {
+	flex: 1;
+}
+
+.HtmlPreviewNode-options {
+	display: flex;
+	align-items: center;
+	gap: var(--tl-space-3);
+}
+
+.HtmlPreviewNode-heightInput {
+	width: 56px;
+	margin-left: auto;
+}
+
+.HtmlPreviewNode-submission {
+	margin: var(--tl-space-2) var(--tl-space-4);
+	border-radius: var(--tl-radius-3);
+	overflow: auto;
+	background: var(--tl-color-muted-0);
+	border: 1px solid var(--tl-color-divider);
+	box-sizing: border-box;
+}
+
+.HtmlPreviewNode-submission pre {
+	margin: 0;
+	padding: var(--tl-space-2) var(--tl-space-3);
+	font-family: var(--tl-font-mono);
+	font-size: var(--fs-label);
+	color: var(--tl-color-text-1);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.HtmlPreviewNode-submission > .NodeRow-disconnected {
+	padding: var(--tl-space-2) var(--tl-space-3);
+	display: block;
 }

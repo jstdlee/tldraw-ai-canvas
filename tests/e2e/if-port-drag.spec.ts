@@ -30,7 +30,11 @@ test.describe('If output port drag', () => {
 		const box = (await port.boundingBox())!
 		expect(box.width).toBeGreaterThan(0)
 
-		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+		// `port.hover()` (not a raw page.mouse.move to a pre-read coordinate) — Playwright's own
+		// actionability wait settles the real pointer-target tracking a plain coordinate jump
+		// doesn't; a bare page.mouse.move here is flaky for any body-row port (reproduces even
+		// on unrelated, unchanged node types), not something specific to this card.
+		await port.hover()
 		await page.mouse.down()
 		await page.mouse.move(box.x + 250, box.y + 200, { steps: 10 })
 		await page.mouse.up()

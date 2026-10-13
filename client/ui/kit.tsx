@@ -216,6 +216,102 @@ function useScrollSelectedIntoView(containerRef: { current: HTMLElement | null }
 	}, [active])
 }
 
+/**
+ * WP27 Part A: tracks whether `ref`'s element has more content to scroll to above/below —
+ * driving the small up/down scroll-arrow bars every overflowing menu shows. Re-measures on
+ * scroll, resize, and DOM mutation (the list's own content can change height, e.g. a filtered
+ * search result list), so it stays correct as the menu's content changes.
+ */
+export function useMenuOverflow(ref: { current: HTMLElement | null }) {
+	const [state, setState] = useState({ up: false, down: false })
+	useEffect(() => {
+		const el = ref.current
+		if (!el) return
+		const update = () => {
+			const { scrollTop, scrollHeight, clientHeight } = el
+			setState({ up: scrollTop > 1, down: scrollTop + clientHeight < scrollHeight - 1 })
+		}
+		update()
+		el.addEventListener('scroll', update, { passive: true })
+		const ro = new ResizeObserver(update)
+		ro.observe(el)
+		const mo = new MutationObserver(update)
+		mo.observe(el, { childList: true, subtree: true })
+		return () => {
+			el.removeEventListener('scroll', update)
+			ro.disconnect()
+			mo.disconnect()
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [ref.current])
+	return state
+}
+
+/**
+ * WP27 Part A: the up/down scroll-arrow bars. Rendered as the first/last children of the
+ * scrollable element itself (`position: sticky`, so they don't need a positioned wrapper and
+ * work however the menu is positioned) — hidden at the ends, hovering scrolls smoothly, clicking
+ * scrolls one page. Pure overlay: the wheel and keyboard keep working on the scroller underneath.
+ * `atTop`/`atBottom` pick which bar this call renders (callers place one each, at the right spot
+ * in the child list, or pass neither to render both as a fragment when order doesn't matter).
+ */
+export function MenuScrollArrows({
+	containerRef,
+	only,
+}: {
+	containerRef: { current: HTMLElement | null }
+	only?: 'up' | 'down'
+}) {
+	const { up, down } = useMenuOverflow(containerRef)
+	const hoverTimer = useRef<number | null>(null)
+	const stopHoverScroll = () => {
+		if (hoverTimer.current != null) {
+			window.clearInterval(hoverTimer.current)
+			hoverTimer.current = null
+		}
+	}
+	useEffect(() => stopHoverScroll, [])
+	const startHoverScroll = (dir: 1 | -1) => {
+		stopHoverScroll()
+		hoverTimer.current = window.setInterval(() => containerRef.current?.scrollBy({ top: dir * 14 }), 16)
+	}
+	const page = (dir: 1 | -1) => {
+		const el = containerRef.current
+		if (!el) return
+		el.scrollBy({ top: dir * el.clientHeight * 0.8, behavior: 'smooth' })
+	}
+	return (
+		<>
+			{up && only !== 'down' && (
+				<button
+					type="button"
+					className="MenuScrollArrow MenuScrollArrow_up"
+					aria-label="Scroll up"
+					onPointerDown={stopPointer}
+					onMouseEnter={() => startHoverScroll(-1)}
+					onMouseLeave={stopHoverScroll}
+					onClick={() => page(-1)}
+				>
+					<IconChevronUp size={12} />
+				</button>
+			)}
+			{down && only !== 'up' && (
+				<button
+					type="button"
+					className="MenuScrollArrow MenuScrollArrow_down"
+					aria-label="Scroll down"
+					onPointerDown={stopPointer}
+					onMouseEnter={() => startHoverScroll(1)}
+					onMouseLeave={stopHoverScroll}
+					onClick={() => page(1)}
+				>
+					<IconChevronDown size={12} />
+				</button>
+			)}
+		</>
+	)
+}
+
 function SelectItems<T extends string>({
 	groups,
 	isOn,
@@ -275,15 +371,26 @@ function SelectDropdownBody<T extends string>({
 }) {
 	const [query, setQuery] = useState('')
 	const listRef = useRef<HTMLDivElement>(null)
+	// WP27 Part A: the Radix path renders this inside tldraw's own `.tlui-menu`, which is the
+	// element that actually scrolls (it has the max-height + overflow, not this plain div) — a
+	// ref callback finds it synchronously at commit, before any effect (ours or the child
+	// MenuScrollArrows') runs, so there's no first-render race.
+	const scrollHostRef = useRef<HTMLElement | null>(null)
+	const setListRef = (el: HTMLDivElement | null) => {
+		listRef.current = el
+		scrollHostRef.current = (el?.closest('.tlui-menu') as HTMLElement | null) ?? el
+	}
 	const showSearch = options.length > SELECT_SEARCH_THRESHOLD
 	const groups = useMemo(() => filteredOptionGroups(options, showSearch ? query : ''), [options, query, showSearch])
 	useScrollSelectedIntoView(listRef)
 	return (
 		<>
 			{showSearch && <SelectSearchBox query={query} onQuery={setQuery} listRef={listRef} />}
-			<div ref={listRef}>
+			<MenuScrollArrows containerRef={scrollHostRef} only="up" />
+			<div ref={setListRef}>
 				<SelectItems groups={groups} isOn={isOn} onPick={onPick} stayOpen={stayOpen} />
 			</div>
+			<MenuScrollArrows containerRef={scrollHostRef} only="down" />
 		</>
 	)
 }
@@ -458,6 +565,7 @@ function FallbackMenu({
 					>
 						{showSearch && <SelectSearchBox query={query} onQuery={setQuery} listRef={listRef} />}
 						<div ref={listRef} className="UiMenu-list">
+							<MenuScrollArrows containerRef={listRef} only="up" />
 							{groups.every((group) => group.items.length === 0) && <div className="UiSelect-empty">No choices</div>}
 							{groups.map((group, index) => (
 								<div key={`${group.group ?? ''}:${index}`} className="UiMenu-group">
@@ -484,6 +592,7 @@ function FallbackMenu({
 									})}
 								</div>
 							))}
+							<MenuScrollArrows containerRef={listRef} only="down" />
 						</div>
 					</div>,
 					document.body
@@ -535,7 +644,7 @@ export function UiSelect<T extends string>({
 					/>
 				</TldrawUiDropdownMenuTrigger>
 				<TldrawUiDropdownMenuContent side="bottom" align="start" sideOffset={4} alignOffset={0}>
-					<div onPointerDown={stopPointer} onWheel={(event) => event.stopPropagation()}>
+				<div data-menu-overflow-owned onPointerDown={stopPointer} onWheel={(event) => event.stopPropagation()}>
 						<SelectDropdownBody options={options} isOn={(option) => option.value === value} onPick={onChange} />
 					</div>
 				</TldrawUiDropdownMenuContent>
@@ -586,7 +695,7 @@ export function UiMultiSelect<T extends string>({
 					<SelectTrigger shown={shown} title={title} disabled={disabled} onPointerDown={onPointerDown} onFocus={onFocus} />
 				</TldrawUiDropdownMenuTrigger>
 				<TldrawUiDropdownMenuContent side="bottom" align="start" sideOffset={4} alignOffset={0}>
-					<div onPointerDown={stopPointer} onWheel={(event) => event.stopPropagation()}>
+				<div data-menu-overflow-owned onPointerDown={stopPointer} onWheel={(event) => event.stopPropagation()}>
 						<SelectDropdownBody
 							options={options}
 							isOn={(option) => values.includes(option.value)}
@@ -667,6 +776,91 @@ export const UiTextInput = forwardRef<HTMLInputElement, UiTextInputProps>(functi
 				onBlur?.()
 			}}
 			onFocus={onFocus}
+		/>
+	)
+})
+
+export interface UiGrowingInputProps {
+	value: string
+	onChange: (value: string) => void
+	placeholder?: string
+	mono?: boolean
+	onCommit?: (value: string) => void
+	className?: string
+	disabled?: boolean
+	title?: string
+	autoFocus?: boolean
+	onBlur?: () => void
+	onFocus?: () => void
+	onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void
+	onPointerDown?: (event: PointerEvent<HTMLTextAreaElement>) => void
+	/** How many lines the box can grow to before it scrolls instead (default 6). */
+	maxRows?: number
+}
+
+/**
+ * WP27 Part B: a single-line-semantics field (same value/onChange contract as `UiTextInput`,
+ * for a long URL, target, pattern, model id, …) that wraps and grows instead of overflowing.
+ * It is a `<textarea>` under the hood — `rows={1}` plus a JS resize on every value change, up
+ * to `maxRows` lines, then it scrolls — but the stored value stays single-line: a newline the
+ * browser inserts (Enter, paste, IME) is stripped right back out on the same `onChange`, so
+ * Shift+Enter has no special effect here (newlines aren't valid for this field) and plain Enter
+ * keeps its usual meaning (blur — the same "commit and defocus" plain `UiTextInput` already
+ * does), not "insert a line". Used inside a `WireField`/`WireFieldHeader` with `grow` set, so
+ * the row's own height follows the box instead of clipping it (see `fields.tsx`).
+ */
+export const UiGrowingInput = forwardRef<HTMLTextAreaElement, UiGrowingInputProps>(function UiGrowingInput(
+	{ value, onChange, placeholder, mono, onCommit, className, disabled, title, autoFocus, onBlur, onFocus, onKeyDown, onPointerDown, maxRows = 6 },
+	ref
+) {
+	const innerRef = useRef<HTMLTextAreaElement>(null)
+	const setRef = (el: HTMLTextAreaElement | null) => {
+		innerRef.current = el
+		if (typeof ref === 'function') ref(el)
+		else if (ref) ref.current = el
+	}
+	const resize = () => {
+		const el = innerRef.current
+		if (!el) return
+		el.style.height = 'auto'
+		el.style.height = `${el.scrollHeight}px`
+	}
+	useLayoutEffect(resize, [value])
+	return (
+		<textarea
+			ref={setRef}
+			rows={1}
+			className={classNames('UiInput', 'UiGrowingInput', mono && 'UiInput_mono', className)}
+			style={{ maxHeight: `calc(${maxRows} * 1.3em + 0.6em)` }}
+			value={value}
+			placeholder={placeholder}
+			disabled={disabled}
+			title={title}
+			autoFocus={autoFocus}
+			onPointerDown={(event) => {
+				stopPointer(event)
+				onPointerDown?.(event)
+			}}
+			onFocus={onFocus}
+			onKeyDown={(event) => {
+				stopKey(event)
+				onKeyDown?.(event)
+				if (event.defaultPrevented) return
+				if (event.nativeEvent.isComposing) return
+				// Plain Enter keeps a single-line input's usual meaning (commit + defocus, same
+				// as UiTextInput). Shift+Enter inserts a newline at the DOM level, same as any
+				// textarea — but this field's own onChange strips it straight back out, since a
+				// newline isn't a valid value here.
+				if (event.key === 'Enter' && !event.shiftKey) {
+					event.preventDefault()
+					event.currentTarget.blur()
+				}
+			}}
+			onChange={(event) => onChange(event.target.value.replace(/\r?\n/g, ''))}
+			onBlur={(event) => {
+				onCommit?.(event.currentTarget.value)
+				onBlur?.()
+			}}
 		/>
 	)
 })

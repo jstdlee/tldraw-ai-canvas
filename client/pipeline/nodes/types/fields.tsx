@@ -1,3 +1,4 @@
+import classNames from 'classnames'
 import { ReactElement, ReactNode, useEffect, useState } from 'react'
 import { TLShapeId, useEditor, useToasts, useValue } from 'tldraw'
 export { NodeMultiSelect, NodeSelect } from './NodeSelect'
@@ -232,6 +233,7 @@ export function WireField({
 	dataType = 'text',
 	hint,
 	children,
+	grow,
 }: {
 	shapeId: TLShapeId
 	fieldKey: string
@@ -239,11 +241,15 @@ export function WireField({
 	dataType?: PortDataType
 	hint?: ReactNode
 	children: ReactElement
+	/** WP27 Part B: the row holds a `UiGrowingInput` (or any other control taller than one
+	 * line) — lets the row's own height follow its content instead of the usual fixed row
+	 * height, and top-aligns the label/port with the control's first line. */
+	grow?: boolean
 }) {
 	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, fieldKey)
 	const { portId, port, sourceName } = useWireField(shapeId, fieldKey)
 	return (
-		<NodeRow ref={ref} className="WireField">
+		<NodeRow ref={ref} className={classNames('WireField', grow && 'WireField_grow')}>
 			<Port shapeId={shapeId} portId={portId} />
 			<NodePortLabel dataType={dataType}>{label}</NodePortLabel>
 			<div className="WireField-control">

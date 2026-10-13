@@ -90,6 +90,22 @@
 	font-family: var(--tl-font-mono);
 }
 
+/* WP27 Part B: wraps instead of overflowing, grows (via JS, see UiGrowingInput) up to its own
+   max-height, then scrolls. Lives inside a `.WireField_grow` row, which lets the row's height
+   follow it instead of clipping it. */
+.UiGrowingInput {
+	display: block;
+	resize: none;
+	overflow-y: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+	min-height: 1.3em;
+}
+
+.NodeRow textarea.UiGrowingInput {
+	height: auto;
+}
+
 .UiInput:focus,
 .UiTextArea:focus,
 .UiSelect-trigger.tlui-button:focus-visible {

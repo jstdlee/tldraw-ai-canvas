@@ -1,14 +1,19 @@
-import { FormEventHandler, useState } from 'react'
+import { FormEventHandler, useRef, useState } from 'react'
 import { Editor, useValue } from 'tldraw'
 import { AtIcon } from '../../shared/icons/AtIcon'
-import { BrainIcon } from '../../shared/icons/BrainIcon'
-import { ChevronDownIcon } from '../../shared/icons/ChevronDownIcon'
-import { getModelLabel, ModelSelect } from '../ai/aiConfig'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
 import { buildWithAI, gatherBuildScope } from '../pipeline/aiBuild'
+import { IconPlay, IconStop } from '../ui'
 import { ChatPlanEntry } from './chatPlan'
 import { ContextItemTag } from './ContextItemTag'
 import { SelectionTag } from './SelectionTag'
+
+/** WP28 Part C: grows the textarea to fit its content (up to the CSS max-height, which
+ * then scrolls), instead of a fixed-size box. */
+function autoGrow(el: HTMLTextAreaElement) {
+	el.style.height = 'auto'
+	el.style.height = el.scrollHeight + 'px'
+}
 
 /** For this one message, build with the selection, or draw — see the mode chip below. */
 type ChatMode = 'drawing' | 'building'
@@ -30,6 +35,7 @@ export function ChatInput({
 	const agent = useAgent()
 	const { editor } = agent
 	const [inputValue, setInputValue] = useState('')
+	const textareaElRef = useRef<HTMLTextAreaElement | null>(null)
 	const isGenerating = useValue('isGenerating', () => agent.requests.isGenerating(), [agent])
 
 	const isContextToolActive = useValue(
@@ -50,8 +56,6 @@ export function ChatInput({
 	const mode = forcedMode ?? autoMode
 	const [buildBusy, setBuildBusy] = useState(false)
 	const contextItems = useValue('contextItems', () => agent.context.getItems(), [agent])
-	const modelName = useValue('modelName', () => agent.modelName.getModelName(), [agent])
-	const modelLabel = useValue('model label', () => getModelLabel(modelName || null, 'agent'), [modelName])
 
 	const runBuild = async (goal: string) => {
 		const scope = gatherBuildScope(editor)
@@ -80,6 +84,7 @@ export function ChatInput({
 					e.preventDefault()
 					const text = inputValue
 					setInputValue('')
+					if (textareaElRef.current) textareaElRef.current.style.height = 'auto'
 					// An empty submit just cancels any running request (handleSubmit's own job) —
 					// nothing to build or draw, so the chat's mode does not apply.
 					if (text.trim() === '') {
@@ -140,12 +145,19 @@ export function ChatInput({
 				</div>
 
 				<textarea
-					ref={inputRef}
+					ref={(el) => {
+						inputRef.current = el
+						textareaElRef.current = el
+					}}
 					name="input"
 					autoComplete="off"
+					rows={1}
 					placeholder={mode === 'building' ? 'What should these cards do? (Enter to build)' : 'Ask, learn, brainstorm, draw'}
 					value={inputValue}
-					onInput={(e) => setInputValue(e.currentTarget.value)}
+					onInput={(e) => {
+						setInputValue(e.currentTarget.value)
+						autoGrow(e.currentTarget)
+					}}
 					onKeyDown={(e) => {
 						if (e.key === 'Enter' && !e.shiftKey) {
 							e.preventDefault()
@@ -159,24 +171,18 @@ export function ChatInput({
 					}}
 				/>
 				<span className="chat-actions">
-					<div className="chat-actions-left">
-						<div className="chat-model-select">
-							<div className="chat-model-select-label">
-								<BrainIcon /> {modelLabel}
-							</div>
-							<ModelSelect
-								capability="agent"
-								value={modelName}
-								onChange={(key) => agent.modelName.setModelName(key)}
-							/>
-							<ChevronDownIcon />
-						</div>
-					</div>
 					<button
 						className="chat-input-submit"
+						title={isGenerating && inputValue === '' ? 'Stop' : 'Send'}
 						disabled={(inputValue === '' && !isGenerating) || buildBusy}
 					>
-						{buildBusy ? '…' : isGenerating && inputValue === '' ? '◼' : '⬆'}
+						{buildBusy ? (
+							'…'
+						) : isGenerating && inputValue === '' ? (
+							<IconStop size={14} />
+						) : (
+							<IconPlay size={14} />
+						)}
 					</button>
 				</span>
 			</form>

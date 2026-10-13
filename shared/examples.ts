@@ -65,10 +65,6 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Canvas nodes, wires, and a local model.' } },
 		{ id: 'b', type: 'text_ai', x: 460, y: 0, props: { operation: 'summarize' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
-	step('llm-sum', 'Summarize', 'Summarize reads the prompt and writes a short note.', [
-		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'A small app for drawing and running node workflows offline.' } },
-		{ id: 'b', type: 'summarize', x: 460, y: 0 },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
 	step('llm-jev', 'JEV decision', 'A question about the prompt. JEV returns yes, no, or a score.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'The note is kind and short.' } },
 		{ id: 'b', type: 'jev', x: 460, y: 0 },
@@ -154,6 +150,48 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'n', fromPort: 'output', to: 'g', toPort: 'test' },
 		{ from: 'p', fromPort: 'output', to: 'g', toPort: 'input' },
 	]),
+	step('if-route-summary', 'Route long text to a summary', 'If the text is long, AI text summarizes it; a short text passes straight through.', [
+		{ id: 'p', type: 'prompt', x: 0, y: 0, props: { text: 'A long paragraph worth summarizing goes here, with several sentences of detail.' } },
+		{ id: 'g', type: 'if', x: 460, y: 0, props: { condition: 'gt', operand: '80' } },
+		{ id: 'len', type: 'text_tool', x: 0, y: 260, props: { op: 'count' } },
+		{ id: 'sum', type: 'text_ai', x: 920, y: -80, props: { operation: 'summarize' } },
+		{ id: 'out', type: 'output', x: 920, y: 160 },
+	], [
+		{ from: 'p', fromPort: 'output', to: 'len', toPort: 'input' },
+		{ from: 'len', fromPort: 'output', to: 'g', toPort: 'test' },
+		{ from: 'p', fromPort: 'output', to: 'g', toPort: 'input' },
+		{ from: 'g', fromPort: 'then', to: 'sum', toPort: 'input' },
+		{ from: 'g', fromPort: 'else', to: 'out', toPort: 'input' },
+	]),
+	step('if-threshold-flag', 'Flag numbers above a threshold', 'A number above the threshold takes "then"; otherwise "else".', [
+		{ id: 'n', type: 'number', x: 0, y: 0, props: { value: 120 } },
+		{ id: 'g', type: 'if', x: 460, y: 0, props: { condition: 'gt', operand: '100' } },
+		{ id: 'high', type: 'output', x: 920, y: -80 },
+		{ id: 'ok', type: 'output', x: 920, y: 160 },
+	], [
+		{ from: 'n', fromPort: 'output', to: 'g', toPort: 'input' },
+		{ from: 'g', fromPort: 'then', to: 'high', toPort: 'input' },
+		{ from: 'g', fromPort: 'else', to: 'ok', toPort: 'input' },
+	]),
+	step('if-in-for-each', 'If inside For each', 'Each item is tested; only the ones that pass reach "Result".', [
+		{ id: 'list', type: 'prompt', x: 0, y: 0, props: { text: 'apple\nbanana kiwi\ncherry' } },
+		{ id: 'loop', type: 'for_each', x: 460, y: 0, props: { noResult: 'skip' } },
+		{ id: 'g', type: 'if', x: 920, y: 0, props: { condition: 'contains', operand: ' ' } },
+	], [
+		{ from: 'list', fromPort: 'output', to: 'loop', toPort: 'list' },
+		{ from: 'loop', fromPort: 'item', to: 'g', toPort: 'input' },
+		{ from: 'g', fromPort: 'then', to: 'loop', toPort: 'result' },
+	]),
+	step('if-regex-check', 'Regex check', 'If the text matches the pattern, "then" carries it; otherwise "else" does.', [
+		{ id: 'p', type: 'prompt', x: 0, y: 0, props: { text: 'order-2024-0193' } },
+		{ id: 'g', type: 'if', x: 460, y: 0, props: { condition: 'regex', operand: '^order-\\d{4}-\\d+$' } },
+		{ id: 'valid', type: 'output', x: 920, y: -80 },
+		{ id: 'invalid', type: 'output', x: 920, y: 160 },
+	], [
+		{ from: 'p', fromPort: 'output', to: 'g', toPort: 'input' },
+		{ from: 'g', fromPort: 'then', to: 'valid', toPort: 'input' },
+		{ from: 'g', fromPort: 'else', to: 'invalid', toPort: 'input' },
+	]),
 	step('logic-gate', 'And / Or / Not', 'Two prompts go into And.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'yes' } },
 		{ id: 'b', type: 'prompt', x: 0, y: 200, props: { text: 'yes' } },
@@ -195,7 +233,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ id: 'page', type: 'prompt', x: 460, y: 0, props: { text: 'https://example.com' } },
 			{ id: 'fetch', type: 'http', x: 920, y: 0, props: { method: 'GET', url: '', extractText: true } },
 			{ id: 'clean', type: 'text_tool', x: 1380, y: 0, props: { op: 'trim' } },
-			{ id: 'summary', type: 'summarize', x: 0, y: 380 },
+			{ id: 'summary', type: 'text_ai', x: 0, y: 380, props: { operation: 'summarize' } },
 			{ id: 'draft', type: 'generate_text', x: 460, y: 380 },
 			{ id: 'join', type: 'prompt_concat', x: 920, y: 380, props: { separator: '\n\n' } },
 			{ id: 'count', type: 'code', x: 1380, y: 380, props: { inputCount: 1, code: WORD_COUNT } },
@@ -267,14 +305,25 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
-	step('url-summary', 'Summarize a page', 'Type www.wikipedia.org with no https. URL in adds it, fetches the page, and Summarize reads the text.', [
+	step('url-summary', 'Summarize a page', 'Type www.wikipedia.org with no https. URL in adds it, fetches the page, and AI text summarizes it.', [
 		{ id: 'a', type: 'url_in', x: 0, y: 0, props: { url: 'www.wikipedia.org', fetchBody: true } },
-		{ id: 'b', type: 'summarize', x: 460, y: 0 },
+		{ id: 'b', type: 'text_ai', x: 460, y: 0, props: { operation: 'summarize' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
 	step('web-search', 'Search the web', 'A prompt feeds Web search. Add a key in AI providers → Search providers (or on the card) first.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'latest open source AI model releases' } },
 		{ id: 'b', type: 'web_search', x: 460, y: 0, props: { provider: 'exa', count: 5 } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'query' }]),
+	step('agent-task', 'Run an agent task', 'Agent runs a task with a model that has the "agent" capability. Add a search provider or MCP server in AI providers to give it tools.', [
+		{ id: 'a', type: 'agent', x: 0, y: 0, props: { task: 'What is 2 + 2? Answer in one short sentence.' } },
+	], []),
+	step('html-preview', 'Preview HTML', 'A prompt holds a small HTML snippet. HTML preview renders it in a sandboxed iframe.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: '<button style="padding:8px 14px">Hello</button>' } },
+		{ id: 'b', type: 'html_preview', x: 460, y: 0 },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'text' }]),
+	step('html-form-cards', 'Click an option card', 'HTML form shows three option buttons and waits for a click, then Output shows the clicked value as JSON.', [
+		{ id: 'a', type: 'html_form', x: 0, y: 0 },
+		{ id: 'b', type: 'output', x: 560, y: 0 },
+	], [{ from: 'a', fromPort: 'json', to: 'b', toPort: 'input' }]),
 	step('video-autoplay', 'Video link', 'The prompt is the video URL. Turn on autoplay on the video node. The browser mutes autoplay.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4' } },
 		{ id: 'b', type: 'video', x: 460, y: 0, props: { autoplay: true } },
@@ -297,7 +346,7 @@ export const EXAMPLES: CanvasExample[] = [
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'prompt' }]),
 	step('url-in', 'A web address', 'URL in accepts www.example.com without https. Turn on Fetch to send the page text.', [
 		{ id: 'a', type: 'url_in', x: 0, y: 0, props: { url: 'www.example.com', fetchBody: true } },
-		{ id: 'b', type: 'summarize', x: 460, y: 0 },
+		{ id: 'b', type: 'text_ai', x: 460, y: 0, props: { operation: 'summarize' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
 	step('raw-model', 'Raw model call', 'Every setting is on the card: URL, model id, key, system prompt, temperature, thinking, max tokens.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Say hello in one line.' } },
@@ -383,7 +432,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ id: 'site', type: 'url_in', x: 460, y: 420, props: { url: 'www.example.com', fetchBody: false } },
 			{ id: 'file', type: 'file_in', x: 980, y: 420, props: { source: 'url', url: 'https://www.example.com', asText: 'text' } },
 			{ id: 'task', type: 'prompt', x: 1500, y: 420, props: { text: 'Say hello in one line.' } },
-			{ id: 'sum', type: 'summarize', x: 0, y: 840 },
+			{ id: 'sum', type: 'text_ai', x: 0, y: 840, props: { operation: 'summarize' } },
 			{ id: 'raw', type: 'raw_model', x: 460, y: 840, props: { url: 'http://127.0.0.1:11434/v1', model: 'llama3.2' } },
 		],
 		wires: [

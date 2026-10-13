@@ -6,6 +6,7 @@ import { AlignActionUtil } from '../actions/AlignActionUtil'
 import { BringToFrontActionUtil } from '../actions/BringToFrontActionUtil'
 import { ClearActionUtil } from '../actions/ClearActionUtil'
 import { CountShapesActionUtil } from '../actions/CountShapesActionUtil'
+import { WebSearchActionUtil } from '../actions/WebSearchActionUtil'
 import { CreateActionUtil } from '../actions/CreateActionUtil'
 import { DeleteActionUtil } from '../actions/DeleteActionUtil'
 import { DistributeActionUtil } from '../actions/DistributeActionUtil'
@@ -163,6 +164,8 @@ export const AGENT_MODE_DEFINITIONS = [
 
 			// External APIs
 			CountShapesActionUtil.type,
+			// WP31 Part E: filtered out in ModePartUtil.ts when no search provider is configured.
+			WebSearchActionUtil.type,
 
 			// Internal (required)
 			UnknownActionUtil.type,

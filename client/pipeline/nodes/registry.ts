@@ -18,9 +18,10 @@ import { CodeNodeDefinition } from './types/CodeNode'
 import { SubgraphNodeDefinition } from './types/SubgraphNode'
 import { removedNodeDefinition } from './types/RemovedNode'
 import { JevNodeDefinition } from './types/JevNode'
-import { NetToolNodeDefinition, RandomNodeDefinition, SummarizeNodeDefinition } from './types/UtilityNodes'
+import { NetToolNodeDefinition, RandomNodeDefinition } from './types/UtilityNodes'
 import { DownloadNodeDefinition, HttpNodeDefinition, SaveNodeDefinition } from './types/WebNodes'
 import { WebSearchNodeDefinition } from './types/WebSearchNode'
+import { AgentNodeDefinition } from './types/AgentNode'
 import { TableViewNodeDefinition } from './types/TableViewNode'
 import { PostgresNodeDefinition } from './types/PostgresNode'
 import { GenerateTextNodeDefinition } from './types/GenerateTextNode'
@@ -36,6 +37,7 @@ import { ImageGenNodeDefinition } from './types/ImageGenNode'
 import { ModelSourceNodeDefinition } from './types/ModelSourceNode'
 import { RawModelNodeDefinition } from './types/RawModelNode'
 import { OpenRouterNodeDefinition, SleepNodeDefinition, VideoNodeDefinition } from './types/ToolNodes'
+import { HtmlFormNodeDefinition, HtmlPreviewNodeDefinition } from './types/HtmlPreviewNode'
 import type { NodeDefinition, NodeDefinitionConstructor } from './types/shared'
 import {
 	getNodeDefinition as getNodeDefinitionFromStore,
@@ -69,12 +71,13 @@ export const NodeDefinitions = {
 	camera: CameraNodeDefinition,
 	random: RandomNodeDefinition,
 	capture: CaptureNodeDefinition,
+	html_form: HtmlFormNodeDefinition,
 	// Text & AI
 	text_ai: TextAINodeDefinition,
-	summarize: SummarizeNodeDefinition,
 	text_tool: TextToolNodeDefinition,
 	generate_text: GenerateTextNodeDefinition,
 	chat: ChatNodeDefinition,
+	agent: AgentNodeDefinition,
 	model_source: ModelSourceNodeDefinition,
 	prompt_concat: PromptConcatNodeDefinition,
 	// Image (runs in the browser)
@@ -107,6 +110,7 @@ export const NodeDefinitions = {
 	profile: ProfileNodeDefinition,
 	database: DatabaseNodeDefinition,
 	table_view: TableViewNodeDefinition,
+	html_preview: HtmlPreviewNodeDefinition,
 	openrouter: OpenRouterNodeDefinition,
 	raw_model: RawModelNodeDefinition,
 	video: VideoNodeDefinition,
@@ -139,6 +143,9 @@ const RemovedNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {
 	agent_run: removedNodeDefinition('agent_run', 'Local agent'),
 	local_tool: removedNodeDefinition('local_tool', 'Local tool'),
 	sqlite_in: removedNodeDefinition('sqlite_in', 'SQLite import'),
+	// WP27 Part E: duplicated AI text / Generate text. Old canvases keep loading; the card is
+	// hidden from the library, search, insert menus and the AI catalog.
+	summarize: removedNodeDefinition('summarize', 'Summarize'),
 }
 
 const AllNodeDefinitions: Record<string, NodeDefinitionConstructor<any>> = {

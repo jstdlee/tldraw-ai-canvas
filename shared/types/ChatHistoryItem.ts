@@ -9,6 +9,7 @@ export type ChatHistoryItem =
 	| ChatHistoryActionItem
 	| ChatHistoryPromptItem
 	| ChatHistoryContinuationItem
+	| ChatHistoryErrorItem
 
 /**
  * A prompt from a user, another agent, or the agent itself.
@@ -38,4 +39,16 @@ export interface ChatHistoryActionItem {
 export interface ChatHistoryContinuationItem {
 	type: 'continuation'
 	data: JsonValue[]
+}
+
+/**
+ * WP28 Part A: a request that failed before the model produced any action
+ * (a dead model id, a provider that refused the request, an empty or
+ * non-JSON reply, or a network error). Without this, a failed request left
+ * the user's prompt bubble with nothing after it — "no proper reply" — because
+ * the error only ever reached a toast, not the chat thread.
+ */
+export interface ChatHistoryErrorItem {
+	type: 'error'
+	message: string
 }

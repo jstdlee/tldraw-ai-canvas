@@ -46,8 +46,8 @@ test.describe('wire-drop picker: picking a card places it', () => {
 
 	test('clicking a result row creates and wires the card', async ({ page }) => {
 		const src = await dropWireFromPrompt(page)
-		await page.keyboard.type('summ')
-		await page.locator('.NodeSearchPicker').getByText('Summarize', { exact: false }).first().click()
+		await page.keyboard.type('ai text')
+		await page.locator('.NodeSearchPicker').getByText('AI text', { exact: false }).first().click()
 		await expect.poll(async () => (await state(page, src)).types.length).toBe(1)
 		expect((await state(page, src)).wired).toBe(1)
 	})

@@ -109,7 +109,19 @@ export async function unwire(page: Page, connectionId: string): Promise<void> {
 /** Zoom to fit everything on the page, so later clicks on a card land inside the viewport. */
 export async function zoomToFit(page: Page): Promise<void> {
 	await page.evaluate(() => {
-		(window as any).editor.zoomToFit()
+		// WP27: an instant jump, not tldraw's default animated transition — without this, a
+		// test that reads a port/shape's boundingBox() right after zoomToFit() (as several do,
+		// to then drive page.mouse directly) can capture a mid-animation position and then drag
+		// from a now-stale pixel once the camera finishes settling a moment later. A taller card
+		// (a bigger zoom/pan delta to fit) makes the animation longer and the race easier to
+		// hit, which is what exposed this — but any card's size change could have, since nothing
+		// here ever waited for the animation to finish.
+		(window as any).editor.zoomToFit({ animation: { duration: 0 } })
+		// Even an instant camera move only takes effect in the DOM on the next paint (tldraw
+		// applies the camera transform via a rAF-driven render tick, not synchronously) — wait
+		// one so a boundingBox() read right after this resolves reflects the real, final
+		// position instead of the pre-zoom one.
+		return new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 	})
 }
 
@@ -124,6 +136,20 @@ export async function nodeProps<T = Record<string, unknown>>(page: Page, id: str
 		const editor = (window as any).editor
 		return editor.getShape(id)?.props?.node ?? null
 	}, id) as Promise<T>
+}
+
+/** A card's run status (`{ status, message, ms }` from `nodeRunState.ts`), via the dev-server
+ * dynamic import trick `runNode` also uses — the per-shape atom isn't on the shape itself. */
+export async function getNodeRun(
+	page: Page,
+	id: string
+): Promise<{ status: string; message?: string; ms?: number } | undefined> {
+	return page.evaluate(async (id: string) => {
+		// @ts-expect-error dynamic import of an app source file, only resolvable at runtime
+		// by the dev server — see helpers.ts's `runNode` for why.
+		const mod = await import('/client/pipeline/execution/nodeRunState.ts')
+		return mod.getNodeRun((window as any).editor, id)
+	}, id)
 }
 
 /** Merge a patch into a node's props, the same way the app's own `updateNode` does it (which
@@ -148,6 +174,23 @@ export async function setNodeProps(page: Page, id: string, patch: Record<string,
  * server, the same trick the WP20 guide suggests for `startExecution`) is. */
 export async function runNode(page: Page, id: string, timeout = 15_000): Promise<void> {
 	const button = nodeLocator(page, id).locator('.NodeShape-footer > button').first()
+	// WP27: a card's height isn't fixed — a result preview, a growing field, an expanded
+	// section can all make it taller after the page's earlier (one-time) zoomToFit ran,
+	// pushing the footer below the viewport (e.g. DataPipe gains ~176px of preview table
+	// height after its first run). Only re-fit when the button isn't already fully on
+	// screen — zoomToBounds on just this one (possibly small) shape every single call would
+	// over-zoom a small card, which can shove its own content under the fixed bottom toolbar.
+	const viewport = page.viewportSize()
+	const box = await button.boundingBox()
+	const onScreen =
+		!!box && !!viewport && box.y >= 0 && box.x >= 0 && box.y + box.height <= viewport.height && box.x + box.width <= viewport.width
+	if (!onScreen) {
+		await page.evaluate((id) => {
+			const editor = (window as any).editor
+			const bounds = editor.getShapePageBounds(id)
+			if (bounds) editor.zoomToBounds(bounds, { animation: { duration: 0 } })
+		}, id)
+	}
 	await button.click()
 	const deadline = Date.now() + timeout
 	for (;;) {
@@ -208,4 +251,22 @@ export async function addCardFromLibrary(page: Page, title: string): Promise<str
 	const id = await selectedShapeId(page)
 	if (!id) throw new Error(`addCardFromLibrary(${title}): nothing selected after clicking the item`)
 	return id
+}
+
+/** Wait for `executionState.runningGraph` to go idle (same signal `runNode` polls), without
+ * clicking anything first — for a card whose run is started some other way (e.g. a card like
+ * HTML form that only starts its run once the user interacts with its own preview). */
+export async function waitForRunIdle(page: Page, timeout = 15_000): Promise<void> {
+	const deadline = Date.now() + timeout
+	for (;;) {
+		const running = await page.evaluate(async () => {
+			// @ts-expect-error dynamic import of an app source file, only resolvable at runtime
+			// by the dev server — see helpers.ts's `runNode` for why.
+			const mod = await import('/client/pipeline/execution/executionState.ts')
+			return mod.executionState.get((window as any).editor).runningGraph !== null
+		})
+		if (!running) return
+		if (Date.now() > deadline) throw new Error(`waitForRunIdle: still running after ${timeout}ms`)
+		await page.waitForTimeout(50)
+	}
 }

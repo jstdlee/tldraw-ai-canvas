@@ -26,7 +26,6 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	generate_text: { inn: ['input', 'prompt', 'model', 'system', 'params'], out: ['output'] },
 	chat: { inn: ['parent', 'attach', 'model', 'system', 'params'], out: ['output'] },
 	text_ai: { inn: ['input', 'model', 'system', 'params'], out: ['output'] },
-	summarize: { inn: ['input'], out: ['output'] },
 	model_source: { inn: [], out: ['model'] },
 	jev: { inn: ['context', 'question', 'input'], out: ['output', 'probs', 'final', 'yes', 'no'] },
 	decision_switch: { inn: ['decision', 'value'], out: ['yes', 'no', 'unsure', 'other'] },
@@ -61,6 +60,8 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	image_gen: { inn: ['prompt', 'image', 'model', 'system', 'params'], out: ['output', 'images'] },
 	web_search: { inn: ['query'], out: ['output', 'results', 'urls', 'answer'] },
 	table_view: { inn: ['data'], out: ['output', 'json'] },
+	html_preview: { inn: ['text', 'html', 'css', 'js'], out: ['output'] },
+	html_form: { inn: ['text', 'html', 'css', 'js'], out: ['output', 'json'] },
 }
 
 describe('llm usage', () => {

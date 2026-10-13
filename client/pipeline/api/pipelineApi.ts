@@ -285,3 +285,58 @@ export interface SearchResult {
 export function apiSearch(params: SearchParams, signal?: AbortSignal) {
 	return postJson<SearchResult>('/api/search', params, signal)
 }
+
+// --- WP31: Agent card -------------------------------------------------------
+
+export interface AgentRunParams {
+	task: string
+	context?: string
+	model?: string
+	search?: string[]
+	mcpServers?: string[]
+	skills?: string[]
+	systemPrompt?: string
+	maxSteps?: number
+}
+
+/** One event from `POST /api/agent/run` (shape mirrors `server/agent/types.ts`'s `AgentRunEvent`). */
+export type AgentRunEvent =
+	| { type: 'step_start'; step: number }
+	| { type: 'tool_call'; step: number; toolCallId: string; name: string; argsPreview: string }
+	| { type: 'tool_result'; step: number; toolCallId: string; name: string; resultPreview: string; isError: boolean }
+	| { type: 'text_delta'; step: number; delta: string }
+	| { type: 'final'; output: string; steps: unknown[] }
+	| { type: 'error'; message: string; steps: unknown[] }
+
+/** Agent card: streams SSE progress events from the pi-agent-core run on the server. */
+export async function* apiAgentRun(params: AgentRunParams, signal?: AbortSignal): AsyncGenerator<AgentRunEvent> {
+	const res = await fetch('/api/agent/run', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(params),
+		signal,
+	})
+	if (!res.body) {
+		const err = await res.json().catch(() => ({ error: res.statusText }))
+		throw new Error((err as { error?: string }).error ?? 'Agent run failed')
+	}
+	const reader = res.body.getReader()
+	const decoder = new TextDecoder()
+	let buffer = ''
+	try {
+		while (true) {
+			const { value, done } = await reader.read()
+			if (done) break
+			buffer += decoder.decode(value, { stream: true })
+			const chunks = buffer.split('\n\n')
+			buffer = chunks.pop() || ''
+			for (const chunk of chunks) {
+				const match = chunk.match(/^data: (.+)$/m)
+				if (!match) continue
+				yield JSON.parse(match[1]) as AgentRunEvent
+			}
+		}
+	} finally {
+		reader.releaseLock()
+	}
+}

@@ -301,6 +301,15 @@ function buildHistoryItemMessage(item: ChatHistoryItem, priority: number): Agent
 				priority,
 			}
 		}
+		case 'error': {
+			// WP28 Part A: let the model see that its last attempt failed, so a scheduled
+			// continuation (or the user's next message) isn't working from a gap in the history.
+			return {
+				role: 'assistant',
+				content: [{ type: 'text', text: `[ERROR]: ${item.message}` }],
+				priority,
+			}
+		}
 	}
 }
 

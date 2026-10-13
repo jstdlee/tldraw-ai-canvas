@@ -4,7 +4,8 @@ import { sqlHasWrite } from './sqlStatements'
  * Which cards never use the input-hash run cache (WP14 Part B): side effects
  * (http, download, save, camera, capture), non-determinism (random), time
  * (sleep, and any formula calling today()), and calls whose whole point is a
- * fresh answer each time (chat, image_gen).
+ * fresh answer each time (chat, image_gen, html_form — it waits for a new user
+ * submission on every run).
  */
 export const NO_CACHE_NODE_TYPES: ReadonlySet<string> = new Set([
 	'http',
@@ -16,6 +17,7 @@ export const NO_CACHE_NODE_TYPES: ReadonlySet<string> = new Set([
 	'sleep',
 	'chat',
 	'image_gen',
+	'html_form',
 ])
 
 /** True when a Database card's SQL (the field, or the wired override already applied to

@@ -4,12 +4,13 @@ import { runTextTool, TEXT_TOOL_OPS, TextToolOp } from '../../../../shared/textT
 import { PromptConcatIcon } from '../../components/icons/PromptConcatIcon'
 import {
 	getNodeRowHeightPx,
+	GROW_FIELD_EXTRA_PX,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
 } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiTextInput } from '../../../ui'
+import { UiGrowingInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect, WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -55,8 +56,12 @@ export class TextToolNodeDefinition extends NodeDefinition<TextToolNode> {
 	getDefault(): TextToolNode {
 		return { type: 'text_tool', op: 'template', a: '{{input}}', b: '', lastResultText: null, error: null }
 	}
-	getBodyHeightPx(shape: NodeShape) {
-		return getNodeRowHeightPx(shape.props.fontSize) * 5
+	getBodyHeightPx(shape: NodeShape, node: TextToolNode) {
+		// WP27 Part B: Param A/B wrap/grow instead of a single-line cutoff (e.g. a template
+		// string, a long pattern) — reserve a max-rows cap for each one this op actually shows.
+		const op = TEXT_TOOL_OPS.find((o) => o.id === node.op) ?? TEXT_TOOL_OPS[0]
+		const growExtra = (op.a ? GROW_FIELD_EXTRA_PX : 0) + (op.b ? GROW_FIELD_EXTRA_PX : 0)
+		return getNodeRowHeightPx(shape.props.fontSize) * 5 + growExtra
 	}
 	getPorts(shape: NodeShape, node: TextToolNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -122,9 +127,9 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 				</NodeSelect>
 			</WireField>
 			{(['a', 'b'] as const).map((key) => (
-				<WireField key={key} shapeId={shape.id} fieldKey={key} label={key === 'a' ? 'Param A' : 'Param B'}>
+				<WireField key={key} shapeId={shape.id} fieldKey={key} label={key === 'a' ? 'Param A' : 'Param B'} grow={!!op[key]}>
 					{op[key] ? (
-						<UiTextInput placeholder={op[key]} value={node[key]} onChange={(next) => set({ [key]: next })} />
+						<UiGrowingInput placeholder={op[key]} value={node[key]} onChange={(next) => set({ [key]: next })} />
 					) : (
 						<span className="NodeRow-disconnected">{key === 'a' ? 'no options' : ''}</span>
 					)}

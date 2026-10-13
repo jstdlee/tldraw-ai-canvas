@@ -442,6 +442,26 @@ export const TABLE_OPS: OpSpec[] = [
 		params: [{ field: 'with', label: 'Count', kind: 'number', required: true }],
 	},
 	{
+		id: 'skip_first',
+		label: 'Skip first N rows',
+		group: 'Rows',
+		description: 'Skips the first N data rows after the header (default 1).',
+		params: [{ field: 'with', label: 'Count', kind: 'number', placeholder: '1' }],
+	},
+	{
+		id: 'skip_regex',
+		label: 'Skip rows matching',
+		group: 'Rows',
+		description: 'Removes rows where a column — or any cell when none is chosen — matches a regular expression.',
+		params: [
+			{ field: 'pattern', label: 'Pattern', kind: 'regex', required: true },
+			{ field: 'column', label: 'Column', kind: 'column', hint: 'empty = any cell' },
+			// Reuses the generic 'totals' boolean slot (Pivot's own "Add totals" meaning doesn't
+			// apply here — every op keeps its own meaning for the shared job fields).
+			{ field: 'totals', label: 'Case-insensitive', kind: 'boolean' },
+		],
+	},
+	{
 		id: 'replicate',
 		label: 'Repeat rows',
 		group: 'Rows',
@@ -828,6 +848,27 @@ export function runTable(text: string, job: TableJob, second?: string): string {
 		const n = Math.trunc(Number(job.with))
 		if (!Number.isFinite(n) || n === 0) throw new Error('First N rows: give a non-zero count')
 		table = { headers: table.headers, rows: n > 0 ? table.rows.slice(0, n) : table.rows.slice(n) }
+	} else if (op === 'skip_first') {
+		const raw = (job.with ?? '').trim()
+		const n = raw === '' ? 1 : Math.trunc(Number(raw))
+		if (!Number.isFinite(n) || n < 0) throw new Error('Skip first N rows: give a whole number of 0 or more')
+		table = { headers: table.headers, rows: table.rows.slice(n) }
+	} else if (op === 'skip_regex') {
+		if (!job.pattern) throw new Error('Skip rows matching: give a pattern')
+		let regex: RegExp
+		try {
+			regex = new RegExp(job.pattern, job.totals ? 'i' : '')
+		} catch (error) {
+			throw new Error(`Skip rows matching: invalid pattern: ${(error as Error).message}`)
+		}
+		const index = job.column ? indexOf(table, job.column) : -1
+		table = {
+			headers: table.headers,
+			rows: table.rows.filter((row) => {
+				if (index >= 0) return !regex.test(row[index] ?? '')
+				return !row.some((cell) => regex.test(cell ?? ''))
+			}),
+		}
 	} else if (op === 'replicate') {
 		const n = Math.trunc(Number(job.with))
 		if (!Number.isFinite(n) || n < 1) throw new Error('Repeat rows: give a count of at least 1')

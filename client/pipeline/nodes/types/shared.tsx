@@ -147,6 +147,11 @@ export const NodeRow = forwardRef<
 
 /**
  * A label for a port row, displayed next to the port.
+ *
+ * WP27 Part B: every row's label sits in a fixed-width column (CSS, `.NodePortLabel`) so a card
+ * reads as a steady two-column layout even when one row's label is much longer than the rest —
+ * a long one is ellipsised and gets its full text as a `title` tooltip instead of pushing the
+ * row's control out of line with the others.
  */
 export function NodePortLabel({
 	children,
@@ -156,7 +161,7 @@ export function NodePortLabel({
 	dataType: PortDataType
 }) {
 	return (
-		<span className="NodePortLabel" style={{ color: PORT_TYPE_COLORS[dataType] }}>
+		<span className="NodePortLabel" style={{ color: PORT_TYPE_COLORS[dataType] }} title={typeof children === 'string' ? children : undefined}>
 			{children}
 		</span>
 	)

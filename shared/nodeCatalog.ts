@@ -18,7 +18,6 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	generate_text: { in: ['input', 'prompt', 'model', 'system', 'params'], out: ['output'], fields: ['model', 'system', 'promptText'] },
 	chat: { in: ['parent', 'attach', 'model', 'system', 'params'], out: ['output'], fields: ['userMessage', 'model', 'system'] },
 	model_source: { in: [], out: ['model', 'modelId', 'baseURL'], fields: ['baseURL', 'keyRef', 'model', 'filter', 'kind'] },
-	summarize: { in: ['input'], out: ['output'], fields: ['focus', 'model', 'system'] },
 	jev: { in: ['context', 'question', 'input'], out: ['output', 'probs', 'final'], fields: ['kind', 'question', 'options', 'filter'] },
 	decision_switch: {
 		in: ['decision', 'value'],
@@ -66,7 +65,22 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 		out: ['output', 'results', 'urls', 'answer'],
 		fields: ['provider', 'query', 'count', 'tavilyDepth', 'tavilyIncludeAnswer', 'exaIncludeText', 'keyRef'],
 	},
+	agent: {
+		in: ['context', 'task', 'model'],
+		out: ['output', 'steps'],
+		fields: ['model', 'task', 'search', 'mcpServers', 'skills', 'systemPrompt', 'maxSteps'],
+	},
 	table_view: { in: ['data'], out: ['output', 'json'], fields: ['text'] },
+	html_preview: {
+		in: ['text', 'html', 'css', 'js'],
+		out: ['output'],
+		fields: ['text', 'html', 'css', 'js', 'allowNetwork', 'heightPx'],
+	},
+	html_form: {
+		in: ['text', 'html', 'css', 'js'],
+		out: ['output', 'json'],
+		fields: ['text', 'html', 'css', 'js', 'allowNetwork', 'heightPx'],
+	},
 }
 
 export function catalogPrompt(): string {

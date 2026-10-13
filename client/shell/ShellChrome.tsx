@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { DefaultColorStyle, Editor, TLDefaultColorStyle, TLShapeId, useActions, useEditor, useValue } from 'tldraw'
 import { FEATURE_ROWS } from '../../shared/featureList'
 import { getNodeDefinitions, NodeType } from '../pipeline/nodes/nodeTypes'
@@ -9,7 +9,8 @@ import { CardDoc, getCardDocs, searchCards } from '../../shared/cardSearch'
 import { readPickerRecency, recordPick } from '../../shared/pickerRank'
 import { PickerRow } from '../pipeline/components/OnCanvasNodePicker'
 import { useJevRerank } from '../pipeline/components/useJevRerank'
-import { IconJevMark, IconSearch, UiTextInput } from '../ui'
+import { IconGroup, IconJevMark, IconGlobe, IconSearch, IconSidebarCollapse, UiTextInput } from '../ui'
+import { initNativeMenuScrollArrows } from '../ui/nativeMenuScrollArrows'
 import {
 	$backup,
 	$colorChordOpen,
@@ -60,6 +61,12 @@ function applyChordColor(editor: Editor, color: string) {
 export function ShellChrome() {
 	const editor = useEditor()
 	const actions = useActions()
+
+	// WP27 Part A: scroll arrows for tldraw's own context menu / Insert submenus. Idempotent and
+	// DOM-watcher based (see nativeMenuScrollArrows.ts) since those menus aren't our React tree.
+	useEffect(() => {
+		initNativeMenuScrollArrows()
+	}, [])
 
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
@@ -237,6 +244,37 @@ function useSelectedCardTitle(editor: Editor): string {
 }
 
 /**
+ * WP27 Part C: a palette row for a feature/tool action (Find, Map view, Features, Collapse
+ * library) — the same icon/title/hint look as `PickerRow`'s card rows, plus an optional
+ * keyboard shortcut on the right, so the palette's first rows match the rest instead of
+ * being bare `<button>` text.
+ */
+function CommandRow({
+	icon,
+	label,
+	hint,
+	shortcut,
+	onClick,
+}: {
+	icon: ReactNode
+	label: string
+	hint?: string
+	shortcut?: string
+	onClick: () => void
+}) {
+	return (
+		<button type="button" className="NodeSearchPicker-row" onClick={onClick}>
+			<span className="NodeSearchPicker-row-icon">{icon}</span>
+			<span className="NodeSearchPicker-row-text">
+				<span className="NodeSearchPicker-row-title">{label}</span>
+				{hint && <span className="NodeSearchPicker-row-desc">{hint}</span>}
+			</span>
+			{shortcut && <span className="NodeSearchPicker-row-shortcut">{shortcut}</span>}
+		</button>
+	)
+}
+
+/**
  * Ctrl/Cmd+P: features, tools and, in an "Insert" section, every card from the one
  * search engine (shared/cardSearch.ts) — the same ranking the library and the wire-drop
  * picker use. Ctrl/Cmd+Shift+I / "/" open the narrower insert-mode palette instead
@@ -247,12 +285,15 @@ function CommandPalette({ editor }: { editor: Editor }) {
 	const [query, setQuery] = useState('')
 	const cardDocs = useVisibleCardDocs(editor)
 
+	// WP27 Part C: these rows render with the same look as every other palette row
+	// (CommandRow below, which shares PickerRow's icon/title/hint/shortcut layout) instead of
+	// their own bare-button markup.
 	const tools = useMemo(
 		() => [
-			{ id: 'find', label: 'Find on canvas', run: () => $findOpen.set(true) },
-			{ id: 'map', label: 'Map view', run: () => $mapOpen.set(!$mapOpen.get()) },
-			{ id: 'features', label: 'Features compared with tldraw', run: () => $featuresOpen.set(true) },
-			{ id: 'library', label: 'Collapse node library', run: () => $libraryRail.set(!$libraryRail.get()) },
+			{ id: 'find', label: 'Find on canvas', hint: 'Search text and labels on this canvas', shortcut: 'Ctrl F', icon: <IconSearch size={15} />, run: () => $findOpen.set(true) },
+			{ id: 'map', label: 'Map view', hint: 'See every shape and pan by clicking', icon: <IconGlobe size={15} />, run: () => $mapOpen.set(!$mapOpen.get()) },
+			{ id: 'features', label: 'Features compared with tldraw', hint: 'What this app adds over plain tldraw', icon: <IconGroup size={15} />, run: () => $featuresOpen.set(true) },
+			{ id: 'library', label: 'Collapse node library', hint: 'Toggle the card library drawer', shortcut: 'Shift B', icon: <IconSidebarCollapse size={15} />, run: () => $libraryRail.set(!$libraryRail.get()) },
 		],
 		[]
 	)
@@ -298,16 +339,17 @@ function CommandPalette({ editor }: { editor: Editor }) {
 				/>
 				<div className="Palette-list">
 					{matchedTools.map((item) => (
-						<button
+						<CommandRow
 							key={item.id}
-							type="button"
+							icon={item.icon}
+							label={item.label}
+							hint={item.hint}
+							shortcut={item.shortcut}
 							onClick={() => {
 								item.run()
 								$paletteOpen.set(false)
 							}}
-						>
-							{item.label}
-						</button>
+						/>
 					))}
 					{cardResults.length > 0 && (
 						<div className="NodeSearchPicker-section">

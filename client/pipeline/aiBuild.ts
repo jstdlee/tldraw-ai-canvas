@@ -100,7 +100,7 @@ Reply with JSON only, in this shape:
 {"summary":"one sentence","add":[{"ref":"n1","type":"prompt","props":{"text":"…"},"label":"optional title"}],"update":[{"id":"<existing node id>","props":{"…":"…"},"label":"optional"}],"wires":[{"from":"n1","fromPort":"output","to":"n2","toPort":"input"}],"unwire":[{"to":"<existing node id>","toPort":"<port id>"}],"notes":["anything only a person can do"],"arrange":"tidy"}
 
 Example 1 — goal "fetch https://example.com and summarise it", nothing selected:
-{"summary":"Fetch the page, then summarise it","add":[{"ref":"fetch","type":"http","props":{"method":"GET","url":"https://example.com"}},{"ref":"sum","type":"summarize","props":{"length":"short","format":"bullets"}}],"update":[],"wires":[{"from":"fetch","fromPort":"output","to":"sum","toPort":"input"}],"unwire":[],"notes":[],"arrange":"tidy"}
+{"summary":"Fetch the page, then summarise it","add":[{"ref":"fetch","type":"http","props":{"method":"GET","url":"https://example.com"}},{"ref":"sum","type":"text_ai","props":{"operation":"summarize"}}],"update":[],"wires":[{"from":"fetch","fromPort":"output","to":"sum","toPort":"input"}],"unwire":[],"notes":[],"arrange":"tidy"}
 
 Example 2 — goal "filter rows where score > 3 and chart score by name", selected: a Prompt (csv text), a DataPipe ("table", op currently "select"), and a Chart:
 {"summary":"Filter the table to score > 3, then chart score by name","add":[],"update":[{"id":"pipe1","props":{"op":"filter","column":"score","as":">","with":"3"}},{"id":"chart1","props":{"kind":"bar","xCol":"name","yCol":"score"}}],"wires":[{"from":"prompt1","fromPort":"output","to":"pipe1","toPort":"data"},{"from":"pipe1","fromPort":"output","to":"chart1","toPort":"data"}],"unwire":[],"notes":[],"arrange":"tidy"}`

@@ -62,11 +62,6 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'One turn of a branching chat conversation with an LLM.',
 		keywords: ['ai', 'chat', 'conversation', 'message', 'llm'],
 	},
-	summarize: {
-		title: 'Summarize',
-		description: 'Summarizes text, a URL, an image or a video with an LLM.',
-		keywords: ['ai', 'summary', 'tldr', 'bullets', 'llm'],
-	},
 	jev: {
 		title: 'JEV decision',
 		description: 'Asks a judge model a yes/no, multiple-choice, or scored question and returns probabilities.',
@@ -232,9 +227,24 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'Searches the web with Exa, Tavily, or Brave and returns a list of results.',
 		keywords: ['web', 'search', 'exa', 'tavily', 'brave', 'google', 'results', 'find'],
 	},
+	agent: {
+		title: 'Agent',
+		description: 'Runs a task with an LLM agent that can search the web, call MCP tools, and read skills.',
+		keywords: ['agent', 'mcp', 'tool', 'search', 'skill', 'autonomous', 'task'],
+	},
 	table_view: {
 		title: 'Table view',
 		description: 'Shows a table as a sortable, filterable grid, with a row count and Copy as CSV.',
 		keywords: ['table', 'view', 'grid', 'sort', 'filter', 'csv', 'rows', 'spreadsheet'],
+	},
+	html_preview: {
+		title: 'HTML preview',
+		description: 'Renders HTML/CSS/JS (a full page, a fragment, or LLM output with fenced code blocks) in a sandboxed preview.',
+		keywords: ['html', 'preview', 'css', 'js', 'javascript', 'sandbox', 'iframe', 'render', 'webpage'],
+	},
+	html_form: {
+		title: 'HTML form',
+		description: 'Same sandboxed preview as HTML preview, but waits for a form submit or a button click and outputs it as JSON.',
+		keywords: ['html', 'form', 'button', 'click', 'submit', 'options', 'cards', 'choice', 'sandbox', 'iframe'],
 	},
 }

@@ -223,3 +223,40 @@ describe('Pivot totals and unpivot (WP11 Part D)', () => {
 		expect(out).toBe('name,quarter,score\nAda,q1,3\nAda,q2,5\nLin,q1,4\nLin,q2,6')
 	})
 })
+
+describe('WP27 Part F: DataPipe skip rows', () => {
+	it('skip_first defaults to 1 row when "with" is empty', () => {
+		expect(runTable(CSV, job({ op: 'skip_first' }))).toBe('name,city,score\nLin,Oslo,5\nBea,Paris,7')
+	})
+
+	it('skip_first skips N rows', () => {
+		expect(runTable(CSV, job({ op: 'skip_first', with: '2' }))).toBe('name,city,score\nBea,Paris,7')
+	})
+
+	it('skip_first rejects a negative or non-numeric count', () => {
+		expect(() => runTable(CSV, job({ op: 'skip_first', with: '-1' }))).toThrow()
+		expect(() => runTable(CSV, job({ op: 'skip_first', with: 'abc' }))).toThrow()
+	})
+
+	it('skip_regex removes rows where any cell matches, when no column is chosen', () => {
+		expect(runTable(CSV, job({ op: 'skip_regex', pattern: 'Paris' }))).toBe('name,city,score\nLin,Oslo,5')
+	})
+
+	it('skip_regex can target one column', () => {
+		expect(runTable(CSV, job({ op: 'skip_regex', pattern: '^A', column: 'name' }))).toBe('name,city,score\nLin,Oslo,5\nBea,Paris,7')
+	})
+
+	it('skip_regex is case-sensitive by default, case-insensitive with the flag', () => {
+		expect(runTable(CSV, job({ op: 'skip_regex', pattern: 'ada', column: 'name' }))).toBe(
+			'name,city,score\nAda,Paris,3\nLin,Oslo,5\nBea,Paris,7'
+		)
+		expect(runTable(CSV, job({ op: 'skip_regex', pattern: 'ada', column: 'name', totals: true }))).toBe(
+			'name,city,score\nLin,Oslo,5\nBea,Paris,7'
+		)
+	})
+
+	it('skip_regex requires a pattern and surfaces a clear error for an invalid one', () => {
+		expect(() => runTable(CSV, job({ op: 'skip_regex' }))).toThrow(/pattern/i)
+		expect(() => runTable(CSV, job({ op: 'skip_regex', pattern: '(' }))).toThrow(/invalid pattern/i)
+	})
+})

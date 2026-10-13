@@ -1,26 +1,15 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
-import { normalizeUrl } from '../../../../shared/contentKind'
 import { T, useEditor } from 'tldraw'
-import { ModelSelect } from '../../../ai/aiConfig'
 import { RANDOM_MODES, randomValue } from '../../../../shared/random'
-import { apiGenerateText, apiNetTool } from '../../api/pipelineApi'
-import { currentRunSignal } from '../../execution/executionState'
-import { isAbortError } from '../../../../shared/abort'
-import { formatLlmUsage } from '../../../../shared/llmUsage'
-import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
+import { apiNetTool } from '../../api/pipelineApi'
 import { NumberIcon } from '../../components/icons/NumberIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
-import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
+import { getNodeRowHeightPx, GROW_FIELD_EXTRA_PX, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiNumberInput, UiSlider, UiTextArea, UiTextInput } from '../../../ui'
-import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult, WireField, WireFieldHeader } from './fields'
-import {
-	DEFAULT_LLM_SETTINGS,
-	LlmSettingsFields,
-	llmRequestSettings,
-} from './llmSettings'
+import { UiGrowingInput, UiTextArea, UiTextInput } from '../../../ui'
+import { PortRow, stopEvent, useInputConnected, NodeSelect, WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -216,8 +205,13 @@ export class NetToolNodeDefinition extends NodeDefinition<NetToolNode> {
 	override getWidthPx() {
 		return 340
 	}
-	getBodyHeightPx(shape: NodeShape, _node: NetToolNode) {
-		return getNodeRowHeightPx(shape.props.fontSize) * 4
+	getBodyHeightPx(shape: NodeShape, node: NetToolNode) {
+		const tool = NET_TOOL_OPTIONS.find((t) => t.id === node.tool) ?? NET_TOOL_OPTIONS[0]
+		const targetWired = isInputWired(this.editor, shape.id, 'target')
+		// WP27 Part B: the target field wraps/grows (UiGrowingInput) instead of a single-line
+		// input — reserve its max-rows cap, but only when it's actually shown and editable.
+		const growExtra = 'target' in tool && !targetWired ? GROW_FIELD_EXTRA_PX : 0
+		return getNodeRowHeightPx(shape.props.fontSize) * 4 + growExtra
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return { target: { id: 'target', x: 0, y: portY(0, getNodeRowHeightPx(shape.props.fontSize)), terminal: 'end', dataType: 'text' }, output: out('text', 340) }
@@ -260,9 +254,9 @@ function NetToolNodeComponent({ shape, node }: NodeComponentProps<NetToolNode>) 
 					))}
 				</NodeSelect>
 			</WireField>
-			<NodeRow>
+			<NodeRow className={'target' in tool && !targetWired ? 'WireField_grow' : undefined}>
 				{'target' in tool && !targetWired ? (
-					<UiTextInput placeholder={tool.target} value={node.target} onChange={(target) => set({ target })} />
+					<UiGrowingInput placeholder={tool.target} value={node.target} onChange={(target) => set({ target })} />
 				) : (
 					<span className="NodeRow-disconnected">{targetWired ? 'target from input' : 'no target needed'}</span>
 				)}
@@ -278,226 +272,6 @@ function NetToolNodeComponent({ shape, node }: NodeComponentProps<NetToolNode>) 
 	)
 }
 
-// ---------------------------------------------------------------------------
-// Summarize: text, web page (URL), image, or video (frames)
-// ---------------------------------------------------------------------------
-
-export type SummarizeNode = T.TypeOf<typeof SummarizeNode>
-export const SummarizeNode = T.object({
-	type: T.literal('summarize'),
-	length: T.string,
-	format: T.string,
-	language: T.string,
-	focus: T.string,
-	model: T.string,
-	lastResultText: T.string.nullable(),
-	lastKind: T.string.nullable(),
-	error: T.string.nullable(),
-	...LlmSettingsFields,
-})
-
-const SUM_RESULT_PX = 150
-const SUM_SYSTEM_BOX_PX = 70
-
-function isVideoValue(v: string) {
-	// blob: URLs come from video shapes on the canvas (images arrive as data URLs).
-	return /^(data:video\/|blob:)/.test(v) || /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(v)
-}
-
-/** Take evenly spaced frames from a video as JPEG data URLs. */
-export async function videoFrames(src: string, count = 6): Promise<string[]> {
-	const video = document.createElement('video')
-	video.crossOrigin = 'anonymous'
-	video.muted = true
-	video.preload = 'auto'
-	video.src = src
-	await new Promise<void>((resolve, reject) => {
-		video.onloadedmetadata = () => resolve()
-		video.onerror = () => reject(new Error('Cannot load the video'))
-	})
-	const duration = Number.isFinite(video.duration) ? video.duration : 0
-	const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight))
-	const canvas = document.createElement('canvas')
-	canvas.width = Math.round(video.videoWidth * scale)
-	canvas.height = Math.round(video.videoHeight * scale)
-	const ctx = canvas.getContext('2d')!
-	const frames: string[] = []
-	for (let i = 0; i < count; i++) {
-		video.currentTime = duration ? (duration * (i + 0.5)) / count : 0
-		await new Promise<void>((resolve) => (video.onseeked = () => resolve()))
-		ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-		frames.push(canvas.toDataURL('image/jpeg', 0.8))
-	}
-	return frames
-}
-
-export class SummarizeNodeDefinition extends NodeDefinition<SummarizeNode> {
-	static type = 'summarize'
-	static validator = SummarizeNode
-	title = 'Summarize (text, URL, image, video)'
-	heading = 'Summarize'
-	icon = <GenerateTextIcon />
-	category = categoryOf('summarize')
-	override defaultWidthPx = 380
-	override showsOutput = true
-	resultKeys = ['lastResultText', 'lastKind', 'error'] as const
-	getDefault(): SummarizeNode {
-		return {
-			type: 'summarize',
-			length: 'short',
-			format: 'bullets',
-			language: '',
-			focus: '',
-			model: '',
-			lastResultText: null,
-			lastKind: null,
-			error: null,
-			...DEFAULT_LLM_SETTINGS,
-		}
-	}
-	getBodyHeightPx(shape: NodeShape, _node: SummarizeNode) {
-		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
-		// Rows: input, length, format, language, focus, model, system label, temperature,
-		// thinking, max tokens, status = 11 (WP17: each wirable field got its own row).
-		const systemWired = isInputWired(this.editor, shape.id, 'field:system')
-		return rowPx * 11 + (systemWired ? 0 : SUM_SYSTEM_BOX_PX) + SUM_RESULT_PX
-	}
-	getPorts(shape: NodeShape, node: SummarizeNode): Record<string, ShapePort> {
-		return {
-			input: { id: 'input', x: 0, y: portY(0, getNodeRowHeightPx(shape.props.fontSize)), terminal: 'end', dataType: 'any' },
-			output: out('text', this.getWidthPx(shape, node)),
-		}
-	}
-	async execute(shape: NodeShape, node: SummarizeNode, inputs: InputValues): Promise<ExecutionResult> {
-		// Bare hosts (www.wikipedia.com) get a scheme so they are read as a web page.
-		const value = normalizeUrl(coerceToText(getInput(inputs, 'input')).trim())
-		if (!value) {
-			updateNode<SummarizeNode>(this.editor, shape, (n) => ({ ...n, error: 'Connect something to summarize' }), false)
-			return { output: STOP_EXECUTION }
-		}
-		const kind = isVideoValue(value) ? 'video' : isImageValue(value) ? 'image' : /^https?:\/\/\S+$/.test(value) ? 'web page' : 'text'
-		const lengths: Record<string, string> = { short: '2-3 sentences', medium: 'one paragraph', long: 'several paragraphs' }
-		const formats: Record<string, string> = {
-			bullets: 'as bullet points',
-			paragraph: 'as plain paragraphs',
-			tldr: 'as a one-line TL;DR followed by key points',
-			outline: 'as a Markdown outline with headings',
-		}
-		const what = kind === 'video' ? 'this video (frames in order)' : kind === 'image' ? 'this image' : `this ${kind}`
-		const prompt =
-			`Summarize ${what} in ${lengths[node.length] ?? lengths.short}, ${formats[node.format] ?? formats.bullets}.` +
-			(node.focus ? ` Focus on: ${node.focus}.` : '') +
-			(node.language ? ` Write in ${node.language}.` : '')
-		try {
-			const images = kind === 'video' ? await videoFrames(value) : undefined
-			const result = await apiGenerateText(
-				{
-					input: kind === 'video' ? undefined : value,
-					images,
-					prompt,
-					model: node.model || undefined,
-					...llmRequestSettings(node),
-				},
-				currentRunSignal(this.editor)
-			)
-			const usage = result.usage ? formatLlmUsage(result.usage) : ''
-			updateNode<SummarizeNode>(this.editor, shape, (n) => ({
-				...n,
-				lastResultText: result.text,
-				lastKind: kind,
-				lastUsage: usage || undefined,
-				error: null,
-			}))
-			return { output: result.text }
-		} catch (e) {
-			updateNode<SummarizeNode>(this.editor, shape, (n) => ({ ...n, error: isAbortError(e) ? null : (e as Error).message }), false)
-			return { output: STOP_EXECUTION }
-		}
-	}
-	getOutputInfo(shape: NodeShape, node: SummarizeNode, inputs: InfoValues) {
-		return textOutput(shape, node.lastResultText, inputs)
-	}
-	Component = SummarizeNodeComponent
-}
-
-function SummarizeNodeComponent({ shape, node }: NodeComponentProps<SummarizeNode>) {
-	const editor = useEditor()
-	const set = (patch: Partial<SummarizeNode>, outOfDate = true) =>
-		updateNode<SummarizeNode>(editor, shape, (n) => ({ ...n, ...patch }), outOfDate)
-	const systemWired = useInputConnected(shape.id, 'field:system')
-	return (
-		<>
-			<PortRow shapeId={shape.id} portId="input" label="Input" dataType="any" hint="text, URL, image, video" />
-			<WireField shapeId={shape.id} fieldKey="length" label="Length">
-				<NodeSelect className="NodeField-select" value={node.length} onPointerDown={stopEvent} onChange={(e) => set({ length: e.target.value })}>
-					<option value="short">Short</option>
-					<option value="medium">Medium</option>
-					<option value="long">Long</option>
-				</NodeSelect>
-			</WireField>
-			<WireField shapeId={shape.id} fieldKey="format" label="Format">
-				<NodeSelect className="NodeField-select" value={node.format} onPointerDown={stopEvent} onChange={(e) => set({ format: e.target.value })}>
-					<option value="bullets">Bullets</option>
-					<option value="paragraph">Paragraph</option>
-					<option value="tldr">TL;DR + points</option>
-					<option value="outline">Outline</option>
-				</NodeSelect>
-			</WireField>
-			<WireField shapeId={shape.id} fieldKey="focus" label="Focus">
-				<UiTextInput placeholder="Focus (optional)" value={node.focus} onChange={(focus) => set({ focus })} />
-			</WireField>
-			<WireField shapeId={shape.id} fieldKey="language" label="Language">
-				<UiTextInput placeholder="Language" value={node.language} onChange={(language) => set({ language })} />
-			</WireField>
-			<WireField shapeId={shape.id} fieldKey="model" label="Model" dataType="model">
-				<ModelSelect className="node-model-select" capability="vision" value={node.model} onChange={(model) => set({ model }, false)} />
-			</WireField>
-			<WireFieldHeader shapeId={shape.id} fieldKey="system" label="System" />
-			{!systemWired && (
-				<div className="NodeField-block" style={{ height: SUM_SYSTEM_BOX_PX }}>
-					<UiTextArea
-						className="NodeField-textarea"
-						placeholder="System prompt (optional): role, tone, rules…"
-						value={node.system ?? ''}
-						onChange={(system) => set({ system }, false)}
-					/>
-				</div>
-			)}
-			<label className="LlmSettings-row">
-				<span>Temperature</span>
-				<UiSlider
-					label="Temperature"
-					min={0}
-					max={2}
-					step={0.1}
-					value={node.temperature ?? 0.7}
-					onChange={(temperature) => set({ temperature }, false)}
-				/>
-				<span className="LlmSettings-value">{node.temperature == null ? 'auto' : node.temperature.toFixed(1)}</span>
-			</label>
-			<label className="LlmSettings-row">
-				<span>Thinking</span>
-				<NodeSelect className="NodeField-select" value={node.thinking ?? ''} onPointerDown={stopEvent} onChange={(e) => set({ thinking: e.target.value }, false)}>
-					<option value="">model default</option>
-					<option value="none">off (fast)</option>
-					<option value="low">low</option>
-					<option value="medium">medium</option>
-					<option value="high">high (slow, careful)</option>
-				</NodeSelect>
-			</label>
-			<label className="LlmSettings-row">
-				<span>Max tokens</span>
-				<UiNumberInput
-					min={1}
-					placeholder="auto"
-					value={node.maxTokens ?? null}
-					onChange={(maxTokens) => set({ maxTokens: maxTokens == null ? null : Math.max(1, maxTokens) }, false)}
-				/>
-			</label>
-			<NodeRow>
-				<span className="NodeStatus">{node.lastKind ? `Last input: ${node.lastKind}` : 'Videos: 6 frames are read'}</span>
-			</NodeRow>
-			<NodeTextResult text={node.lastResultText} error={node.error} empty="Output appears here" height={SUM_RESULT_PX} />
-		</>
-	)
-}
+// WP27 Part E: the Summarize card was removed (it duplicated AI text / Generate text). Its
+// type stays registered as a removed/hidden card — see `registry.ts`'s RemovedNodeDefinitions
+// and `types/RemovedNode.tsx` — so old canvases that still have one keep loading.

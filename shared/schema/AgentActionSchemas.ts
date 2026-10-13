@@ -359,6 +359,19 @@ export const UpdateAction = z
 
 export type UpdateAction = z.infer<typeof UpdateAction>
 // Unknown Action (catch-all for unrecognized actions)
+// Web Search Action (WP31 Part E: available only when a search provider is configured)
+export const WebSearchAction = z
+	.object({
+		_type: z.literal('web-search'),
+		query: z.string(),
+	})
+	.meta({
+		title: 'Web Search',
+		description: 'The AI searches the web for current information it does not already know.',
+	})
+
+export type WebSearchAction = z.infer<typeof WebSearchAction>
+
 export const UnknownAction = z
 	.object({
 		_type: z.literal('unknown'),

@@ -16,7 +16,7 @@ import { runSql as runPgliteSql } from '../../pg'
 import { hiddenDedicatedPortIds, hiddenFieldKeys } from '../fieldVisibility'
 import { NodeShape } from '../NodeShapeUtil'
 import { isInputWired } from '../nodePorts'
-import { UiButton, UiCheckbox, UiEmpty, UiSecretInput, UiSegmented, UiTextArea, UiTextInput } from '../../../ui'
+import { UiButton, UiCheckbox, UiEmpty, UiGrowingInput, UiSecretInput, UiSegmented, UiTextArea, UiTextInput } from '../../../ui'
 import { IconAlert, IconDatabase, IconTable, IconUpload } from '../../../ui/icons'
 import { ExpandableTable } from '../../editors/LargeEditor'
 import { NodeSelect, OutputPortRow, PgliteMemoryWarning, PortRow, stopEvent, useInputConnected, WireField, WireFieldHeader } from './fields'
@@ -664,7 +664,10 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 					</NodeRow>
 					{rowsWired && (
 						<NodeRow>
-							<UiTextInput placeholder="Target table" value={node.targetTable ?? ''} onChange={(targetTable) => set({ targetTable })} />
+							{/* WP27 Part B: wraps/scrolls instead of cutting a long table name off —
+							 * kept to a small max-rows so it still fits this row alongside the
+							 * dropdown and key field. */}
+							<UiGrowingInput maxRows={2} placeholder="Target table" value={node.targetTable ?? ''} onChange={(targetTable) => set({ targetTable })} />
 							<NodeSelect
 								className="NodeField-select"
 								value={node.loadMode ?? 'insert'}
@@ -676,7 +679,7 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 								<option value="replace">Replace table</option>
 							</NodeSelect>
 							{!hiddenFields.has('upsertKey') && (
-								<UiTextInput placeholder="Key column" value={node.upsertKey ?? ''} onChange={(upsertKey) => set({ upsertKey })} />
+								<UiGrowingInput maxRows={2} placeholder="Key column" value={node.upsertKey ?? ''} onChange={(upsertKey) => set({ upsertKey })} />
 							)}
 						</NodeRow>
 					)}

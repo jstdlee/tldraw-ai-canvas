@@ -14,14 +14,16 @@ import { PromptIcon } from '../../components/icons/PromptIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
 import {
 	getNodeRowHeightPx,
+	GROW_FIELD_EXTRA_PX,
 	NODE_HEADER_HEIGHT_PX,
 	NODE_ROW_HEADER_GAP_PX,
 	NODE_WIDTH_PX,
 } from '../../constants'
 import { Port as PortDot, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
+import { isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiButton, UiCheckbox, UiSecretInput, UiTextInput } from '../../../ui'
+import { UiButton, UiCheckbox, UiGrowingInput, UiSecretInput, UiTextInput } from '../../../ui'
 import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -151,12 +153,16 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 		// label, auth, auth value, headers label, body port, "web page -> text" checkbox,
 		// status = 11 (WP17: query/headers/auth each got their own wirable row instead of
 		// sharing one).
+		// WP27 Part B: the URL field wraps/grows (UiGrowingInput) when not wired — reserve its
+		// max-rows cap on top of the one row already budgeted for it.
+		const urlConnected = isInputWired(this.editor, shape.id, 'url')
 		return (
 			getNodeRowHeightPx(shape.props.fontSize) * 11 +
 			HTTP_QUERY_HEIGHT_PX +
 			HTTP_HEADERS_HEIGHT_PX +
 			HTTP_BODY_HEIGHT_PX +
-			HTTP_RESULT_HEIGHT_PX
+			HTTP_RESULT_HEIGHT_PX +
+			(urlConnected ? 0 : GROW_FIELD_EXTRA_PX)
 		)
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
@@ -335,9 +341,9 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 			{urlConnected ? (
 				<PortRow shapeId={shape.id} portId="url" label="URL" dataType="text" />
 			) : (
-				<NodeRow ref={urlRowRef}>
+				<NodeRow ref={urlRowRef} className="WireField_grow">
 					<PortDot shapeId={shape.id} portId="url" />
-					<UiTextInput placeholder="https://…" value={node.url} onChange={(url) => set({ url })} />
+					<UiGrowingInput placeholder="https://…" value={node.url} onChange={(url) => set({ url })} />
 				</NodeRow>
 			)}
 			<PortRow

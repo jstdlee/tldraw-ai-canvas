@@ -223,7 +223,17 @@ export function getNodeOutputInfo(
 	shape: NodeShape,
 	inputs: InfoValues
 ): InfoValues {
-	const node = applyFieldOverridesInfo(shape, inputs)
+	// WP30: a wired field whose value doesn't coerce (e.g. an enum field fed free-form text)
+	// throws here. Unlike `executeNode`, this runs on every render (live preview, upstream
+	// staleness, wire colouring…) with no try/catch around it, so letting it throw crashes the
+	// card instead of showing a run error. Fall back to the card's own (unwired) settings for
+	// display; the real run still throws through `executeNode` and shows the error banner.
+	let node = shape.props.node
+	try {
+		node = applyFieldOverridesInfo(shape, inputs)
+	} catch {
+		// ignored — see comment above
+	}
 	return getNodeDefinition(editor, node).getOutputInfo(shape, node, inputs)
 }
 

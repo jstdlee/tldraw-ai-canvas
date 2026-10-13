@@ -1,4 +1,5 @@
 import { Editor, RecordsDiff, reverseRecordsDiff, structuredClone, TLRecord } from 'tldraw'
+import { createAgentErrorHistoryItem } from '../../shared/format/agentError'
 import { convertTldrawShapeToFocusedShape } from '../../shared/format/convertTldrawShapeToFocusedShape'
 import { AgentModelName } from '../../shared/models'
 import { AgentAction } from '../../shared/types/AgentAction'
@@ -658,6 +659,11 @@ export class TldrawAgent {
 				if (e === 'Cancelled by user' || (e instanceof Error && e.name === 'AbortError')) {
 					return
 				}
+				// WP28 Part A: a request can fail before any action streams in (a dead
+				// model id, a provider that refuses the request, an empty or non-JSON
+				// reply). Record it in the chat so the user sees something after their
+				// message, not just their own prompt bubble with nothing following it.
+				this.chat.push(createAgentErrorHistoryItem(e))
 				this.onError(e)
 			}
 		})()

@@ -8,7 +8,7 @@ import { parseTableText, toCsv } from '../../../../shared/tableText'
 import { profileTable } from '../../../../shared/profile'
 import type { ColumnProfile } from '../../../../shared/profile'
 import { createShapeId, Editor, getColorValue, TLShapeId, T, useEditor, useValue } from 'tldraw'
-import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
+import { getNodeRowHeightPx, GROW_FIELD_EXTRA_PX, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { Port, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchors } from '../../ports/useFieldPortAnchor'
 import { createOrUpdateConnectionBinding } from '../../connection/ConnectionBindingUtil'
@@ -28,6 +28,7 @@ import {
 	UiChip,
 	UiEmpty,
 	UiField,
+	UiGrowingInput,
 	UiIconButton,
 	UiNumberInput,
 	UiSegmented,
@@ -170,6 +171,10 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 			if (param.kind === 'formula') return sum + rowPx * 2.5
 			if (param.kind === 'summaries') return sum + rowPx * 2
 			if (param.kind === 'mapping') return sum + rowPx * 3
+			// WP27 Part B: a plain text/regex param (pattern, with, …) wraps/grows
+			// (UiGrowingInput, capped at 3 rows here — these are usually short) instead of a
+			// single-line input — reserve its smaller max-rows cap.
+			if (param.kind === 'text' || param.kind === 'regex') return sum + GROW_FIELD_EXTRA_PX / 2
 			return sum
 		}, 0)
 		return rowPx * rowsCount + inlineExtra + descriptionExtra + previewExtra + structuredExtra
@@ -355,7 +360,7 @@ function FormulaField({
 	hint?: string
 }) {
 	const { wired } = useWireField(shapeId, fieldKey)
-	const inputRef = useRef<HTMLInputElement>(null)
+	const inputRef = useRef<HTMLTextAreaElement>(null)
 	const [debounced, setDebounced] = useState(value)
 	useEffect(() => {
 		const timer = window.setTimeout(() => setDebounced(value), 200)
@@ -392,8 +397,8 @@ function FormulaField({
 
 	return (
 		<>
-			<WireField shapeId={shapeId} fieldKey={fieldKey} label={label} hint={hint}>
-				<UiTextInput ref={inputRef} mono value={value} onChange={onChange} placeholder="e.g. upper(name), round(score * 1.2, 1)" />
+			<WireField shapeId={shapeId} fieldKey={fieldKey} label={label} hint={hint} grow>
+				<UiGrowingInput ref={inputRef} mono value={value} onChange={onChange} placeholder="e.g. upper(name), round(score * 1.2, 1)" />
 			</WireField>
 			{!wired && (
 				<>
@@ -650,10 +655,11 @@ function ParamField({
 	if (param.kind === 'mapping') {
 		return <CaseMappingField shapeId={shapeId} fieldKey={param.field} label={param.label} value={value} onChange={onChange} />
 	}
-	// 'regex' renders as a mono text input.
+	// 'regex' (and plain 'text') renders as a wrapping, growing mono field (WP27 Part B) — a
+	// pattern or a long replacement/value shouldn't just cut off mid-line.
 	return (
-		<WireField shapeId={shapeId} fieldKey={param.field} label={param.label} hint={param.hint}>
-			<UiTextInput mono value={value} onChange={onChange} placeholder={param.placeholder} />
+		<WireField shapeId={shapeId} fieldKey={param.field} label={param.label} hint={param.hint} grow>
+			<UiGrowingInput mono maxRows={3} value={value} onChange={onChange} placeholder={param.placeholder} />
 		</WireField>
 	)
 }

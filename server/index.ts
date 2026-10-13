@@ -37,6 +37,14 @@ import { getLanguageModel, getProviderOptions, listProviderModels, ProviderModel
 import { guessCapabilities, ModelCapability, ModelConfig } from '../shared/aiConfig'
 import { registerBatchRoutes } from './batchRoutes'
 import { checkModelsHealth } from './modelHealth'
+import { McpConfig, McpServerConfig, toPublicMcpConfig } from '../shared/mcpConfig'
+import { loadMcpConfig, saveMcpConfig } from './mcpStore'
+import { listMcpTools } from './mcp'
+import { scanSkills } from './skills'
+import { toPiModel } from './agent/model'
+import { buildMcpTools, buildSearchTools, buildSkillTools, skillsSystemPromptBlock } from './agent/tools'
+import { runAgent } from './agent/runner'
+import { AgentRunRequest, MAX_RUN_MS } from './agent/types'
 
 const PORT = Number(process.env.API_PORT ?? 8790)
 const HOST = process.env.HOST ?? '127.0.0.1'
@@ -219,6 +227,71 @@ app.post('/api/search', async (c) => {
 		options?: SearchOptions
 	}
 	return c.json(await runSearch({ ...body, signal: c.req.raw.signal }))
+})
+
+// --- MCP servers (WP31 Part B) ----------------------------------------------
+
+app.get('/api/mcp-config', (c) => c.json(toPublicMcpConfig(loadMcpConfig())))
+
+app.put('/api/mcp-config', async (c) => {
+	const body = (await c.req.json()) as McpConfig
+	saveMcpConfig(body)
+	return c.json(toPublicMcpConfig(loadMcpConfig()))
+})
+
+app.post('/api/mcp-config/test', async (c) => {
+	const body = (await c.req.json()) as { server: McpServerConfig }
+	const tools = await listMcpTools(body.server, c.req.raw.signal)
+	return c.json({ tools })
+})
+
+// --- Skills (WP31 Part A/C) -------------------------------------------------
+
+app.get('/api/skills', (c) => c.json({ skills: scanSkills() }))
+app.post('/api/skills/rescan', (c) => c.json({ skills: scanSkills() }))
+
+// --- Agent card (WP31 Part C): pi-agent-core + pi-ai, search + MCP + skills --
+
+app.post('/api/agent/run', async (c) => {
+	const body = (await c.req.json()) as AgentRunRequest
+	if (!body.task?.trim()) throw new ConfigError('task is required')
+	const { model: modelConfig, provider } = resolveModelRef(body.model, 'agent')
+	const apiKey = provider.apiKey || (provider.kind === 'cloudflare' ? provider.apiKey : undefined)
+	const piModel = toPiModel(provider, modelConfig)
+
+	const searchChoices = (body.search ?? []).map((p) => ({ provider: p, keyRef: loadSearchConfig()[p]?.keyRef }))
+	const mcpServers = loadMcpConfig().filter((s) => s.enabled && (body.mcpServers ?? []).includes(s.id))
+	const allSkills = scanSkills()
+	const chosenSkills = allSkills.filter((s) => (body.skills ?? []).includes(s.id))
+
+	return streamSSE(c, async (stream) => {
+		const abort = new AbortController()
+		stream.onAbort(() => abort.abort())
+		try {
+			const mcpTools = await buildMcpTools(mcpServers, abort.signal)
+			const tools = [...buildSearchTools(searchChoices), ...mcpTools, ...buildSkillTools(chosenSkills)]
+			const systemPrompt =
+				(body.systemPrompt?.trim() || 'You are a helpful agent embedded in a node-based canvas workflow.') +
+				skillsSystemPromptBlock(chosenSkills)
+			for await (const event of runAgent({
+				model: piModel,
+				apiKey,
+				systemPrompt,
+				task: body.task,
+				context: body.context,
+				tools,
+				maxSteps: body.maxSteps,
+				maxRunMs: MAX_RUN_MS,
+				signal: abort.signal,
+			})) {
+				await stream.writeSSE({ data: JSON.stringify(event) })
+			}
+		} catch (e: any) {
+			if (abort.signal.aborted) return
+			console.error('Agent run error:', e)
+			await stream.writeSSE({ data: JSON.stringify({ type: 'error', message: errorMessage(e), steps: [] }) })
+		}
+	})
 })
 
 // --- Agent (canvas-editing chat) -------------------------------------------

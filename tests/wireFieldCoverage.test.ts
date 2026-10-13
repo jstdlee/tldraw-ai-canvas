@@ -26,7 +26,6 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	generate_text: ['promptText'],
 	chat: ['userMessage'],
 	model_source: ['baseURL', 'model', 'filter', 'kind'],
-	summarize: ['length', 'format', 'language', 'focus', 'model', 'system'],
 	jev: ['kind', 'options', 'filter'],
 	decision_switch: ['mode', 'threshold', 'margin', 'options', 'bands'],
 	load_image: ['imageUrl', 'source'],
@@ -64,6 +63,7 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	url_in: ['url', 'fetchBody'],
 	sleep: ['ms'],
 	table_view: ['text'],
+	agent: ['search', 'mcpServers', 'skills', 'systemPrompt', 'maxSteps'],
 }
 
 /** Fields deliberately left unwired, each with a reason (kept with the `wire: false` flag

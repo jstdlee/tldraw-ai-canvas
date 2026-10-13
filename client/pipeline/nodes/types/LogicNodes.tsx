@@ -10,8 +10,8 @@ import { clearNodeRun } from '../../execution/nodeRunState'
 import { Port, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiNumberInput, UiTextInput } from '../../../ui'
-import { PortRow, stopEvent, NodeSelect, WireField } from './fields'
+import { UiNumberInput, UiSelect, UiTextArea, UiTextInput } from '../../../ui'
+import { PortRow, stopEvent, NodeSelect, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -30,6 +30,10 @@ import {
 const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 const portY = (row: number, rowPx: number) => BASE_Y + rowPx * (row + 0.5)
 
+/** WP27 Part B: the If operand's own box — roomier than a single input row, so a long regex or
+ * a "min,max" range reads, scrolling past a few lines instead of a single-line cutoff. */
+const IF_OPERAND_BOX_PX = 56
+
 function inputInfo(inputs: InfoValues, id: string): PipelineValue | undefined {
 	const v = inputs[id]
 	if (!v || v.isOutOfDate) return undefined
@@ -41,22 +45,32 @@ function inputInfo(inputs: InfoValues, id: string): PipelineValue | undefined {
 // If / else: route the value to "then" or "else"
 // ---------------------------------------------------------------------------
 
+/** WP27 Part D: grouped in plain words, each with a one-line hint, so the operator list reads
+ * like a menu instead of a grab-bag. Old saved If cards keep working: every id below already
+ * existed except "between" (new, additive — old canvases never had it, so they can't lose it). */
 export const CONDITIONS = [
-	{ id: 'truthy', label: 'is true / not empty', operand: false },
-	{ id: 'empty', label: 'is empty / false', operand: false },
-	{ id: 'equals', label: 'equals', operand: true },
-	{ id: 'not_equals', label: 'does not equal', operand: true },
-	{ id: 'contains', label: 'contains', operand: true },
-	{ id: 'starts', label: 'starts with', operand: true },
-	{ id: 'ends', label: 'ends with', operand: true },
-	{ id: 'regex', label: 'matches regex', operand: true },
-	{ id: 'gt', label: '> number', operand: true },
-	{ id: 'gte', label: '≥ number', operand: true },
-	{ id: 'lt', label: '< number', operand: true },
-	{ id: 'lte', label: '≤ number', operand: true },
-	{ id: 'is_image', label: 'is an image', operand: false },
-	{ id: 'is_json', label: 'is valid JSON', operand: false },
+	{ id: 'equals', label: 'equals', hint: 'The whole value matches exactly (case-insensitive).', operand: true, group: 'Text' },
+	{ id: 'not_equals', label: 'does not equal', hint: 'The whole value is different (case-insensitive).', operand: true, group: 'Text' },
+	{ id: 'contains', label: 'contains', hint: 'The value has this text anywhere inside it.', operand: true, group: 'Text' },
+	{ id: 'starts', label: 'starts with', hint: 'The value begins with this text.', operand: true, group: 'Text' },
+	{ id: 'ends', label: 'ends with', hint: 'The value ends with this text.', operand: true, group: 'Text' },
+	{ id: 'regex', label: 'matches regex', hint: 'The value matches this regular expression.', operand: true, group: 'Text' },
+	{ id: 'gt', label: 'is greater than', hint: 'Numerically greater than the value below.', operand: true, group: 'Number' },
+	{ id: 'gte', label: 'is at least', hint: 'Numerically greater than or equal to (≥).', operand: true, group: 'Number' },
+	{ id: 'lt', label: 'is less than', hint: 'Numerically less than the value below.', operand: true, group: 'Number' },
+	{ id: 'lte', label: 'is at most', hint: 'Numerically less than or equal to (≤).', operand: true, group: 'Number' },
+	{ id: 'between', label: 'is between', hint: 'Numerically within a range, both ends included — enter "min,max".', operand: true, group: 'Number' },
+	{ id: 'empty', label: 'is empty', hint: 'Empty, or one of "false", "no", "0", "off".', operand: false, group: 'Empty / not empty' },
+	{ id: 'truthy', label: 'is true / not empty', hint: 'Has a value other than empty, "false", "no", "0" or "off".', operand: false, group: 'True / false' },
+	{ id: 'is_image', label: 'is an image', hint: 'Looks like an image: a data URL, upload, or image file URL.', operand: false, group: 'Other' },
+	{ id: 'is_json', label: 'is valid JSON', hint: 'Parses as JSON.', operand: false, group: 'Other' },
 ] as const
+
+/** A short English rendering of one condition for the "reads as a sentence" hint. */
+function conditionSentence(condition: string, operand: string): string {
+	const cond = CONDITIONS.find((c) => c.id === condition) ?? CONDITIONS[0]
+	return cond.operand && operand ? `${cond.label} ${operand}` : cond.label
+}
 
 export type IfNode = T.TypeOf<typeof IfNode>
 export const IfNode = T.object({
@@ -79,15 +93,21 @@ export class IfNodeDefinition extends NodeDefinition<IfNode> {
 		return { type: 'if', condition: 'contains', operand: 'yes', lastResult: null, lastValue: null }
 	}
 	getBodyHeightPx(shape: NodeShape) {
-		return getNodeRowHeightPx(shape.props.fontSize) * 6
+		const node = shape.props.node as IfNode
+		const cond = CONDITIONS.find((c) => c.id === node.condition) ?? CONDITIONS[0]
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		// Rows: input, test, condition, operand header, sentence, then, else = 7, plus the
+		// operand's own control (WP27 Part B): a small scrolling box when this operator needs a
+		// value, or one more plain row ("no value needed") when it doesn't.
+		return rowPx * 7 + (cond.operand ? IF_OPERAND_BOX_PX : rowPx)
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		return {
 			input: { id: 'input', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
 			test: { id: 'test', x: 0, y: portY(1, rowPx), terminal: 'end', dataType: 'any' },
-			then: { id: 'then', x: NODE_WIDTH_PX, y: portY(4, rowPx), terminal: 'start', dataType: 'any' },
-			else: { id: 'else', x: NODE_WIDTH_PX, y: portY(5, rowPx), terminal: 'start', dataType: 'any' },
+			then: { id: 'then', x: NODE_WIDTH_PX, y: portY(5, rowPx), terminal: 'start', dataType: 'any' },
+			else: { id: 'else', x: NODE_WIDTH_PX, y: portY(6, rowPx), terminal: 'start', dataType: 'any' },
 		}
 	}
 	async execute(shape: NodeShape, node: IfNode, inputs: InputValues): Promise<ExecutionResult> {
@@ -114,50 +134,74 @@ function IfNodeComponent({ shape, node }: NodeComponentProps<IfNode>) {
 	const editor = useEditor()
 	const set = (patch: Partial<IfNode>) => updateNode<IfNode>(editor, shape, (n) => ({ ...n, ...patch }))
 	const cond = CONDITIONS.find((c) => c.id === node.condition) ?? CONDITIONS[0]
+	const conditionOptions = CONDITIONS.map((c) => ({ value: c.id, label: c.label, hint: c.hint, group: c.group }))
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="input" label="Value" dataType="any" />
 			<PortRow shapeId={shape.id} portId="test" label="Test" dataType="any" hint="optional: test this instead" />
 			<WireField shapeId={shape.id} fieldKey="condition" label="If">
-				<NodeSelect className="NodeField-select" value={node.condition} onPointerDown={stopEvent} onChange={(e) => set({ condition: e.target.value })}>
-					{CONDITIONS.map((c) => (
-						<option key={c.id} value={c.id}>
-							{c.label}
-						</option>
-					))}
-				</NodeSelect>
+				<UiSelect value={node.condition} options={conditionOptions} onChange={(condition) => set({ condition })} />
 			</WireField>
-			<WireField shapeId={shape.id} fieldKey="operand" label="Value">
-				{cond.operand ? (
-					<UiTextInput placeholder="compare with…" value={node.operand} onChange={(operand) => set({ operand })} />
-				) : (
+			{/* WP27 Part B: the operand can be long (a regex, a "min,max" range…) — a
+			 * fixed-but-roomier box that scrolls past a few lines, not a single-line input that
+			 * just cuts the text off. WireFieldHeader anchors the port; the box below is the
+			 * field's own control, shown only when this operator needs one. */}
+			<WireFieldHeader shapeId={shape.id} fieldKey="operand" label="Value" />
+			{cond.operand ? (
+				<div className="NodeField-block" style={{ height: IF_OPERAND_BOX_PX }}>
+					<UiTextArea
+						className="NodeField-textarea"
+						placeholder={cond.id === 'between' ? 'e.g. 5,10' : 'compare with…'}
+						value={node.operand}
+						onChange={(operand) => set({ operand })}
+					/>
+				</div>
+			) : (
+				<NodeRow>
 					<span className="NodeRow-disconnected">no value needed</span>
-				)}
-			</WireField>
-			<IfBranchRow shapeId={shape.id} portId="then" active={node.lastResult === true} label="then ✓" />
-			<IfBranchRow shapeId={shape.id} portId="else" active={node.lastResult === false} label="else ✗" />
+				</NodeRow>
+			)}
+			{/* WP27 Part D: the card reads as a sentence, e.g. "If input contains yes". */}
+			<NodeRow className="NodeHint IfNode-sentence">
+				If <strong>input</strong> {conditionSentence(node.condition, node.operand)} → then / else
+			</NodeRow>
+			<IfBranchRow shapeId={shape.id} portId="then" active={node.lastResult === true} label="then (yes)" value={node.lastValue} />
+			<IfBranchRow shapeId={shape.id} portId="else" active={node.lastResult === false} label="else (no)" value={node.lastValue} />
 		</>
 	)
 }
 
+/** A short single-line preview of the branch's value, for the "value shown" highlight. */
+function branchValuePreview(value: string | null): string {
+	if (value == null || value === '') return ''
+	const one = value.replace(/\s+/g, ' ').trim()
+	return one.length > 28 ? one.slice(0, 28) + '…' : one
+}
+
 /** WP21 Part A: the If node's `then`/`else` ports were defined in `getPorts` but never had a
  * `<Port>` rendered, so they had no visible, draggable dot. Anchored to its own row so the dot
- * tracks the row at any font size, like `OutputPortRow`, but keeps the `NodeBranch` styling. */
+ * tracks the row at any font size, like `OutputPortRow`, but keeps the `NodeBranch` styling.
+ * WP27 Part D: the branch taken by the last run is highlighted with its value shown. */
 function IfBranchRow({
 	shapeId,
 	portId,
 	active,
 	label,
+	value,
 }: {
 	shapeId: NodeShape['id']
 	portId: string
 	active: boolean
 	label: string
+	value: string | null
 }) {
 	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, portId)
 	return (
 		<NodeRow ref={ref} className="NodeRow-right">
-			<span className={'NodeBranch' + (active ? ' is-active' : '')}>{label}</span>
+			<span className={'NodeBranch' + (active ? ' is-active' : '')}>
+				{label}
+				{active && branchValuePreview(value) && <span className="NodeBranch-value"> · {branchValuePreview(value)}</span>}
+			</span>
 			<Port shapeId={shapeId} portId={portId} />
 		</NodeRow>
 	)

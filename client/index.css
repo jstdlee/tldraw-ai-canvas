@@ -75,51 +75,6 @@ body {
 	user-select: none;
 }
 
-.chat-header {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding-left: 12px;
-}
-
-.chat-header-title {
-	flex: 1;
-	font-weight: 600;
-	font-size: 12px;
-}
-
-.chat-header-link {
-	all: unset;
-	cursor: pointer;
-	font-size: 12px;
-	color: var(--tl-color-text-3);
-	padding: 4px 6px;
-	border-radius: 4px;
-}
-
-.chat-header-link:hover {
-	color: var(--tl-color-text-1);
-	background: var(--tl-color-muted-2);
-}
-
-.new-chat-button {
-	width: 32px;
-	height: 32px;
-	font-size: 16px;
-	align-self: flex-end;
-	appearance: none;
-	border: 0;
-	border-radius: 4px;
-	cursor: pointer;
-	background: none;
-	margin: 2px;
-	color: var(--tl-color-text);
-}
-
-.new-chat-button:hover {
-	background-color: var(--tl-color-muted-2);
-}
-
 /* Chat Input */
 .chat-input-container {
 	display: flex;
@@ -179,12 +134,16 @@ body {
 	border: none;
 	background-color: transparent;
 	color: var(--tl-color-text);
-	font-family: sans-serif;
+	font-family: var(--tl-font-sans, sans-serif);
 	border-radius: 4px;
 	font-size: 12px;
 	outline: none;
 	width: 100%;
 	resize: none;
+	/* WP28 Part C: grows with content (see ChatInput's autoGrow), capped so a long paste
+	   scrolls inside the box instead of pushing the rest of the panel off-screen. */
+	max-height: 160px;
+	overflow-y: auto;
 	scrollbar-color: var(--tl-color-text-3) transparent;
 }
 
@@ -211,15 +170,15 @@ body {
 }
 
 .chat-input-submit {
-	width: 16px;
-	height: 16px;
+	width: 24px;
+	height: 24px;
+	flex-shrink: 0;
 	align-self: flex-end;
 	background: var(--tl-color-primary);
 	box-shadow: var(--tl-shadow-1);
 	color: var(--tl-color-panel-contrast);
 	appearance: none;
 	border: 0;
-	border-radius: 4px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -243,28 +202,7 @@ body {
 	display: flex;
 	gap: 8px;
 	width: 100%;
-	justify-content: space-between;
-}
-
-.chat-actions-left {
-	display: flex;
-	gap: 0px;
-}
-
-.chat-icon {
-	width: 11px;
-	height: 11px;
-	margin-right: 4px;
-}
-
-.chat-mode-select {
-	display: flex;
-	align-items: center;
-	gap: 0px;
-}
-
-.chat-mode-select span {
-	margin-right: 4px;
+	justify-content: flex-end;
 }
 
 .chat-context-select-label {
@@ -274,20 +212,12 @@ body {
 	font-size: 10px;
 }
 
-.chat-model-select,
 .chat-context-select {
 	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 4px;
 	padding: 0px 8px;
-}
-
-.chat-model-select-label {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	margin-left: -6px;
 }
 
 .chat-context-select {
@@ -297,13 +227,11 @@ body {
 	height: 18px;
 }
 
-.chat-model-select:hover,
 .chat-context-select:hover {
 	color: var(--tl-color-text);
 	border-color: var(--tl-color-text);
 }
 
-.chat-model-select select,
 .chat-context-select select {
 	opacity: 0;
 	position: absolute;
@@ -422,6 +350,138 @@ body {
 .chat-history-prompt-other-agent {
 	color: var(--tl-color-text-3);
 	font-style: italic;
+}
+
+/* WP28 Part C: the user's own messages sit on the right, like a chat app, so the thread
+ * reads as a conversation instead of a flat log. */
+.chat-history-prompt-container:has(.chat-history-prompt-user) {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.chat-history-prompt-user {
+	width: auto;
+	max-width: 85%;
+}
+
+/* WP28 Part A: shown when a request fails before the model produces any reply, so the
+ * thread never leaves a message with nothing after it. */
+.chat-history-error {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background-color: color-mix(in srgb, var(--tl-color-danger) 12%, var(--tl-color-panel));
+	border: 1px solid color-mix(in srgb, var(--tl-color-danger) 35%, transparent);
+	color: var(--tl-color-danger);
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+/* WP28 Part C: a `message` action is the assistant talking — give it a bubble with a
+ * small avatar, distinct from the compact collapsible rows other actions use. */
+.agent-message-bubble {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	max-width: 92%;
+}
+
+.agent-message-avatar {
+	flex-shrink: 0;
+	width: 20px;
+	height: 20px;
+	border-radius: 999px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--tl-color-muted-1);
+	color: var(--tl-color-text-2);
+}
+
+.chat-code-block {
+	position: relative;
+}
+
+.chat-code-block pre {
+	margin: 0;
+	overflow-x: auto;
+	border-radius: var(--tl-radius-2);
+	font-family: var(--tl-font-mono);
+	background: var(--tl-color-muted-1);
+	padding: 8px;
+}
+
+.chat-code-block-copy {
+	all: unset;
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: var(--tl-radius-2);
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-2);
+	box-shadow: var(--tl-shadow-1);
+}
+
+.chat-code-block-copy:hover {
+	color: var(--tl-color-text-1);
+}
+
+/* WP28 Part C: the empty-chat state, with ready-made suggestions. */
+.chat-history-empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.chat-empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: 4px;
+	padding: 16px;
+	color: var(--tl-color-text-2);
+}
+
+.chat-empty-state-title {
+	font-weight: 600;
+	color: var(--tl-color-text-1);
+	margin: 6px 0 0 0;
+}
+
+.chat-empty-state-subtitle {
+	margin: 0;
+	font-size: 11px;
+}
+
+.chat-empty-state-suggestions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+.chat-suggestion-chip {
+	all: unset;
+	cursor: pointer;
+	font-size: 11px;
+	color: var(--tl-color-text-1);
+	background: var(--tl-color-muted-1);
+	padding: 6px 10px;
+	border-radius: 999px;
+}
+
+.chat-suggestion-chip:hover {
+	background: var(--tl-color-muted-2);
 }
 
 /* WP23 Part F: a Build-with-AI plan shown as a message in the chat thread, when the chat is

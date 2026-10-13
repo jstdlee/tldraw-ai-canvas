@@ -36,7 +36,7 @@ import {
 	TldrawAgentAppContextProvider,
 	TldrawAgentAppProvider,
 } from './agent/TldrawAgentAppProvider'
-import { ChatPanel } from './components/ChatPanel'
+import { ChatPanel, ChatPanelHeader } from './components/ChatPanel'
 import { ChatPanelFallback } from './components/ChatPanelFallback'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
@@ -66,7 +66,7 @@ import { FindBar } from './clips/FindBar'
 import { installKeepGroup } from './pipeline/groups/KeepGroupShapeUtil'
 import { ShellChrome } from './shell/ShellChrome'
 import { $featuresOpen, $libraryRail, $mapOpen, saveBackup, writeLibraryRail } from './shell/shellState'
-import { FloatingPanel, IconClose, IconSparkle, UiIconButton } from './ui'
+import { FloatingPanel, IconSparkle } from './ui'
 import { ImageEditorModal } from './clips/ImageEditor'
 import { RewriteDialogs } from './clips/RewriteDialogs'
 import { $presetsEditorOpen } from './clips/rewrite'
@@ -346,12 +346,9 @@ function App() {
 						minHeight={260}
 						onClose={() => togglePanel('chat')}
 						header={
-							<div className="chat-float-bar">
-								<strong>
-									<IconSparkle size={16} /> Agent chat
-								</strong>
-								<UiIconButton icon={<IconClose />} title="Close" onClick={() => togglePanel('chat')} />
-							</div>
+							<TldrawAgentAppContextProvider app={app}>
+								<ChatPanelHeader onClose={() => togglePanel('chat')} />
+							</TldrawAgentAppContextProvider>
 						}
 					>
 						<ErrorBoundary fallback={ChatPanelFallback}>

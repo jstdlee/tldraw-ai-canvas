@@ -21,6 +21,14 @@ describe('logic', () => {
 		expect(evaluateCondition('', 'empty', '')).toBe(true)
 		expect(evaluateCondition('x', 'regex', '([')).toBe(false)
 	})
+	it('evaluates the "between" condition (WP27 Part D)', () => {
+		expect(evaluateCondition('5', 'between', '1,10')).toBe(true)
+		expect(evaluateCondition('1', 'between', '1,10')).toBe(true)
+		expect(evaluateCondition('10', 'between', '1,10')).toBe(true)
+		expect(evaluateCondition('11', 'between', '1,10')).toBe(false)
+		expect(evaluateCondition('5', 'between', '10,1')).toBe(true) // either order
+		expect(evaluateCondition('5', 'between', 'nope')).toBe(false)
+	})
 	it('splits For each lists', () => {
 		expect(splitItems('a\n\n b \nc', 'lines', '')).toEqual(['a', 'b', 'c'])
 		expect(splitItems('a; b;;c', 'separator', ';')).toEqual(['a', 'b', 'c'])

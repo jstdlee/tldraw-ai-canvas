@@ -1,7 +1,17 @@
 import { ReactNode, useEffect, useRef } from 'react'
 import { useValue } from 'tldraw'
+import { IconSparkle } from '../../ui'
 import { TldrawAgent } from '../../agent/TldrawAgent'
 import { ChatHistorySection, getAgentHistorySections } from './ChatHistorySection'
+
+/** WP28 Part C: shown when a new chat has no messages yet. Each chip sends a ready-made
+ * request so a user can get going without having to think of a first prompt. */
+const SUGGESTIONS = [
+	{ label: 'Draw a flowchart', message: 'Draw a simple flowchart with 3 steps' },
+	{ label: 'Sketch an idea', message: 'Sketch a rough idea for a mobile app home screen' },
+	{ label: 'Build with my cards', message: 'Wire up the cards I have on the canvas' },
+	{ label: 'What can you do?', message: 'What can you help me with here?' },
+]
 
 /*
 Chat history is stored as a list of history items.
@@ -82,12 +92,47 @@ export function ChatHistory({
 
 	const isGenerating = useValue('isGenerating', () => agent.requests.isGenerating(), [agent])
 
+	const sendSuggestion = (message: string) => {
+		agent.interrupt({
+			input: {
+				agentMessages: [message],
+				bounds: agent.editor.getViewportPageBounds(),
+				source: 'user',
+				contextItems: agent.context.getItems(),
+			},
+		})
+	}
+
+	const hasTrailing = Array.isArray(trailing) ? trailing.length > 0 : !!trailing
+
+	if (sections.length === 0 && !hasTrailing) {
+		return (
+			<div className="chat-history chat-history-empty">
+				<div className="chat-empty-state">
+					<IconSparkle size={22} />
+					<p className="chat-empty-state-title">Ask, learn, or start drawing</p>
+					<p className="chat-empty-state-subtitle">
+						Chat about the canvas, or pick something to try:
+					</p>
+					<div className="chat-empty-state-suggestions">
+						{SUGGESTIONS.map((s) => (
+							<button key={s.label} type="button" className="chat-suggestion-chip" onClick={() => sendSuggestion(s.message)}>
+								{s.label}
+							</button>
+						))}
+					</div>
+				</div>
+			</div>
+		)
+	}
+
 	return (
 		<div className="chat-history" ref={historyRef} onScroll={handleScroll}>
 			{sections.map((section, i) => {
 				return (
 					<ChatHistorySection
 						key={'history-section-' + i}
+						id={'chat-section-' + i}
 						section={section}
 						loading={i === sections.length - 1 && isGenerating}
 					/>

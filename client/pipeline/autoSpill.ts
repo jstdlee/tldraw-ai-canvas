@@ -4,7 +4,7 @@ import { ExecutionResult, STOP_EXECUTION } from './nodes/types/shared'
 import { getNodePortConnections, getNodePorts } from './nodes/nodePorts'
 import { shouldSpillOutput } from './nodes/nodeTypes'
 import { NodeShape } from './nodes/NodeShapeUtil'
-import { placeImageOnCanvas } from './placeOnCanvas'
+import { freeSpot, placeImageOnCanvas } from './placeOnCanvas'
 
 /** Horizontal gap between the node and its output label. */
 const GAP = 48
@@ -60,11 +60,21 @@ export async function spillUnconnectedOutput(editor: Editor, shape: NodeShape, o
 		} else {
 			freshId = createShapeId()
 			const bounds = editor.getShapePageBounds(shape.id)
+			// WP30: don't just place the label at a fixed offset — a neighbouring card can
+			// already be sitting there. freeSpot nudges it down past anything in the way.
+			const labelH = Math.min(600, 80 + text.split('\n').length * 20)
+			const { x, y } = freeSpot(
+				editor,
+				(bounds?.maxX ?? shape.x) + GAP,
+				bounds?.minY ?? shape.y,
+				TEXT_W,
+				labelH
+			)
 			editor.createShape({
 				id: freshId,
 				type: 'text',
-				x: (bounds?.maxX ?? shape.x) + GAP,
-				y: bounds?.minY ?? shape.y,
+				x,
+				y,
 				props: {
 					richText: toRichText(text),
 					autoSize: false,

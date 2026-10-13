@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import Markdown from 'react-markdown'
 import { AgentIcon } from '../../../shared/icons/AgentIcon'
 import { ChevronDownIcon } from '../../../shared/icons/ChevronDownIcon'
 import { ChevronRightIcon } from '../../../shared/icons/ChevronRightIcon'
@@ -9,6 +8,7 @@ import { Streaming } from '../../../shared/types/Streaming'
 import { useAgent } from '../../agent/TldrawAgentAppProvider'
 import { ChatHistoryGroup } from './ChatHistoryGroup'
 import { getActionInfo } from './getActionInfo'
+import { MarkdownMessage } from './MarkdownMessage'
 
 export function ChatHistoryGroupWithoutDiff({ group }: { group: ChatHistoryGroup }) {
 	const agent = useAgent()
@@ -95,16 +95,26 @@ function ChatHistoryItem({ item }: { item: ChatHistoryActionItem }) {
 function ChatHistoryItemExpanded({ action }: { action: Streaming<AgentAction> }) {
 	const agent = useAgent()
 	const { icon, description } = getActionInfo(action, agent)
+	// WP28 Part C: a `message` action is the assistant actually talking to the user, so it
+	// gets its own bubble with a small avatar icon, distinct from the compact tool-step rows
+	// used for every other action type (create, update, review, and so on).
+	const isMessage = action._type === 'message'
 
 	return (
-		<div className={`agent-action agent-action-type-${action._type}`}>
-			{icon && (
-				<span>
-					<AgentIcon type={icon} />
+		<div className={`agent-action agent-action-type-${action._type}${isMessage ? ' agent-message-bubble' : ''}`}>
+			{isMessage ? (
+				<span className="agent-message-avatar">
+					<AgentIcon type="comment" />
 				</span>
+			) : (
+				icon && (
+					<span>
+						<AgentIcon type={icon} />
+					</span>
+				)
 			)}
 			<span className="agent-action-description">
-				<Markdown>{description}</Markdown>
+				<MarkdownMessage text={description} />
 			</span>
 		</div>
 	)

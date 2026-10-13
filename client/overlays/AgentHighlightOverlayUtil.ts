@@ -67,24 +67,13 @@ export class AgentHighlightOverlayUtil extends OverlayUtil<AgentHighlightOverlay
 
 		for (const agent of agents) {
 			const activeRequest = agent.requests.getActiveRequest()
+			// WP28 Part B: don't draw a box around the agent's whole viewport just
+			// because a request is active — every chat message defaults its bounds
+			// to the current viewport, so this used to flash a highlight around
+			// everything on screen for every message, even plain conversation. Only
+			// context items the user (or a real `review` action) added on purpose
+			// are highlighted below.
 			const activeContextItems = activeRequest?.contextItems ?? []
-
-			if (
-				activeRequest?.bounds &&
-				!this.isEquivalentToPendingContextArea(activeRequest.bounds, activeContextItems)
-			) {
-				overlays.push({
-					id: `agent-highlight:${agent.id}:viewport`,
-					type: 'agent-highlight',
-					props: {
-						kind: 'area',
-						bounds: toBoxModel(activeRequest.bounds),
-						color: 'tooltip',
-						generating: true,
-						label: `Agent ${agent.id.slice(0, 6)}'s view`,
-					},
-				})
-			}
 
 			const selectedContextItems = agent.requests.isGenerating() ? [] : agent.context.getItems()
 			this.addContextItemOverlays(overlays, agent.id, 'selected', selectedContextItems, false)
@@ -241,18 +230,6 @@ export class AgentHighlightOverlayUtil extends OverlayUtil<AgentHighlightOverlay
 		}
 
 		overlays.push(...areaHighlights, ...pointHighlights)
-	}
-
-	private isEquivalentToPendingContextArea(
-		agentViewportBounds: BoxModel,
-		contextItems: ContextItem[]
-	): boolean {
-		return contextItems.some(
-			(item) =>
-				item.type === 'area' &&
-				item.source === 'agent' &&
-				Box.Equals(item.bounds, agentViewportBounds)
-		)
 	}
 
 	private renderArea(

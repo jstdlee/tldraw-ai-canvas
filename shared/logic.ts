@@ -49,6 +49,17 @@ export function evaluateCondition(subject: string, condition: string, operand: s
 			return asNumber(s) < asNumber(o)
 		case 'lte':
 			return asNumber(s) <= asNumber(o)
+		case 'between': {
+			// WP27 Part D: operand is "min,max" (either order); both ends included.
+			const [loRaw, hiRaw] = o.split(',')
+			const a = asNumber(loRaw ?? '')
+			const b = asNumber(hiRaw ?? '')
+			if (Number.isNaN(a) || Number.isNaN(b)) return false
+			const n = asNumber(s)
+			const lo = Math.min(a, b)
+			const hi = Math.max(a, b)
+			return n >= lo && n <= hi
+		}
 		case 'is_image':
 			return /^(data:image\/|\/api\/images\/)|^https?:\/\/\S+\.(png|jpe?g|gif|webp|svg)(\?\S*)?$/i.test(s.trim())
 		case 'is_json':

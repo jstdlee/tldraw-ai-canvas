@@ -25,6 +25,13 @@ export function getNodeRowHeightPx(fontPx: number | undefined): number {
 
 export const NODE_IMAGE_PREVIEW_HEIGHT_PX = 160 + 8
 
+/** WP27 Part B: extra body height to reserve for a `WireField`/`WireFieldHeader` field that
+ * uses `UiGrowingInput` (a wrapping, growing single-line field) in place of its usual one-row
+ * height — enough room for the control's own max-rows cap (default 6 lines), beyond the one
+ * row height already budgeted for that field's row. A node's `getBodyHeightPx` adds this once
+ * per such field it has. */
+export const GROW_FIELD_EXTRA_PX = 70
+
 export const PORT_RADIUS_PX = 6
 
 export const DEFAULT_NODE_SPACING_PX = 60

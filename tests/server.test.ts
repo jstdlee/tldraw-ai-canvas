@@ -31,6 +31,21 @@ describe('agent reply parsing', () => {
 		const partial = closeAndParseJson(stripToJson('{"actions": [{"_type": "create", "intent": "Draw'))
 		expect(partial.actions[0]).toMatchObject({ _type: 'create', intent: 'Draw' })
 	})
+
+	// WP28 Part A: a plain "hi" should come back as a normal `message` action, not get
+	// lost — parse a model's reply to small talk the same way `streamAgentActions` does.
+	it('parses a plain conversational reply as a message action, with no canvas actions', () => {
+		const reply = '{"actions": [{"_type": "message", "text": "Hi! How can I help?"}]}'
+		const parsed = closeAndParseJson(stripToJson(reply))
+		expect(parsed.actions).toEqual([{ _type: 'message', text: 'Hi! How can I help?' }])
+	})
+
+	it('still finds the message action when the model wraps it in commentary and fences', () => {
+		const reply =
+			"Sure, here's my reply:\n```json\n{\"actions\": [{\"_type\": \"message\", \"text\": \"Hi there!\"}]}\n```"
+		const parsed = closeAndParseJson(stripToJson(reply))
+		expect(parsed.actions).toEqual([{ _type: 'message', text: 'Hi there!' }])
+	})
 })
 
 describe('chat text', () => {

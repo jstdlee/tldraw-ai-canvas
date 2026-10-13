@@ -7,6 +7,9 @@ import {
 	PublicAIConfig,
 	PublicProviderConfig,
 } from '../../shared/aiConfig'
+import { McpServerConfig } from '../../shared/mcpConfig'
+import { SearchProviderId } from '../../shared/search'
+import { SkillInfo } from '../../shared/skills'
 
 /** The user's AI providers and models, as served by the local server (no keys). */
 export const $aiConfig = atom<PublicAIConfig | null>('ai config', null)
@@ -78,6 +81,86 @@ export async function saveSearchConfig(config: SearchConfig): Promise<SearchConf
 			body: JSON.stringify(config),
 		})
 	)
+}
+
+/** Runs one real query against a search provider (used by the "Test" button in the providers
+ * dialog's unified list). Throws with the server's message on failure (bad/missing key, etc). */
+export async function testSearchProvider(provider: SearchProviderId, keyRef: string | undefined): Promise<number> {
+	const result = await readJson<{ results: unknown[] }>(
+		await fetch('/api/search', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ provider, query: 'test', count: 1, keyRef }),
+		})
+	)
+	return result.results.length
+}
+
+// --- WP31: MCP servers + skills ---------------------------------------------
+
+export async function fetchMcpConfig(): Promise<McpServerConfig[]> {
+	return readJson<McpServerConfig[]>(await fetch('/api/mcp-config'))
+}
+
+export async function saveMcpConfig(config: McpServerConfig[]): Promise<McpServerConfig[]> {
+	return readJson<McpServerConfig[]>(
+		await fetch('/api/mcp-config', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(config),
+		})
+	)
+}
+
+export async function testMcpServer(server: McpServerConfig): Promise<{ name: string; description?: string }[]> {
+	return (
+		await readJson<{ tools: { name: string; description?: string }[] }>(
+			await fetch('/api/mcp-config/test', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ server }),
+			})
+		)
+	).tools
+}
+
+export async function fetchSkills(rescan = false): Promise<SkillInfo[]> {
+	return (await readJson<{ skills: SkillInfo[] }>(await fetch(rescan ? '/api/skills/rescan' : '/api/skills', { method: rescan ? 'POST' : 'GET' })))
+		.skills
+}
+
+/** WP31 Part E: whether the canvas agent chat may offer its `web-search` action — only
+ * when at least one search provider (Exa/Tavily/Brave) has a saved key. */
+export const $searchConfig = atom<SearchConfig | null>('search config (agent)', null)
+export function loadSearchProviders() {
+	if ($searchConfig.get()) return
+	fetchSearchConfig()
+		.then((c) => $searchConfig.set(c))
+		.catch(() => {})
+}
+export function firstConfiguredSearchProvider(): 'exa' | 'tavily' | 'brave' | undefined {
+	const config = $searchConfig.get()
+	if (!config) return undefined
+	return (['exa', 'tavily', 'brave'] as const).find((id) => config[id]?.keyRef)
+}
+
+/** For the Agent card's multi-selects: configured MCP servers and scanned skills, loaded once. */
+export const $mcpServers = atom<McpServerConfig[] | null>('mcp servers', null)
+export const $skills = atom<SkillInfo[] | null>('skills', null)
+let mcpSkillsLoading = false
+
+export function loadMcpServersAndSkills(force = false) {
+	if (mcpSkillsLoading) return
+	if (!force && $mcpServers.get() && $skills.get()) return
+	mcpSkillsLoading = true
+	Promise.all([
+		fetchMcpConfig().then((s) => $mcpServers.set(s)),
+		fetchSkills().then((s) => $skills.set(s)),
+	])
+		.catch(() => {})
+		.finally(() => {
+			mcpSkillsLoading = false
+		})
 }
 
 export function useAIConfig() {

@@ -4,10 +4,10 @@ import { buildAdhocModelValue } from '../../../../shared/modelRef'
 import { useAIConfig } from '../../../ai/aiConfig'
 import { cloudflareBase } from '../../../../shared/aiConfig'
 import { apiProviderModels } from '../../api/pipelineApi'
-import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX } from '../../constants'
+import { getNodeRowHeightPx, GROW_FIELD_EXTRA_PX, NODE_HEADER_HEIGHT_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiButton, UiSecretInput, UiSegmented, UiTextInput } from '../../../ui'
+import { UiButton, UiGrowingInput, UiSecretInput, UiSegmented } from '../../../ui'
 import { OutputPortRow, stopEvent, NodeSelect, WireField } from './fields'
 import { ExecutionResult, InfoValues, NodeComponentProps, NodeDefinition, NodeRow, updateNode } from './shared'
 
@@ -103,7 +103,8 @@ export class ModelSourceNodeDefinition extends NodeDefinition<ModelSourceNode> {
 		// kind, URL, key, fetch (with the model count/fetched-at line inline), filter, model
 		// rows (WP17: filter/model split onto their own rows), plus the big chosen-model line,
 		// plus 2 rows (WP21 Part C) for the modelId/baseURL output rows at the bottom.
-		return getNodeRowHeightPx(shape.props.fontSize) * 8 + CURRENT_PX
+		// WP27 Part B: URL and Filter wrap/grow instead of a single-line cutoff.
+		return getNodeRowHeightPx(shape.props.fontSize) * 8 + CURRENT_PX + GROW_FIELD_EXTRA_PX + GROW_FIELD_EXTRA_PX / 2
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -203,11 +204,11 @@ function ModelSourceNodeComponent({ shape, node }: NodeComponentProps<ModelSourc
 					onChange={(kind) => set({ kind }, false)}
 				/>
 			</WireField>
-			<WireField shapeId={shape.id} fieldKey="baseURL" label="URL">
+			<WireField shapeId={shape.id} fieldKey="baseURL" label="URL" grow>
 				<>
-					<UiTextInput
+					<UiGrowingInput
+						maxRows={3}
 						placeholder="https://api.openai.com/v1"
-						autoComplete="off"
 						value={node.baseURL}
 						onChange={(baseURL) => set({ baseURL }, false)}
 					/>
@@ -239,8 +240,9 @@ function ModelSourceNodeComponent({ shape, node }: NodeComponentProps<ModelSourc
 					{models.length ? `${models.length} models` : 'no models yet'} · {formatFetchedAt(node.fetchedAt)}
 				</span>
 			</NodeRow>
-			<WireField shapeId={shape.id} fieldKey="filter" label="Filter">
-				<UiTextInput
+			<WireField shapeId={shape.id} fieldKey="filter" label="Filter" grow>
+				<UiGrowingInput
+					maxRows={2}
 					placeholder="filter…"
 					value={node.filter}
 					onChange={(filter) => set({ filter }, false)}
