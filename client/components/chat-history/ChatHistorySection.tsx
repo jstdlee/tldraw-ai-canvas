@@ -39,7 +39,12 @@ export function ChatHistorySection({
 			{errors.map((item, i) => (
 				<ChatHistoryError key={'chat-history-error-' + i} item={item} />
 			))}
-			{loading && <SmallSpinner />}
+			{loading && (
+				<div className="chat-history-thinking">
+					<SmallSpinner />
+					<span>Thinking…</span>
+				</div>
+			)}
 		</div>
 	)
 }

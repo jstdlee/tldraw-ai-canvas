@@ -28,6 +28,20 @@ import { AgentTodoManager } from './managers/AgentTodoManager'
 import { AgentUserActionTracker } from './managers/AgentUserActionTracker'
 
 /**
+ * WP32 Problem 1b: a hard, bounded-time backstop for `/stream` going quiet — the server has
+ * its own idle timeout (`AGENT_STREAM_IDLE_TIMEOUT_MS` in AgentService.ts), but this also
+ * covers a hang the server itself can't detect or report (the connection between browser and
+ * server dropping silently, dev-tools network throttling, a mocked/broken route in tests).
+ * Without this, "no reply, no error, even after waiting" has no way to ever resolve.
+ * Overridable in e2e tests (`window.__WP32_STREAM_IDLE_TIMEOUT_MS__`) so a test doesn't need
+ * to wait out the real production timeout.
+ */
+function getStreamIdleTimeoutMs(): number {
+	const override = (globalThis as any).__WP32_STREAM_IDLE_TIMEOUT_MS__
+	return typeof override === 'number' && override > 0 ? override : 95_000
+}
+
+/**
  * The persisted state of an agent.
  * Used for saving and loading agent state.
  */
@@ -689,7 +703,12 @@ export class TldrawAgent {
 		prompt: BaseAgentPrompt
 		signal: AbortSignal
 	}): AsyncGenerator<Streaming<AgentAction>> {
-		const res = await fetch('/stream', {
+		const idleTimeoutMs = getStreamIdleTimeoutMs()
+
+		// The idle-timeout loop below only covers `reader.read()` calls — a server (or a
+		// mocked route in tests) that never responds at all would hang right here, before
+		// there's even a reader to time out. Bound this call the same way.
+		const fetchPromise = fetch('/stream', {
 			method: 'POST',
 			body: JSON.stringify(prompt),
 			headers: {
@@ -697,6 +716,18 @@ export class TldrawAgent {
 			},
 			signal,
 		})
+		// If the timeout below wins the race, this is left to settle on its own later —
+		// swallow that so it never surfaces as an unhandled rejection.
+		fetchPromise.catch(() => {})
+		const res = await Promise.race([
+			fetchPromise,
+			new Promise<never>((_, reject) => {
+				setTimeout(
+					() => reject(new Error(`No response after ${Math.round(idleTimeoutMs / 1000)}s. The request may be stuck — try again.`)),
+					idleTimeoutMs
+				)
+			}),
+		])
 
 		if (!res.body) {
 			throw Error('No body in response')
@@ -708,7 +739,18 @@ export class TldrawAgent {
 
 		try {
 			while (true) {
-				const { value, done } = await reader.read()
+				let timer: ReturnType<typeof setTimeout>
+				const timedOut = new Promise<'timeout'>((resolve) => {
+					timer = setTimeout(() => resolve('timeout'), idleTimeoutMs)
+				})
+				const result = await Promise.race([reader.read(), timedOut])
+				clearTimeout(timer!)
+				if (result === 'timeout') {
+					throw new Error(
+						`No response after ${Math.round(idleTimeoutMs / 1000)}s. The request may be stuck — try again.`
+					)
+				}
+				const { value, done } = result
 				if (done) break
 
 				buffer += decoder.decode(value, { stream: true })
@@ -735,7 +777,18 @@ export class TldrawAgent {
 				}
 			}
 		} finally {
-			reader.releaseLock()
+			// On a real timeout the `reader.read()` promise above may still be pending forever
+			// (same hazard as the server's `withIdleTimeout`): never let cleanup block on it.
+			try {
+				reader.cancel().catch(() => {})
+			} catch {
+				// ignore
+			}
+			try {
+				reader.releaseLock()
+			} catch {
+				// ignore: may already be released, or a read is still pending
+			}
 		}
 	}
 }

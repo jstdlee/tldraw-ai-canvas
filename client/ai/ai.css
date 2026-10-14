@@ -452,7 +452,11 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	color: var(--tl-color-text-1);
+	/* WP32 Problem 2: this only resolved once the FloatingPanel root itself carried the
+	 * tl-theme__* class (see App.tsx) — before that it fell through to the page's default
+	 * text color, reading as near-invisible dark-on-dark in dark mode. text-0 (not text-1)
+	 * for the strongest, most legible title color. */
+	color: var(--tl-color-text-0);
 	width: 100%;
 	min-width: 0;
 }
@@ -462,6 +466,7 @@
 	align-items: center;
 	gap: 6px;
 	font-size: 0.95em;
+	font-weight: 600;
 	white-space: nowrap;
 	flex-shrink: 0;
 }
@@ -476,8 +481,8 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-size: 11px;
-	color: var(--tl-color-text-2);
-	background: var(--tl-color-muted-1);
+	color: var(--tl-color-text-1);
+	background: var(--tl-color-muted-2);
 	padding: 3px 8px;
 	border-radius: 999px;
 	flex: 1 1 auto;

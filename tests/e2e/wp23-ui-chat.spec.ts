@@ -111,8 +111,12 @@ test.describe('WP23: agent chat builds with selected cards', () => {
 		const panel = page.locator('[role="dialog"][aria-label="Agent chat"]')
 		await expect(panel).toBeVisible()
 
+		// WP32 Problem 2: the mode chip is now a "Draw | Build" segmented control instead of a
+		// single text label — the active side shows the card count and is the checked radio.
 		const chip = panel.locator('.chat-mode-chip')
-		await expect(chip).toContainText('Building with 1 card')
+		const buildOption = chip.getByRole('radio', { name: /^Build/ })
+		await expect(buildOption).toHaveText('Build (1)')
+		await expect(buildOption).toHaveAttribute('aria-checked', 'true')
 
 		const input = panel.locator('textarea[name="input"]')
 		await input.fill('wire these up')

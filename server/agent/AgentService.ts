@@ -12,6 +12,55 @@ import { closeAndParseJson } from './closeAndParseJson'
 
 const PREFILL = '{"actions": [{"_type":'
 
+/**
+ * Hard idle timeout (Problem 1b): if the model stalls — a dead local router, a provider
+ * that accepts the request but never streams anything back — the request used to hang
+ * forever with no error. Reset on every text chunk; overridable for tests.
+ */
+export const AGENT_STREAM_IDLE_TIMEOUT_MS = Number(process.env.AGENT_STREAM_IDLE_TIMEOUT_MS) || 90_000
+
+/**
+ * Re-yield `iterable`, but throw a clear timeout error if no chunk arrives within `ms` of
+ * the previous one (or of the start). Needed because a provider-level failure (missing/bad
+ * API key, an unreachable local router, a model that silently drops the connection) can
+ * leave the underlying stream open with no further chunks and no error of its own.
+ */
+export async function* withIdleTimeout<T>(iterable: AsyncIterable<T>, ms: number): AsyncGenerator<T> {
+	const iterator = iterable[Symbol.asyncIterator]()
+	try {
+		while (true) {
+			let timer: ReturnType<typeof setTimeout>
+			const timedOut = new Promise<'timeout'>((resolve) => {
+				timer = setTimeout(() => resolve('timeout'), ms)
+			})
+			const next = iterator.next()
+			const result = await Promise.race([next, timedOut])
+			clearTimeout(timer!)
+			if (result === 'timeout') {
+				throw new Error(
+					`No response from the model after ${Math.round(ms / 1000)}s. ` +
+						`The provider may be unreachable, misconfigured, or stuck. Try again or pick a different model.`
+				)
+			}
+			if (result.done) return
+			yield result.value
+		}
+	} finally {
+		// Best-effort cleanup only, fire-and-forget: the underlying reader may already be
+		// released (stream ended normally, or the request was aborted), in which case
+		// `.return()` itself throws — that must never shadow the real error/result above.
+		// It must also never be awaited here: if the step we timed out on is genuinely stuck
+		// (the promise it's awaiting never settles, not just slow), `.return()` on an async
+		// generator queues behind that in-flight step and would never resolve either,
+		// defeating the whole point of the timeout above.
+		try {
+			iterator.return?.()?.catch(() => {})
+		} catch {
+			// ignore synchronous throws from `.return()` too
+		}
+	}
+}
+
 /** The model key the client picked (a prompt part may carry it). */
 function getRequestedModelKey(prompt: AgentPrompt): string | null {
 	for (const part of Object.values(prompt)) {
@@ -61,6 +110,12 @@ export async function* streamAgentActions(
 	const prefill = !!modelConfig.supportsPrefill
 	if (prefill) messages.push({ role: 'assistant', content: PREFILL })
 
+	// Problem 1b: `onError` throwing here does NOT reliably propagate as an exception out of
+	// `textStream`'s iteration (confirmed: a missing-API-key failure against a local router
+	// left `textStream` ending with zero chunks and no thrown error, which used to surface as
+	// the generic "did not return canvas actions" message below — hiding the real cause).
+	// Capture it instead, and prefer it over the generic message once the stream ends.
+	let streamError: unknown = null
 	const { textStream } = streamText({
 		model,
 		...(isAnthropic ? { allowSystemInMessages: true } : { system: systemPrompt }),
@@ -70,7 +125,7 @@ export async function* streamAgentActions(
 		providerOptions: getProviderOptions(provider, modelConfig),
 		abortSignal: signal,
 		onError: ({ error }) => {
-			throw error
+			streamError = error
 		},
 	})
 
@@ -80,7 +135,7 @@ export async function* streamAgentActions(
 	let maybeIncompleteAction: AgentAction | null = null
 	let startTime = Date.now()
 
-	for await (const text of textStream) {
+	for await (const text of withIdleTimeout(textStream, AGENT_STREAM_IDLE_TIMEOUT_MS)) {
 		buffer += text
 		const partialObject = closeAndParseJson(stripToJson(buffer))
 		if (!partialObject) continue
@@ -112,6 +167,13 @@ export async function* streamAgentActions(
 	}
 
 	if (cursor === 0) {
+		if (streamError) {
+			// A real provider/transport failure (bad key, unreachable host, model refused the
+			// request, …): surface it as-is instead of the generic "wrong format" message.
+			const message = streamError instanceof Error ? streamError.message : String(streamError)
+			console.warn(`[agent] ${modelConfig.key} failed: ${message}`)
+			throw new Error(message)
+		}
 		// The model answered, but not in the agent's JSON format. Small local
 		// models often do this; say so instead of silently doing nothing.
 		const preview = buffer.trim().slice(0, 400) || '(empty reply)'

@@ -340,8 +340,24 @@ function App() {
 					<FloatingPanel
 						storageKey="chat"
 						ariaLabel="Agent chat"
-						className="chat-float-panel"
-						defaultRect={{ w: 380, h: Math.min(640, (typeof window !== 'undefined' ? window.innerHeight : 800) - 32) }}
+						// WP32 Problem 2: the tldraw CSS variables (--tl-color-panel, --tl-shadow-3, …)
+						// only resolve inside a `tl-theme__*`-classed element. Only the inner
+						// ChatPanel div carried that class, so the FloatingPanel's own
+						// background/header/shadow — everything outside ChatPanel — fell back to
+						// `transparent`/`none`, which is why the panel had no solid surface and
+						// tldraw's own top-right style panel showed straight through it.
+						className={`chat-float-panel ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}
+						defaultRect={{
+							// WP32 Problem 2: tldraw's own top-right style panel is a persistent
+							// 148px-wide column (shown even with nothing selected). Right-aligning
+							// flush to the viewport edge (the old default) put the chat panel's
+							// right ~150px directly under it. Reserve that column by default so
+							// the two never fight for the same space; dragging the chat panel over
+							// it afterwards is fine (the panel is opaque and on top).
+							x: (typeof window !== 'undefined' ? window.innerWidth : 1200) - 380 - 12 - 160,
+							w: 380,
+							h: Math.min(640, (typeof window !== 'undefined' ? window.innerHeight : 800) - 32),
+						}}
 						minWidth={300}
 						minHeight={260}
 						onClose={() => togglePanel('chat')}

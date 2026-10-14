@@ -94,6 +94,9 @@ body {
 	z-index: 999999;
 }
 
+/* WP32 Problem 2: was `--tl-color-muted-1` on `--tl-color-muted-1` grey-on-grey (the input
+ * container is also muted-1); a panel background with a real border reads instead of
+ * disappearing into its surroundings, and gets a focus ring when a field inside is active. */
 .chat-input form {
 	display: flex;
 	flex-direction: column;
@@ -101,9 +104,16 @@ body {
 	padding: 8px;
 	border-radius: 12px;
 	color: var(--tl-color-text-2);
-	background-color: var(--tl-color-muted-1);
+	background-color: var(--tl-color-panel);
+	border: 1px solid var(--tl-color-divider);
 	box-shadow: var(--tl-shadow-1);
 	font-size: 11px;
+	transition: border-color 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.chat-input form:focus-within {
+	border-color: var(--tl-color-selected);
+	box-shadow: var(--tl-shadow-1), 0 0 0 2px color-mix(in srgb, var(--tl-color-selected) 35%, transparent);
 }
 
 .chat-input input[type='text'] {
@@ -169,9 +179,10 @@ body {
 	border-radius: 4px;
 }
 
+/* WP32 Problem 2: 28px (was 24px) — big enough to be a comfortable primary click target. */
 .chat-input-submit {
-	width: 24px;
-	height: 24px;
+	width: 28px;
+	height: 28px;
 	flex-shrink: 0;
 	align-self: flex-end;
 	background: var(--tl-color-primary);
@@ -187,6 +198,7 @@ body {
 	text-align: center;
 	font-weight: 500;
 	border-radius: 100%;
+	transition: background-color 0.12s ease-out;
 }
 
 .chat-input-submit:hover {
@@ -208,23 +220,19 @@ body {
 .chat-context-select-label {
 	display: flex;
 	align-items: center;
-	justify-content: center;
-	font-size: 10px;
+	gap: 4px;
+	font-size: 11px;
 }
 
 .chat-context-select {
 	position: relative;
-	display: flex;
+	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	padding: 0px 8px;
-}
-
-.chat-context-select {
-	border: 1px solid var(--tl-color-text-2);
-	padding: 0px 4px 0px 3px;
-	border-radius: 6px;
-	height: 18px;
+	border: 1px solid var(--tl-color-divider);
+	padding: 3px 8px 3px 6px;
+	border-radius: 999px;
+	color: var(--tl-color-text-2);
+	font-weight: 500;
 }
 
 .chat-context-select:hover {
@@ -235,36 +243,27 @@ body {
 .chat-context-select select {
 	opacity: 0;
 	position: absolute;
-	left: -1px;
-	right: -1px;
+	inset: 0;
 	background-color: transparent;
-	border-radius: 6px;
-	padding: 2px 16px 2px 0px;
-	font-size: 11px;
+	border-radius: 999px;
+	padding: 0;
 	border: none;
+	cursor: pointer;
 	-webkit-appearance: none;
 	-moz-appearance: none;
 	appearance: none;
 	font-family: 'Inter', sans-serif;
 }
 
-.chat-context-select select {
-	cursor: pointer;
-	font-size: 10px;
-	font-weight: 500;
-	line-height: 1.5;
-}
-
 .chat-context-select.active {
-	background-color: var(--tl-color-primary);
-	color: black;
-	border-color: black;
+	background-color: var(--tl-color-selected);
+	color: var(--tl-color-panel-contrast);
+	border-color: transparent;
 }
 
 .chat-context-select.active:hover {
-	background-color: var(--tl-color-primary);
-	color: var(--tl-color-text);
-	border-color: var(--tl-color-text);
+	background-color: var(--tl-color-selected);
+	border-color: transparent;
 }
 
 /* Chat History */
@@ -359,9 +358,14 @@ body {
 	justify-content: flex-end;
 }
 
+/* WP32 Problem 2: the user's own bubble used to inherit the same heavy
+ * muted-1 + shadow treatment as the (rarer) sub-agent prompt box. A subtle selected-tint
+ * reads as "this is you" without a heavy border or shadow. */
 .chat-history-prompt-user {
 	width: auto;
 	max-width: 85%;
+	background-color: color-mix(in srgb, var(--tl-color-selected) 14%, var(--tl-color-panel));
+	box-shadow: none;
 }
 
 /* WP28 Part A: shown when a request fails before the model produces any reply, so the
@@ -518,18 +522,21 @@ body {
 	margin-top: 2px;
 }
 
-/* WP23 Part F: the chip above the chat input showing "Drawing" / "Building with N cards". */
+/* WP32 Problem 2: a compact segmented control ("Draw | Build"), replacing the single grey
+ * bar that read "Drawing … Build instead" with no clear sense of which mode was active.
+ * One shared outer border reads as a single control; the active segment is a
+ * `--tl-color-selected` tint (not a near-invisible panel-on-muted swap), the inactive side
+ * is fully transparent so the shared border/background carries it. */
 .chat-mode-chip {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 4px 8px;
+	gap: 2px;
+	padding: 2px;
 	margin-bottom: 4px;
-	border-radius: 6px;
+	border-radius: var(--tl-radius-3);
+	border: 1px solid var(--tl-color-divider);
 	background: var(--tl-color-muted-1);
-	color: var(--tl-color-text-2);
-	font-size: 11px;
+	align-self: flex-start;
 }
 
 .chat-mode-chip button {
@@ -538,18 +545,19 @@ body {
 	color: var(--tl-color-text-2);
 	font-size: 11px;
 	font-weight: 500;
-	padding: 2px 6px;
-	border-radius: 4px;
+	line-height: 1.4;
+	padding: 3px 10px;
+	border-radius: var(--tl-radius-2);
+	background: transparent;
 }
 
 .chat-mode-chip button:hover {
-	background: var(--tl-color-muted-2);
 	color: var(--tl-color-text-1);
 }
 
-.chat-mode-chip.is-building {
-	background: color-mix(in srgb, var(--tl-color-selected) 16%, var(--tl-color-muted-1));
-	color: var(--tl-color-text-1);
+.chat-mode-chip button.is-active {
+	background: color-mix(in srgb, var(--tl-color-selected) 20%, transparent);
+	color: var(--tl-color-selected);
 }
 
 .chat-history-group {
@@ -714,16 +722,31 @@ body {
 	flex-wrap: wrap;
 }
 
+/* WP32 Problem 2: icons like AtIcon/CursorIcon are authored at a 24x24 intrinsic size with no
+ * CSS constraint anywhere, so inside an 18px-tall chip they spilled past the text and border
+ * (the overlapping "Selection"/"Add Context" icons in the owner's screenshot). Every chip icon
+ * carries this class — constrain it once, here. */
+.chat-icon {
+	width: 13px;
+	height: 13px;
+	flex-shrink: 0;
+}
+
 .prompt-tag {
-	display: flex;
+	display: inline-flex;
 	align-items: center;
-	border-radius: 6px;
-	background-color: transparent;
-	font-size: 10px;
-	border: 1px solid var(--tl-color-text-2);
-	padding: 8px 4px 8px 3px;
+	gap: 4px;
+	border-radius: 999px;
+	background-color: var(--tl-color-muted-1);
+	font-size: 11px;
+	border: 1px solid transparent;
+	/* WP32 Problem 2: this used to be `padding: 8px 4px 8px 3px` together with a fixed
+	 * `height: 16px` — 16px of vertical padding alone already exceeded the box's own height,
+	 * which is what pushed the icon over the text and the border. Let the pill size itself
+	 * from its content instead of fighting a fixed height. */
+	padding: 3px 8px 3px 6px;
 	font-weight: 500;
-	height: 16px;
+	line-height: 1.3;
 	color: var(--tl-color-text-2);
 	white-space: nowrap;
 	font-family: 'Inter', sans-serif;
@@ -914,6 +937,16 @@ button.prompt-tag span {
 
 .todo-item-delete:hover {
 	color: var(--tl-color-text);
+}
+
+/* WP32 Problem 1c: a visible, named "thinking" state while waiting for a reply, not just a
+ * bare spinner. */
+.chat-history-thinking {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--tl-color-text-3);
+	font-size: 11px;
 }
 
 /* Custom appearance for specific agent actions */

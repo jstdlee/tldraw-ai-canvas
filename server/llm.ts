@@ -6,9 +6,26 @@ import type { LanguageModel, streamText } from 'ai'
 import { cloudflareBase, ModelConfig, ProviderConfig } from '../shared/aiConfig'
 import { ConfigError } from './config'
 
+/**
+ * The official `@ai-sdk/openai` / `@ai-sdk/anthropic` / `@ai-sdk/google` clients all refuse to
+ * build a model at all when `apiKey` is empty (`AI_LoadAPIKeyError`), even though their `kind`
+ * is reused in this app for self-hosted/local routers (e.g. a Magpie or LiteLLM proxy on
+ * 127.0.0.1) that don't check auth. Without this, picking one of those kinds for a local
+ * router with no key configured fails before the request is ever sent — and because that
+ * failure happens inside the SDK's streaming internals rather than a synchronous throw, it
+ * surfaces as a silently empty reply instead of a clear error (see AgentService.ts's
+ * `cursor === 0` branch). A real cloud endpoint (no custom `baseURL`) still requires a real
+ * key, so the placeholder is only used once the user has pointed the provider somewhere else.
+ */
+export function apiKeyOrLocalPlaceholder(provider: ProviderConfig): string | undefined {
+	if (provider.apiKey) return provider.apiKey
+	return provider.baseURL ? 'local-router-no-key-required' : undefined
+}
+
 /** Build an AI SDK language model from a user-defined provider and model. */
 export function getLanguageModel(provider: ProviderConfig, model: ModelConfig): LanguageModel {
 	const baseURL = provider.baseURL?.replace(/\/+$/, '') || undefined
+	const apiKey = apiKeyOrLocalPlaceholder(provider)
 	switch (provider.kind) {
 		case 'openai-compatible':
 			if (!baseURL) throw new ConfigError(`Provider "${provider.name}" needs a base URL.`)
@@ -18,11 +35,11 @@ export function getLanguageModel(provider: ProviderConfig, model: ModelConfig): 
 				apiKey: provider.apiKey,
 			}).chatModel(model.model)
 		case 'openai':
-			return createOpenAI({ apiKey: provider.apiKey, baseURL })(model.model)
+			return createOpenAI({ apiKey, baseURL })(model.model)
 		case 'anthropic':
-			return createAnthropic({ apiKey: provider.apiKey, baseURL })(model.model)
+			return createAnthropic({ apiKey, baseURL })(model.model)
 		case 'google':
-			return createGoogleGenerativeAI({ apiKey: provider.apiKey, baseURL })(model.model)
+			return createGoogleGenerativeAI({ apiKey, baseURL })(model.model)
 		case 'cloudflare':
 			if (!provider.accountId) throw new ConfigError(`Provider "${provider.name}" needs a Cloudflare account id.`)
 			return createOpenAICompatible({

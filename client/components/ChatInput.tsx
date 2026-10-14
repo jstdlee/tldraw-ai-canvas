@@ -133,14 +133,29 @@ export function ChatInput({
 					))}
 				</div>
 
-				<div className={'chat-mode-chip' + (mode === 'building' ? ' is-building' : '')}>
-					<span>{mode === 'building' ? `Building with ${cardCount} card${cardCount === 1 ? '' : 's'}` : 'Drawing'}</span>
+				{/* WP32 Problem 2: a compact two-option segmented control, so it's clear at a
+				 * glance which mode is active — not a single grey bar reading "Drawing …
+				 * Build instead". */}
+				<div className="chat-mode-chip" role="radiogroup" aria-label="Message mode">
 					<button
 						type="button"
-						title={mode === 'building' ? 'Switch to drawing for this message' : 'Switch to building for this message'}
-						onClick={() => setForcedMode(mode === 'building' ? 'drawing' : 'building')}
+						role="radio"
+						aria-checked={mode === 'drawing'}
+						className={mode === 'drawing' ? 'is-active' : ''}
+						title="Draw on the canvas"
+						onClick={() => setForcedMode('drawing')}
 					>
-						{mode === 'building' ? 'Draw instead' : 'Build instead'}
+						Draw
+					</button>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={mode === 'building'}
+						className={mode === 'building' ? 'is-active' : ''}
+						title={cardCount > 0 ? `Build with ${cardCount} selected card${cardCount === 1 ? '' : 's'}` : 'Build with the cards you select'}
+						onClick={() => setForcedMode('building')}
+					>
+						Build{mode === 'building' && cardCount > 0 ? ` (${cardCount})` : ''}
 					</button>
 				</div>
 
