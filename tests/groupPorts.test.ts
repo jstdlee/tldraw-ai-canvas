@@ -88,4 +88,64 @@ describe('computeGroupPorts', () => {
 		expect(inputs.map((p) => p.label)).toEqual(['Summarise PDF · text', 'Summarise PDF · style'])
 		expect(outputs.map((p) => p.label)).toEqual(['Summarise PDF'])
 	})
+
+	describe('FLOW-05: field ports only join the box when wired from outside', () => {
+		it('an unwired field port (a settings control) is dropped, unlike a dedicated port', () => {
+			const members = ['shape:a']
+			const ports: InnerPort[] = [
+				port('shape:a', 'Text tools', 'input', 'end'),
+				port('shape:a', 'Text tools', 'input2', 'end'),
+				port('shape:a', 'Text tools', 'field:op', 'end'),
+				port('shape:a', 'Text tools', 'field:a', 'end'),
+				port('shape:a', 'Text tools', 'field:b', 'end'),
+				port('shape:a', 'Text tools', 'output', 'start'),
+			]
+			const { inputs } = computeGroupPorts(members, ports, [])
+			// Dedicated ports ("input"/"input2") stay, even unwired; the three settings fields
+			// don't — matching the review's "wall of Text to… rows" repro (FLOW-05).
+			expect(inputs.map((p) => p.portId).sort()).toEqual(['input', 'input2'])
+		})
+
+		it('a field port wired from outside the group still joins the box', () => {
+			const members = ['shape:a']
+			const ports: InnerPort[] = [port('shape:a', 'Text tools', 'field:op', 'end')]
+			const wires: InnerWire[] = [{ fromNode: 'shape:outside', fromPort: 'output', toNode: 'shape:a', toPort: 'field:op' }]
+			const { inputs } = computeGroupPorts(members, ports, wires)
+			expect(inputs.map((p) => p.portId)).toEqual(['field:op'])
+		})
+
+		it('a field port fed by another member stays hidden (rule 1, unchanged)', () => {
+			const members = ['shape:a', 'shape:b']
+			const ports: InnerPort[] = [
+				port('shape:a', 'A', 'output', 'start'),
+				port('shape:b', 'B', 'field:op', 'end'),
+			]
+			const wires: InnerWire[] = [{ fromNode: 'shape:a', fromPort: 'output', toNode: 'shape:b', toPort: 'field:op' }]
+			const { inputs } = computeGroupPorts(members, ports, wires)
+			expect(inputs).toHaveLength(0)
+		})
+
+		it('the exact review repro: Prompt → trim → count packs down from 9 inputs to 3', () => {
+			const members = ['shape:trim', 'shape:count']
+			const mk = (id: string, label: string) => [
+				port(id, label, 'input', 'end'),
+				port(id, label, 'input2', 'end'),
+				port(id, label, 'field:op', 'end'),
+				port(id, label, 'field:a', 'end'),
+				port(id, label, 'field:b', 'end'),
+				port(id, label, 'output', 'start'),
+			]
+			const ports: InnerPort[] = [...mk('shape:trim', 'Text tools'), ...mk('shape:count', 'Text tools')]
+			const wires: InnerWire[] = [
+				{ fromNode: 'shape:prompt', fromPort: 'output', toNode: 'shape:trim', toPort: 'input' },
+				{ fromNode: 'shape:trim', fromPort: 'output', toNode: 'shape:count', toPort: 'input' },
+			]
+			const { inputs, outputs } = computeGroupPorts(members, ports, wires)
+			// Before FLOW-05's fix this was 9 (every unwired field on both cards too); now just
+			// the dedicated ports that matter: trim's wired "input" + both cards' unwired
+			// "input2" (dedicated ports stay regardless of wiring — only fields are filtered).
+			expect(inputs.map((p) => p.portId).sort()).toEqual(['input', 'input2', 'input2'].sort())
+			expect(outputs).toHaveLength(1)
+		})
+	})
 })

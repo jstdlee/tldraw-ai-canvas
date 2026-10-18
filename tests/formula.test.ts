@@ -96,6 +96,23 @@ describe('formula: text functions', () => {
 		expect(run('concat("a", "b", "c")')).toBe('abc')
 		expect(run('text(5)')).toBe('5')
 	})
+
+	// P8: domain()/path() let a formula column pull a URL's host or path, e.g. to group a web
+	// search result by domain — there was no way to do this before (users had to guess a
+	// split(url, "/", n) index, which breaks for a different URL shape).
+	it('domain() returns the hostname', () => {
+		expect(run('domain(url)', { url: 'https://example.com/blog/post-1' })).toBe('example.com')
+		expect(run('domain("www.example.com/x")')).toBe('www.example.com')
+	})
+
+	it('path() returns the path', () => {
+		expect(run('path(url)', { url: 'https://example.com/blog/post-1?x=1' })).toBe('/blog/post-1')
+		expect(run('path("example.com")')).toBe('/')
+	})
+
+	it('domain()/path() give a clear error for something that is not a URL', () => {
+		expect(() => run('domain("::::")')).toThrow(/is not a URL/)
+	})
 })
 
 describe('formula: number functions', () => {

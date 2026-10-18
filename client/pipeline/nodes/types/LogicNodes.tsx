@@ -1,11 +1,24 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
-import { evaluateCondition, isTruthy, rangeItems, resolveLoopItemResult, splitItems } from '../../../../shared/logic'
+import {
+	addResultColumn,
+	CollectMode,
+	collectResults,
+	evaluateCondition,
+	isTruthy,
+	legacyCollectMode,
+	rangeItems,
+	resolveJoiner,
+	resolveLoopItemResult,
+	rowColumnPorts,
+	splitItems,
+} from '../../../../shared/logic'
+import { parseTableText, toCsv } from '../../../../shared/tableText'
 import { IteratorIcon } from '../../components/icons/IteratorIcon'
 import { RouterIcon } from '../../components/icons/RouterIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
 import { executionGeneration } from '../../execution/executionState'
-import { loopBodyNodes, runLoopBody } from '../../execution/loop'
+import { loopBodyNodes, runLoopBodyPorts } from '../../execution/loop'
 import { clearNodeRun } from '../../execution/nodeRunState'
 import { Port, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
@@ -316,12 +329,36 @@ export const ForEachNode = T.object({
 	rangeFrom: T.number.optional(),
 	rangeTo: T.number.optional(),
 	rangeStep: T.number.optional(),
+	// WP35 Part C ("For each over table rows"): `collect` is independent of `split` (GAPS-14 —
+	// `split: 'json'` used to always collect as a JSON array, ignoring "Join with" entirely).
+	// All three are new and optional: an old saved canvas without them behaves exactly as
+	// before (see `effectiveCollect`'s legacy fallback) — `split: 'rows'` itself is additive,
+	// so an old canvas can't have been using it already.
+	collect: T.string.optional(),
+	resultColumn: T.string.optional(),
+	// The last run's table header, for split: 'rows' — lets the row:<column> ports render
+	// before the next run too (same pattern as Decision switch's `lastOptions`).
+	rowColumns: T.arrayOf(T.string).optional(),
 	progress: T.string.nullable(),
 	lastResults: T.string.nullable(),
 	error: T.string.nullable(),
 })
 
 const FOR_EACH_RESULT_PX = 110
+
+/** The collect mode actually in effect: the node's own explicit choice, or — for a canvas saved
+ * before this field existed — the exact legacy rule, so its output never silently changes. */
+function effectiveCollect(node: ForEachNode): CollectMode {
+	const raw = node.collect
+	if (raw === 'lines' || raw === 'joined' || raw === 'json' || raw === 'table') return raw
+	return legacyCollectMode(node.split)
+}
+
+/** The table's columns for `split: 'rows'`, remembered from the last run (empty before the
+ * first one, or whenever `split` isn't `'rows'`). */
+function rowColumnsFor(node: ForEachNode): string[] {
+	return node.split === 'rows' ? node.rowColumns ?? [] : []
+}
 
 export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 	static type = 'for_each'
@@ -330,66 +367,132 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 	heading = 'For each'
 	icon = <IteratorIcon />
 	category = categoryOf('for_each')
-	resultKeys = ['progress', 'lastResults', 'error'] as const
+	// UI-15: the default width left "each item →" and its port dot crowded against the card's
+	// right edge; table-rows mode adds its own "row:<column>" pills right below it, which need
+	// the same room.
+	override defaultWidthPx = 360
+	resultKeys = ['progress', 'lastResults', 'error', 'rowColumns'] as const
 	getDefault(): ForEachNode {
-		return { type: 'for_each', split: 'lines', separator: ',', joiner: '\\n', noResult: 'skip', rangeFrom: 1, rangeTo: 10, rangeStep: 1, progress: null, lastResults: null, error: null }
-	}
-	getBodyHeightPx(shape: NodeShape) {
-		// +1 row (WP21 Part B): the noResult control. Range mode: From / To / Step replace the
-		// one Separator row (+2 rows).
-		const extra = isRangeMode(shape) ? 2 : 0
-		return getNodeRowHeightPx(shape.props.fontSize) * (7 + extra) + 18
-	}
-	getPorts(shape: NodeShape): Record<string, ShapePort> {
-		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
-		const extra = isRangeMode(shape) ? 2 : 0
 		return {
-			list: { id: 'list', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
-			// Loop body: "item" → … → back into "result".
-			item: { id: 'item', x: NODE_WIDTH_PX, y: portY(3 + extra, rowPx), terminal: 'start', dataType: 'text' },
-			result: { id: 'result', x: 0, y: portY(4 + extra, rowPx), terminal: 'end', dataType: 'any', feedback: true },
-			output: { id: 'output', x: NODE_WIDTH_PX, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
+			type: 'for_each',
+			split: 'lines',
+			separator: ',',
+			joiner: '\\n',
+			noResult: 'skip',
+			rangeFrom: 1,
+			rangeTo: 10,
+			rangeStep: 1,
+			collect: 'joined',
+			resultColumn: 'result',
+			rowColumns: [],
+			progress: null,
+			lastResults: null,
+			error: null,
 		}
+	}
+	getBodyHeightPx(shape: NodeShape, node: ForEachNode) {
+		// 8 fixed rows: list, split, separator (or its range/rows equivalent), item, result,
+		// "Join with", Collect, No result. Range mode: From / To / Step replace the one
+		// Separator row (+2). Table rows mode: one row:<column> output row per column, right
+		// after "item" (+N). Collect "table": +1 row for the "Result column" name.
+		const extraSplit = isRangeMode(shape) ? 2 : 0
+		const rowCols = rowColumnsFor(node).length
+		const extraCollect = effectiveCollect(node) === 'table' ? 1 : 0
+		return getNodeRowHeightPx(shape.props.fontSize) * (8 + extraSplit + rowCols + extraCollect) + 18
+	}
+	getPorts(shape: NodeShape, node: ForEachNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		const width = this.getWidthPx(shape, node)
+		const extra = isRangeMode(shape) ? 2 : 0
+		const rowPorts = node.split === 'rows' ? rowColumnPorts(rowColumnsFor(node)) : []
+		const ports: Record<string, ShapePort> = {
+			list: { id: 'list', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
+			// Loop body: "item" (+ "row:<column>" when split is "rows") → … → back into "result".
+			item: { id: 'item', x: width, y: portY(3 + extra, rowPx), terminal: 'start', dataType: 'text' },
+			result: { id: 'result', x: 0, y: portY(4 + extra + rowPorts.length, rowPx), terminal: 'end', dataType: 'any', feedback: true },
+			output: { id: 'output', x: width, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
+		}
+		rowPorts.forEach((p, i) => {
+			ports[p.id] = { id: p.id, x: width, y: portY(4 + extra + i, rowPx), terminal: 'start', dataType: 'text' }
+		})
+		return ports
 	}
 	async execute(shape: NodeShape, node: ForEachNode, inputs: InputValues): Promise<ExecutionResult> {
 		const set = (patch: Partial<ForEachNode>, outOfDate = true) =>
 			updateNode<ForEachNode>(this.editor, this.editor.getShape<NodeShape>(shape.id) ?? shape, (n) => ({ ...n, ...patch }), outOfDate)
 		const generation = executionGeneration(this.editor)
 		const bodyNodes = loopBodyNodes(this.editor, shape.id, 'item')
-		const joinResults = (results: string[]) =>
-			node.split === 'json' ? JSON.stringify(results) : results.join(node.joiner.replace(/\\n/g, '\n'))
+		const collect = effectiveCollect(node)
+		const joiner = resolveJoiner(node.joiner)
 		try {
-			const items =
-				node.split === 'range'
-					? rangeItems(node.rangeFrom ?? 1, node.rangeTo ?? 10, node.rangeStep)
-					: splitItems(coerceToText(getInput(inputs, 'list')), node.split, node.separator)
-			const results: string[] = []
+			let rowsTable: { headers: string[]; rows: string[][] } | null = null
+			let rowPorts: { id: string; label: string }[] = []
+			let items: string[]
+			if (node.split === 'range') {
+				items = rangeItems(node.rangeFrom ?? 1, node.rangeTo ?? 10, node.rangeStep)
+			} else if (node.split === 'rows') {
+				// WP35 Part C: each row becomes one item (the row, as a JSON object keyed by
+				// column) plus its own "row:<column>" port for each cell — reusing the one table
+				// contract (`parseTableText`) every table-producing/consuming card already uses.
+				const table = parseTableText(coerceToText(getInput(inputs, 'list')))
+				rowsTable = table
+				rowPorts = rowColumnPorts(table.headers)
+				items = table.rows.map((row) => JSON.stringify(Object.fromEntries(table.headers.map((h, i) => [h, row[i] ?? '']))))
+				set({ rowColumns: table.headers }, false)
+			} else {
+				items = splitItems(coerceToText(getInput(inputs, 'list')), node.split, node.separator)
+			}
+			if (collect === 'table' && !rowsTable) {
+				throw new Error('"Table (add column)" needs Split: table rows')
+			}
+
+			// Builds this run's `output`/`lastResults` from whatever has been collected so far —
+			// shared by the happy path and every early-return (stopped/failed) below, so a
+			// partial run still produces a sensible partial table/list instead of nothing.
+			const finalize = (aligned: (string | null)[]): string => {
+				if (collect === 'table' && rowsTable) {
+					const built = addResultColumn(rowsTable.headers, rowsTable.rows, node.resultColumn || 'result', aligned)
+					return toCsv(built.headers, built.rows)
+				}
+				return collectResults(aligned, collect === 'table' ? 'joined' : collect, joiner)
+			}
+			const hasAny = (aligned: (string | null)[]) => aligned.some((v) => v != null)
+
+			const aligned: (string | null)[] = []
 			for (let i = 0; i < items.length; i++) {
 				// Stop pressed (or a new Play started): keep what finished and end cleanly.
 				if (executionGeneration(this.editor) !== generation) {
-					set({ progress: `stopped at ${i} / ${items.length}`, lastResults: joinResults(results) })
-					return { item: STOP_EXECUTION, output: results.length ? joinResults(results) : STOP_EXECUTION }
+					set({ progress: `stopped at ${i} / ${items.length}`, lastResults: finalize(aligned) })
+					return { item: STOP_EXECUTION, output: hasAny(aligned) ? finalize(aligned) : STOP_EXECUTION }
 				}
 				set({ progress: `${i + 1} / ${items.length}`, error: null })
 				// Clear last item's body-node run state so only this item's failure counts.
 				for (const id of bodyNodes) clearNodeRun(this.editor, id)
-				const result = await runLoopBody(this.editor, shape.id, 'item', 'result', items[i])
+				const itemPorts: Record<string, PipelineValue> = { item: items[i] }
+				if (rowsTable) {
+					rowPorts.forEach((p, colIdx) => {
+						itemPorts[p.id] = rowsTable!.rows[i][colIdx] ?? ''
+					})
+				}
+				const result = await runLoopBodyPorts(this.editor, shape.id, itemPorts, 'result')
 				if (result.error) {
 					// Surface the failure instead of passing the item through as if it worked.
 					set({ error: `Item ${i + 1} (${previewItem(items[i])}): ${result.error}`, progress: `failed at ${i + 1} / ${items.length}` }, false)
-					return { item: STOP_EXECUTION, output: results.length ? joinResults(results) : STOP_EXECUTION }
+					return { item: STOP_EXECUTION, output: hasAny(aligned) ? finalize(aligned) : STOP_EXECUTION }
 				}
 				// WP21 Part B: a branch inside the loop body (e.g. an If whose "else" is never
 				// wired back to "result") can leave this item with no result at all — handled
-				// by noResult (default "skip": the item is left out, like a filter).
+				// by noResult (default "skip": the item is left out, like a filter). For
+				// collect: "table" every row is kept regardless (a missing result is an empty
+				// cell, not a dropped row), so `aligned` always stays index-aligned with `items`.
 				const outcome = resolveLoopItemResult(result.value, items[i], (node.noResult as 'skip' | 'keep' | 'error') ?? 'skip')
 				if (outcome.error) {
 					set({ error: `Item ${i + 1} (${previewItem(items[i])}): ${outcome.error}`, progress: `failed at ${i + 1} / ${items.length}` }, false)
-					return { item: STOP_EXECUTION, output: results.length ? joinResults(results) : STOP_EXECUTION }
+					return { item: STOP_EXECUTION, output: hasAny(aligned) ? finalize(aligned) : STOP_EXECUTION }
 				}
-				if (outcome.value != null) results.push(outcome.value)
+				aligned.push(outcome.value)
 			}
-			const joined = joinResults(results)
+			const joined = finalize(aligned)
 			set({ lastResults: joined, progress: `${items.length} done` })
 			return { item: STOP_EXECUTION, output: joined }
 		} catch (e) {
@@ -436,9 +539,24 @@ function ForEachItemRow({ shapeId }: { shapeId: NodeShape['id'] }) {
 	)
 }
 
+/** WP35 Part C: one output row per table column, right below "item", for `split: 'rows'`. */
+function ForEachRowColumnRow({ shapeId, portId, label }: { shapeId: NodeShape['id']; portId: string; label: string }) {
+	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, portId)
+	return (
+		<NodeRow ref={ref} className="NodeRow-right">
+			<span className="NodeBranch" title={label}>
+				{label} →
+			</span>
+			<Port shapeId={shapeId} portId={portId} />
+		</NodeRow>
+	)
+}
+
 function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) {
 	const editor = useEditor()
 	const set = (patch: Partial<ForEachNode>) => updateNode<ForEachNode>(editor, shape, (n) => ({ ...n, ...patch }))
+	const collect = effectiveCollect(node)
+	const rowPorts = node.split === 'rows' ? rowColumnPorts(rowColumnsFor(node)) : []
 	return (
 		<>
 			<PortRow shapeId={shape.id} portId="list" label="List" dataType="any" />
@@ -450,6 +568,7 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 					<option value="json">JSON array items</option>
 					<option value="regex">per regex match</option>
 					<option value="range">number range</option>
+					<option value="rows">table rows</option>
 				</NodeSelect>
 			</WireField>
 			{node.split === 'range' ? (
@@ -472,16 +591,36 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 						value={node.separator}
 						onChange={(separator) => set({ separator })}
 					/>
+				) : node.split === 'rows' ? (
+					<span className="NodeRow-disconnected">header kept — one item per row</span>
 				) : (
 					<span className="NodeRow-disconnected">empty items are skipped</span>
 				)}
 			</WireField>
 			)}
 			<ForEachItemRow shapeId={shape.id} />
+			{/* WP35 Part C: "item" carries the whole row as JSON; each column also gets its own
+			 * output port, so the loop body can wire just the one field it needs. */}
+			{rowPorts.map((p) => (
+				<ForEachRowColumnRow key={p.id} shapeId={shape.id} portId={p.id} label={p.label} />
+			))}
 			<PortRow shapeId={shape.id} portId="result" label="← Result" dataType="any" hint="end of the loop body" />
 			<WireField shapeId={shape.id} fieldKey="joiner" label="Join with">
 				<UiTextInput value={node.joiner} onChange={(joiner) => set({ joiner })} />
 			</WireField>
+			<WireField shapeId={shape.id} fieldKey="collect" label="Collect">
+				<NodeSelect className="NodeField-select" value={collect} onPointerDown={stopEvent} onChange={(e) => set({ collect: e.target.value })}>
+					<option value="lines">lines</option>
+					<option value="joined">joined (Join with)</option>
+					<option value="json">JSON array</option>
+					<option value="table">table (add column)</option>
+				</NodeSelect>
+			</WireField>
+			{collect === 'table' && (
+				<WireField shapeId={shape.id} fieldKey="resultColumn" label="Result column" hint={node.split !== 'rows' ? 'needs Split: table rows' : undefined}>
+					<UiTextInput placeholder="result" value={node.resultColumn ?? 'result'} onChange={(resultColumn) => set({ resultColumn })} />
+				</WireField>
+			)}
 			<WireField shapeId={shape.id} fieldKey="noResult" label="No result">
 				<NodeSelect
 					className="NodeField-select"

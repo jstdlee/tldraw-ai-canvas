@@ -60,7 +60,7 @@ test.describe('WP27 Part B: long row labels', () => {
 		await gotoApp(page)
 	})
 
-	test('a port label ellipsises with its full text as a title, and the port dot stays on its row', async ({ page }) => {
+	test('a port label wraps to two lines before it is cut, keeps its full text as a title, and the port dot stays on its row', async ({ page }) => {
 		const id = await createNode(
 			page,
 			{ type: 'if', condition: 'contains', operand: 'yes', lastResult: null, lastValue: null },
@@ -70,8 +70,9 @@ test.describe('WP27 Part B: long row labels', () => {
 
 		const label = nodeLocator(page, id).locator('.NodePortLabel').first()
 		await expect(label).toHaveAttribute('title', await label.innerText())
-		const style = await label.evaluate((el) => getComputedStyle(el).textOverflow)
-		expect(style).toBe('ellipsis')
+		// WP37 UI-04: a long label wraps to a second line, then the line clamp cuts it.
+		const clamp = await label.evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-line-clamp'))
+		expect(clamp).toBe('2')
 
 		// The "then" output port dot sits vertically inside its own row's bounding box.
 		const row = nodeLocator(page, id).locator('.NodeRow-right').first()

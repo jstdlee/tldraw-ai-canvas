@@ -125,8 +125,11 @@ export async function testMcpServer(server: McpServerConfig): Promise<{ name: st
 }
 
 export async function fetchSkills(rescan = false): Promise<SkillInfo[]> {
-	return (await readJson<{ skills: SkillInfo[] }>(await fetch(rescan ? '/api/skills/rescan' : '/api/skills', { method: rescan ? 'POST' : 'GET' })))
-		.skills
+	// AI-05: a POST with no Content-Type trips the server's own CSRF guard (it requires
+	// `application/json` on every /api/* POST/PUT) with a 415 — this needs a body + header
+	// even though the route itself ignores the body.
+	const init = rescan ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' } : { method: 'GET' }
+	return (await readJson<{ skills: SkillInfo[] }>(await fetch(rescan ? '/api/skills/rescan' : '/api/skills', init))).skills
 }
 
 /** WP31 Part E: whether the canvas agent chat may offer its `web-search` action — only

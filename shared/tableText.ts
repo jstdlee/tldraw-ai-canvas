@@ -17,6 +17,14 @@ function cellToString(value: unknown): string {
 	return String(value)
 }
 
+/** The one number parser shared across the table-text layer (DATA-05): strips thousands
+ * separators before parsing, so "1,000" compares/converts the same way everywhere a cell is
+ * read as a number — DataPipe's Convert/Sort ops (`shared/tableOps.ts`), Table view's
+ * click-to-sort (`compareCells` below), and the full-size zoom viewer that reuses it. */
+export function toNumber(value: string): number {
+	return Number((value ?? '').replace(/,/g, ''))
+}
+
 function needsQuote(value: string): boolean {
 	return value.includes('"') || value.includes('\n') || value.includes('\r') || value.includes(',')
 }
@@ -79,7 +87,20 @@ function splitDelimited(text: string, sep: string): string[][] {
 		row.push(cell)
 		rows.push(row)
 	}
-	return rows.filter((line) => line.some((part) => part.length > 0))
+	return trimBlankEdgeRows(rows)
+}
+
+/** DATA-06: a wholly-empty row (every cell blank) is only dropped at the very start or end of
+ * the input — the usual "trailing blank line(s) in a pasted CSV" case — never in the middle, so
+ * a genuinely blank data row (e.g. `a,b\n1,x\n,\n3,z`) survives as an empty row instead of
+ * silently vanishing with no trace. */
+function trimBlankEdgeRows(rows: string[][]): string[][] {
+	const isBlank = (line: string[]) => line.every((part) => part.length === 0)
+	let start = 0
+	while (start < rows.length && isBlank(rows[start])) start++
+	let end = rows.length
+	while (end > start && isBlank(rows[end - 1])) end--
+	return rows.slice(start, end)
 }
 
 function fromGrid(grid: string[][]): Table {
@@ -120,6 +141,25 @@ function pickDelimiter(lines: string[]): string {
 	return detectDelimiter(lines[0] ?? '')
 }
 
+/** GAPS-07: flattens one object's own nested shape to dotted column names (`customer.country`),
+ * recursing through plain nested objects. An array of scalars becomes one cell, its values
+ * joined with `; `; a deeper array (of objects or arrays) is kept as JSON text — flattening it
+ * too would need a column per index, which rarely matches across rows. */
+function flattenRecord(obj: Record<string, unknown>, prefix = ''): Record<string, string> {
+	const out: Record<string, string> = {}
+	for (const [key, value] of Object.entries(obj)) {
+		const path = prefix ? `${prefix}.${key}` : key
+		if (Array.isArray(value)) {
+			out[path] = value.every((v) => v === null || typeof v !== 'object') ? value.map((v) => cellToString(v)).join('; ') : JSON.stringify(value)
+		} else if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+			Object.assign(out, flattenRecord(value as Record<string, unknown>, path))
+		} else {
+			out[path] = cellToString(value)
+		}
+	}
+	return out
+}
+
 function fromJsonValue(parsed: unknown): Table | null {
 	if (Array.isArray(parsed)) {
 		if (!parsed.length) return { headers: [], rows: [] }
@@ -130,24 +170,33 @@ function fromJsonValue(parsed: unknown): Table | null {
 		}
 		if (typeof parsed[0] === 'object' && parsed[0] !== null) {
 			// A JSON array of objects (e.g. an HTTP or Web search result): the column order is
-			// every key's first appearance, across every object (rows may not share every key).
+			// every key's first appearance, across every (flattened) object — rows may not share
+			// every key, and a nested object's own keys appear dotted (GAPS-07).
 			const objects = parsed as Record<string, unknown>[]
+			const flat = objects.map((obj) => (obj && typeof obj === 'object' ? flattenRecord(obj) : {}))
 			const headers: string[] = []
-			for (const obj of objects) {
-				if (!obj || typeof obj !== 'object') continue
-				for (const key of Object.keys(obj)) if (!headers.includes(key)) headers.push(key)
-			}
-			const rows = objects.map((obj) => headers.map((h) => cellToString(obj?.[h])))
+			for (const obj of flat) for (const key of Object.keys(obj)) if (!headers.includes(key)) headers.push(key)
+			const rows = flat.map((obj) => headers.map((h) => obj[h] ?? ''))
 			return { headers, rows }
 		}
-		return null
+		// GAPS-10: a JSON array of scalars (strings, numbers, booleans, null) — e.g. a For each
+		// loop's collected lines, or Generate image's `images` — becomes one column, "value".
+		return { headers: ['value'], rows: parsed.map((v) => [cellToString(v)]) }
 	}
 	if (parsed && typeof parsed === 'object') {
-		const obj = parsed as { columns?: unknown; rows?: unknown }
+		const obj = parsed as Record<string, unknown>
 		if (Array.isArray(obj.columns) && Array.isArray(obj.rows)) {
 			const headers = obj.columns.map(cellToString)
 			const rows = (obj.rows as unknown[][]).map((row) => headers.map((_, i) => cellToString(row[i])))
 			return { headers, rows }
+		}
+		// GAPS-07/10: a `{ data: [...] }` / `{ items: [...] }` wrapper around the real rows (a
+		// common REST API shape) — accept the one array property, whichever of these it's named.
+		for (const key of ['data', 'items', 'rows', 'results']) {
+			if (Array.isArray(obj[key])) {
+				const inner = fromJsonValue(obj[key])
+				if (inner) return inner
+			}
 		}
 	}
 	return null
@@ -179,14 +228,18 @@ function fromMarkdownTable(text: string): Table | null {
 /**
  * `hadQuotes` (the raw text contained a `"`) is a strong signal that the author meant CSV
  * quoting on purpose, so a quoted table is never flagged as garbage here, however short.
- * Otherwise: a one-column table (every line split to exactly one cell) or a ragged one (lines
- * split to different widths, as a sentence's stray comma does) is only garbage when most of its
- * cells have their own internal whitespace — a real one-column table of plain words or ids has
- * none. */
+ * DATA-04: a one-column table (every line split to exactly one cell) with more than one row is
+ * always accepted now — full names, titles, free-text notes are all legitimate one-column data,
+ * and having a space in a cell says nothing about whether it's a real column. Only a single
+ * bare line (no row structure at all — just one sentence) or a ragged split (lines split to
+ * different widths, as a sentence's stray comma does) still look like a mistake, and only when
+ * most of their cells have their own internal whitespace (a real one-column table of plain
+ * words or ids has none). */
 function garbageError(grid: string[][], hadQuotes: boolean): Error | null {
 	if (hadQuotes) return null
 	const widths = grid.map((line) => line.length)
 	const uniform = widths.every((w) => w === widths[0])
+	if (uniform && widths[0] === 1 && grid.length > 1) return null
 	const cells = grid.flat()
 	const spaced = cells.filter((cell) => /\s/.test(cell.trim())).length
 	const mostlySpaced = cells.length > 0 && spaced / cells.length >= 0.5
@@ -253,8 +306,8 @@ export function filterTableRows(rows: string[][], filter: string): string[][] {
 }
 
 function compareCells(a: string, b: string): number {
-	const an = Number(a)
-	const bn = Number(b)
+	const an = toNumber(a)
+	const bn = toNumber(b)
 	const bothNumeric = a.trim() !== '' && b.trim() !== '' && Number.isFinite(an) && Number.isFinite(bn)
 	return bothNumeric ? an - bn : a.localeCompare(b)
 }

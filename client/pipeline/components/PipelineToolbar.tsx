@@ -44,6 +44,10 @@ function createNodeShape(editor: Editor, shapeId: TLShapeId, center: Vec, node: 
 		editor.select(shapeId)
 	})
 
+	// FLOW-08: a separate stopping point AFTER creation too, so the user's very first edit to
+	// this just-placed card is its own undo step, not fused with the creation (see placeNode.ts's
+	// createNodeAt, which this toolbar-click path doesn't go through).
+	editor.markHistoryStoppingPoint('create node')
 	return markId
 }
 

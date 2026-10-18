@@ -33,7 +33,7 @@ import { downloadUrl, httpRequest, HttpRequestInput, saveContent, unfurl } from 
 import { deleteCustomNode, listCustomNodes, readCustomNode, saveCustomNode } from './customNodes'
 import { decide, JevRequest } from './jev'
 import { NET_TOOLS, NetTool, runNetTool } from './nettools'
-import { getLanguageModel, getProviderOptions, listProviderModels, ProviderModelInfo } from './llm'
+import { apiKeyOrLocalPlaceholder, getLanguageModel, getProviderOptions, listProviderModels, ProviderModelInfo } from './llm'
 import { guessCapabilities, ModelCapability, ModelConfig } from '../shared/aiConfig'
 import { registerBatchRoutes } from './batchRoutes'
 import { checkModelsHealth } from './modelHealth'
@@ -193,9 +193,9 @@ app.post('/api/download', async (c) => {
 })
 
 app.post('/api/save', async (c) => {
-	const body = (await c.req.json()) as { content: string; fileName?: string }
+	const body = (await c.req.json()) as { content: string; fileName?: string; mode?: 'new' | 'overwrite' | 'append'; name?: string }
 	if (typeof body.content !== 'string' || !body.content) throw new ConfigError('Nothing to save')
-	return c.json(await saveContent(body.content, body.fileName))
+	return c.json(await saveContent(body.content, body.fileName, { mode: body.mode, name: body.name }))
 })
 
 app.get('/api/unfurl', async (c) => {
@@ -256,7 +256,11 @@ app.post('/api/agent/run', async (c) => {
 	const body = (await c.req.json()) as AgentRunRequest
 	if (!body.task?.trim()) throw new ConfigError('task is required')
 	const { model: modelConfig, provider } = resolveModelRef(body.model, 'agent')
-	const apiKey = provider.apiKey || (provider.kind === 'cloudflare' ? provider.apiKey : undefined)
+	// AI-01/FLOW-01/GAPS-03: `pi-ai`'s model layer (unlike the `ai` SDK path every other LLM
+	// card uses) hard-requires a truthy key and throws "No API key for provider" when it's
+	// missing — even for a local/self-hosted router that needs no auth. Same placeholder rule
+	// as `server/llm.ts`'s `getLanguageModel`.
+	const apiKey = apiKeyOrLocalPlaceholder(provider)
 	const piModel = toPiModel(provider, modelConfig)
 
 	const searchChoices = (body.search ?? []).map((p) => ({ provider: p, keyRef: loadSearchConfig()[p]?.keyRef }))

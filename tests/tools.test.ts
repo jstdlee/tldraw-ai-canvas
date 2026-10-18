@@ -56,6 +56,21 @@ describe('more text tools', () => {
 		expect(runTextTool('json_to_csv', '[{"a":1,"b":"x,y"},{"a":2}]')).toBe('a,b\n1,"x,y"\n2,')
 		expect(runTextTool('csv_to_markdown', 'a,b\n1,2')).toBe('| a | b |\n| --- | --- |\n| 1 | 2 |')
 	})
+	it('extract_links (WP35 Part Q): resolves relative hrefs, dedupes, and can restrict to same-site', () => {
+		const html = [
+			'<p>See our <a href="/blog/intro">intro post</a> and the',
+			'<a href="https://blog.example.com/guide">full guide</a>.</p>',
+			'<a href="/blog/intro">intro post</a>',
+			'<a href="#top">back to top</a>',
+			'<a href="mailto:hi@example.com">email us</a>',
+		].join('\n')
+		const all = runTextTool('extract_links', html, 'all', '', 'https://example.com/blog/')
+		expect(all).toBe('url,text\nhttps://example.com/blog/intro,intro post\nhttps://blog.example.com/guide,full guide')
+
+		const sameSite = runTextTool('extract_links', html, 'same-site only', '', 'https://example.com/blog/')
+		expect(sameSite).toBe('url,text\nhttps://example.com/blog/intro,intro post')
+	})
+
 	it('URLs and diff', () => {
 		expect(runTextTool('url_clean', 'https://ex.com/p?utm_source=a&id=2&fbclid=z')).toBe('https://ex.com/p?id=2')
 		expect(runTextTool('url_domain', 'https://www.example.org/x\nsub.test.com')).toBe('example.org\nsub.test.com')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toCsv, parseTableText } from '../shared/tableText'
+import { toCsv, parseTableText, sortTableRows } from '../shared/tableText'
 
 describe('toCsv', () => {
 	it('quotes only when a cell needs it, and doubles embedded quotes', () => {
@@ -77,6 +77,23 @@ describe('parseTableText: CSV / TSV / semicolon', () => {
 		const table = parseTableText('n,name\n10.5,北京')
 		expect(table.rows).toEqual([['10.5', '北京']])
 	})
+
+	// DATA-06: a row blank in every column (e.g. a stray ",") survives as an empty row in the
+	// middle of the table; only a wholly-blank line at the very start/end is dropped.
+	it('keeps an interior wholly-blank row instead of dropping it silently', () => {
+		const table = parseTableText('a,b\n1,x\n,\n3,z')
+		expect(table).toEqual({ headers: ['a', 'b'], rows: [['1', 'x'], ['', ''], ['3', 'z']] })
+	})
+
+	it('still drops a trailing blank line (or several)', () => {
+		const table = parseTableText('a,b\n1,2\n\n\n')
+		expect(table).toEqual({ headers: ['a', 'b'], rows: [['1', '2']] })
+	})
+
+	it('still drops a leading blank line', () => {
+		const table = parseTableText('\n\na,b\n1,2')
+		expect(table).toEqual({ headers: ['a', 'b'], rows: [['1', '2']] })
+	})
 })
 
 describe('parseTableText: JSON', () => {
@@ -101,7 +118,40 @@ describe('parseTableText: JSON', () => {
 
 	it('throws a clear error for JSON that is not table-shaped', () => {
 		expect(() => parseTableText(JSON.stringify({ hello: 'world' }))).toThrow(/not a table/)
-		expect(() => parseTableText(JSON.stringify(['a', 'b', 'c']))).toThrow(/not a table/)
+	})
+
+	// GAPS-10: a For each loop's collected lines, or Generate image's `images`, come out as a
+	// JSON array of scalars — one column, "value", not a hard "not a table" dead end.
+	it('parses a JSON array of scalars as one column named "value"', () => {
+		const table = parseTableText(JSON.stringify(['a', 'b', 'c']))
+		expect(table).toEqual({ headers: ['value'], rows: [['a'], ['b'], ['c']] })
+	})
+
+	it('parses a JSON array of numbers the same way', () => {
+		const table = parseTableText(JSON.stringify([1, 2, 3]))
+		expect(table).toEqual({ headers: ['value'], rows: [['1'], ['2'], ['3']] })
+	})
+
+	// GAPS-07/GAPS-10: a `{ data: [...] }` / `{ items: [...] }` wrapper around the real rows —
+	// a common REST API shape — is accepted the same way the bare array would be.
+	it('accepts a {data: [...]} wrapper around an array of objects', () => {
+		const table = parseTableText(JSON.stringify({ meta: { total: 1 }, data: [{ id: 1, name: 'Ada' }] }))
+		expect(table).toEqual({ headers: ['id', 'name'], rows: [['1', 'Ada']] })
+	})
+
+	it('accepts an {items: [...]} wrapper around an array of scalars', () => {
+		const table = parseTableText(JSON.stringify({ items: ['x', 'y'] }))
+		expect(table).toEqual({ headers: ['value'], rows: [['x'], ['y']] })
+	})
+
+	// GAPS-07: a nested object becomes dotted columns, not "[object Object]"; a nested array of
+	// scalars is joined with "; "; a deeper nested array (of objects) is kept as JSON text.
+	it('flattens a nested object to dotted columns', () => {
+		const table = parseTableText(
+			JSON.stringify([{ id: 1, customer: { name: 'Ada', country: 'FR' }, tags: ['x', 'y'], history: [{ at: 1 }] }])
+		)
+		expect(table.headers).toEqual(['id', 'customer.name', 'customer.country', 'tags', 'history'])
+		expect(table.rows).toEqual([['1', 'Ada', 'FR', 'x; y', '[{"at":1}]']])
 	})
 })
 
@@ -129,5 +179,25 @@ describe('parseTableText: garbage', () => {
 	it('throws on empty text', () => {
 		expect(() => parseTableText('')).toThrow()
 		expect(() => parseTableText('   ')).toThrow()
+	})
+
+	// DATA-04: a one-column table of ordinary free text (names, titles, notes) is real data, not
+	// a mistake — only a single bare line, or a ragged split, still looks like one.
+	it('accepts a one-column table of free text with spaces', () => {
+		const table = parseTableText('name\nAda Lovelace\nAda King')
+		expect(table).toEqual({ headers: ['name'], rows: [['Ada Lovelace'], ['Ada King']] })
+	})
+
+	it('accepts a one-column list with no header row implied, same shape', () => {
+		const table = parseTableText('tagline\nPlain one\nPlayful two')
+		expect(table).toEqual({ headers: ['tagline'], rows: [['Plain one'], ['Playful two']] })
+	})
+})
+
+describe('sortTableRows (DATA-05)', () => {
+	it('sorts a thousands-separated numeric column numerically, not as text', () => {
+		const rows = [['1,000'], ['250'], ['999,000'], ['9,500'], ['80']]
+		const sorted = sortTableRows(rows, 0, 'asc')
+		expect(sorted.map((r) => r[0])).toEqual(['80', '250', '1,000', '9,500', '999,000'])
 	})
 })

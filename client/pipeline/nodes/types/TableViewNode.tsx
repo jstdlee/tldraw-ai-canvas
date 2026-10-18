@@ -4,7 +4,7 @@ import { filterTableRows, parseTableText, sortTableRows, toCsv } from '../../../
 import { T, useEditor, useValue } from 'tldraw'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { ShapePort } from '../../ports/Port'
-import { getNodeInputPortValues, isInputWired } from '../nodePorts'
+import { getNodeInputPortValues, getWiredSourceTitle, isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiEmpty, UiIconButton, UiTextArea } from '../../../ui'
 import { IconCopy, IconExpand, IconTable } from '../../../ui/icons'
@@ -13,12 +13,12 @@ import { OutputPortRow, PortRow, stopEvent, useInputConnected, WireFieldHeader }
 import {
 	areAnyInputsOutOfDate,
 	ExecutionResult,
-	getInputText,
 	InfoValues,
 	InputValues,
 	NodeComponentProps,
 	NodeDefinition,
 	updateNode,
+	wiredOrOwnText,
 } from './shared'
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,9 @@ export class TableViewNodeDefinition extends NodeDefinition<TableViewNode> {
 	getDefault(): TableViewNode {
 		return {
 			type: 'table_view',
-			text: 'name,city,score\nAda,Paris,3\nLin,Oslo,5',
+			// GAPS-01: a fresh card starts empty, not seeded with sample data; a saved canvas
+			// that already has sample text in `text` keeps it as is.
+			text: '',
 			filterText: '',
 			sortColumn: '',
 			sortDir: 'asc',
@@ -89,8 +91,11 @@ export class TableViewNodeDefinition extends NodeDefinition<TableViewNode> {
 		}
 	}
 	async execute(shape: NodeShape, node: TableViewNode, inputs: InputValues): Promise<ExecutionResult> {
-		const text = getInputText(inputs, 'data') || node.text
 		try {
+			// GAPS-01: resolved inside the try so a wired-but-empty "No table from <source>"
+			// lands in `node.error` too, same as any other failure here.
+			const dataWired = isInputWired(this.editor, shape.id, 'data')
+			const text = wiredOrOwnText(inputs, 'data', dataWired, node.text, getWiredSourceTitle(this.editor, shape.id, 'data'))
 			const table = parseTableText(text)
 			const columnIndex = node.sortColumn ? table.headers.indexOf(node.sortColumn) : -1
 			const filtered = filterTableRows(table.rows, node.filterText)
@@ -123,17 +128,21 @@ function TableViewComponent({ shape, node }: NodeComponentProps<TableViewNode>) 
 	const [visibleRows, setVisibleRows] = useState<string[][]>([])
 	const set = (patch: Partial<TableViewNode>) => updateNode<TableViewNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
 
-	// WP26: same pattern as DataPipe/Chart/Profile's own live preview — the wired input's current
-	// value (via `getNodeInputPortValues`, which reads the upstream node's own last-run output),
-	// falling back to the literal Text field.
+	const sourceTitle = useValue('table_view source title', () => getWiredSourceTitle(editor, shape.id, 'data'), [editor, shape.id])
+	// WP26/GAPS-01: same pattern as DataPipe/Chart/Profile's own live preview — the wired input's
+	// current value (via `getNodeInputPortValues`, which reads the upstream node's own last-run
+	// output). Once "data" is wired, it's the only source: a wired-but-empty/failed value must
+	// never fall back to showing the old `text` instead.
 	const effectiveText = useValue(
 		'table_view input text',
 		() => {
-			const wired = getNodeInputPortValues(editor, shape.id).data?.value
-			if (typeof wired === 'string' && wired.trim()) return wired
+			if (dataWired) {
+				const wired = getNodeInputPortValues(editor, shape.id).data?.value
+				return typeof wired === 'string' ? wired : ''
+			}
 			return node.text
 		},
-		[editor, shape.id, node.text]
+		[editor, shape.id, node.text, dataWired]
 	)
 	const table = useMemo(() => {
 		try {
@@ -159,7 +168,14 @@ function TableViewComponent({ shape, node }: NodeComponentProps<TableViewNode>) 
 			{!dataWired && (
 				<>
 					<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Text" />
-					<UiTextArea className="NodeField-textarea" mono rows={4} value={node.text} onChange={(text) => set({ text })} />
+					<UiTextArea
+						className="NodeField-textarea"
+						mono
+						rows={4}
+						value={node.text}
+						placeholder="Paste a table: CSV, TSV, JSON array, or Markdown"
+						onChange={(text) => set({ text })}
+					/>
 				</>
 			)}
 			{table ? (
@@ -186,7 +202,7 @@ function TableViewComponent({ shape, node }: NodeComponentProps<TableViewNode>) 
 					{zoomOpen && <TableZoom title="Table view" columns={table.headers} rows={table.rows} onClose={() => setZoomOpen(false)} />}
 				</>
 			) : (
-				<UiEmpty text="Give this card a table to view" />
+				<UiEmpty text={dataWired ? `No table from ${sourceTitle ?? 'the wired card'}` : 'Give this card a table to view'} />
 			)}
 			<OutputPortRow shapeId={shape.id} portId="json" label="JSON" dataType="text" />
 		</>

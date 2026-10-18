@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { opSpec, runTable, TABLE_OPS, type TableJob } from '../shared/tableOps'
+import { opSpec, parseTable, runTable, TABLE_OPS, type TableJob } from '../shared/tableOps'
 
 const CSV = 'name,city,score\nAda,Paris,3\nLin,Oslo,5\nBea,Paris,7'
 
@@ -39,6 +39,22 @@ describe('auto format detection', () => {
 	// forces anything, so a stored 'tsv' on data that is actually CSV still works.
 	it('the stored format field no longer forces parsing (WP26: always auto)', () => {
 		expect(runTable('a,b\n1,2', job({ format: 'tsv', op: 'select', columns: 'b' }))).toBe('b\n2')
+	})
+})
+
+// DATA-06: parseTable (still used by DataPipe's own live preview / Chart / Profile / Database's
+// preview) keeps an interior wholly-blank row the same way shared/tableText.ts's parseTableText
+// now does — only a leading/trailing blank line is dropped.
+describe('parseTable: blank rows (DATA-06)', () => {
+	it('keeps a wholly-blank interior row', () => {
+		expect(parseTable('a,b\n1,x\n,\n3,z', 'csv')).toEqual({
+			headers: ['a', 'b'],
+			rows: [['1', 'x'], ['', ''], ['3', 'z']],
+		})
+	})
+
+	it('still drops a trailing blank line', () => {
+		expect(parseTable('a,b\n1,2\n\n', 'csv')).toEqual({ headers: ['a', 'b'], rows: [['1', '2']] })
 	})
 })
 
@@ -207,6 +223,18 @@ describe('Group and summarise (WP11 Part C)', () => {
 	it('accepts an alias with col:fn:alias', () => {
 		const data = 'g,v\na,1\na,3'
 		expect(runTable(data, job({ op: 'groupby', column: 'g', columns: 'v:sum:total' }))).toBe('g,total\na,4')
+	})
+
+	// P8: "*:count" (no alias) names its output column "count", not "count_*" — there's no real
+	// column for "count_*" to refer to, and a Chart's own Y column picker expects the plain name.
+	it('names a plain "*:count" column "count", not "count_*"', () => {
+		const data = 'city,score\nParis,3\nParis,5\nOslo,9'
+		expect(runTable(data, job({ op: 'groupby', column: 'city', columns: '*:count' }))).toBe('city,count\nParis,2\nOslo,1')
+	})
+
+	it('still names "*:count_distinct" after the function alone', () => {
+		const data = 'city,score\nParis,3\nParis,3\nOslo,9'
+		expect(runTable(data, job({ op: 'groupby', column: 'city', columns: '*:count_distinct' }))).toBe('city,count_distinct\nParis,1\nOslo,1')
 	})
 })
 

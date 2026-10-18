@@ -58,6 +58,12 @@ export function createNodeAt(
 		editor.updateShape({ id: shapeId, type: 'node', x: pos.x, y: pos.y })
 		if (opts.select !== false) editor.select(shapeId)
 	})
+	// FLOW-08: without this, a user's very first edit to a just-placed card (typing into its
+	// first field) fused with the creation into one undo step — one Ctrl+Z removed the whole
+	// card instead of just reverting the edit. Nested inside a larger editor.run() (e.g. AI
+	// build's own multi-card batch), tldraw defers this mark to that outer batch's own boundary,
+	// so it doesn't fragment a multi-card build into separate undo steps.
+	editor.markHistoryStoppingPoint('create node')
 	return shapeId
 }
 

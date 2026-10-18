@@ -36,6 +36,15 @@ const CSV = `name,score
 ada,9
 bea,4`
 
+const PROSE_WITH_TABLE = `Here are the findings from the latest survey:
+
+| Country | Share |
+| --- | --- |
+| Norway | 42% |
+| Sweden | 31% |
+
+Let me know if you would like a breakdown by age group.`
+
 function step(id: string, title: string, blurb: string, nodes: ExampleNode[], wires: ExampleWire[] = []): CanvasExample {
 	return { id, title, blurb, nodes, wires }
 }
@@ -57,10 +66,14 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Write two sentences about a paper notebook.' } },
 		{ id: 'b', type: 'generate_text', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'prompt' }]),
-	step('llm-chat', 'Chat message', 'A prompt is the first message in a chat node.', [
+	// FLOW-03: "Reply to" (the `parent` port) seeds prior conversation history, not this turn's
+	// message — wiring the prompt there left the chat's own Message field empty ("Type a message
+	// first."). The outgoing message is the `userMessage` field itself, which (like every
+	// wirable field, WP17) has its own `field:` port.
+	step('llm-chat', 'Chat message', 'A prompt becomes the chat node\'s outgoing message.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Say hello in one short sentence.' } },
 		{ id: 'b', type: 'chat', x: 460, y: 0 },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'parent' }]),
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'field:userMessage' }]),
 	step('llm-task', 'AI text job', 'AI text summarizes whatever the prompt sends.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Canvas nodes, wires, and a local model.' } },
 		{ id: 'b', type: 'text_ai', x: 460, y: 0, props: { operation: 'summarize' } },
@@ -281,6 +294,18 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 		{ id: 'b', type: 'table_view', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'data' }]),
+	step('json-fields', 'Pull fields out of JSON', 'A JSON prompt feeds JSON fields. Each line of the Paths field becomes its own output port.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: '{"value":"hi","topic":"demo","data":[{"name":"Ada"}],"customer":{"country":"NO"}}' } },
+		{ id: 'b', type: 'json_fields', x: 460, y: 0 },
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'json' }]),
+	step('extract-table', 'Pull a table out of prose', 'A chatty answer feeds Extract from text. It finds the Markdown table inside it and outputs it as CSV.', [
+		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: PROSE_WITH_TABLE } },
+		{ id: 'b', type: 'extract', x: 460, y: 0 },
+		{ id: 'c', type: 'output', x: 980, y: 0 },
+	], [
+		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'text' },
+		{ from: 'b', fromPort: 'table', to: 'c', toPort: 'input' },
+	]),
 	step('chart-bars', 'Bar chart', 'The same CSV feeds Chart. ECharts draws name and score.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: CSV } },
 		{ id: 'b', type: 'chart', x: 460, y: 0, props: { format: 'csv', kind: 'bar', xCol: 'name', yCol: 'score' } },
@@ -372,6 +397,16 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'one two three four' } },
 		{ id: 'b', type: 'text_tool', x: 460, y: 0, props: { op: 'count' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
+	step('template-fill', 'Fill a template', 'Two prompts fill {{name}} and {{total}} in the Template text; the result is one piece of text.', [
+		{ id: 'name', type: 'prompt', x: 0, y: 0, props: { text: 'Ada' } },
+		{ id: 'total', type: 'prompt', x: 0, y: 220, props: { text: '42' } },
+		{ id: 't', type: 'template', x: 460, y: 100, props: { template: 'Hi {{name}}, your total is {{total}}.' } },
+		{ id: 'out', type: 'output', x: 980, y: 100 },
+	], [
+		{ from: 'name', fromPort: 'output', to: 't', toPort: 'var:name' },
+		{ from: 'total', fromPort: 'output', to: 't', toPort: 'var:total' },
+		{ from: 't', fromPort: 'output', to: 'out', toPort: 'input' },
+	]),
 	{
 		id: 'group-label',
 		title: 'Group and rename',
@@ -444,6 +479,27 @@ export const EXAMPLES: CanvasExample[] = [
 			{ from: 'task', fromPort: 'output', to: 'raw', toPort: 'prompt' },
 		],
 	},
+	step(
+		'merge-branches',
+		'Merge two branches',
+		'If routes the message to one of two prompts; Merge combines whichever one actually ran (the other is skipped, not an error) into one Output.',
+		[
+			{ id: 'msg', type: 'prompt', x: 0, y: 0, props: { text: 'I am upset about my order.' } },
+			{ id: 'check', type: 'if', x: 460, y: 0, props: { condition: 'contains', operand: 'upset' } },
+			{ id: 'join', type: 'merge', x: 920, y: 0, props: { mode: 'first' } },
+			{ id: 'out', type: 'output', x: 1380, y: 0 },
+		],
+		[
+			{ from: 'msg', fromPort: 'output', to: 'check', toPort: 'input' },
+			{ from: 'check', fromPort: 'then', to: 'join', toPort: 'in1' },
+			{ from: 'check', fromPort: 'else', to: 'join', toPort: 'in2' },
+			{ from: 'join', fromPort: 'output', to: 'out', toPort: 'input' },
+		]
+	),
+	step('image-gallery', 'Image gallery', 'A list of image URLs becomes a grid, with Download all as a zip.', [
+		{ id: 'list', type: 'prompt', x: 0, y: 0, props: { text: '/examples/girl-base.jpg\n/examples/girl-coat.jpg\n/examples/girl-dress.jpg' } },
+		{ id: 'grid', type: 'gallery', x: 460, y: 0, props: { columns: 3 } },
+	], [{ from: 'list', fromPort: 'output', to: 'grid', toPort: 'images' }]),
 ]
 
 export function exampleCovers(): string[] {

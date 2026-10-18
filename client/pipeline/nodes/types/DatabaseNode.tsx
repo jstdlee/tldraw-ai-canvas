@@ -11,8 +11,9 @@ import { currentRunSignal, startExecution } from '../../execution/executionState
 import { isAbortError } from '../../../../shared/abort'
 import { ShapePort } from '../../ports/Port'
 import { storeFile, loadFileBytes } from '../../fileStore'
-import { describeTables, openDatabase, runSqlCsv, schemaText, type SqlTableInfo } from '../../sqlJs'
-import { runSql as runPgliteSql } from '../../pg'
+import { createDatabase, describeTables, execStatements, openDatabase, runSqlCsv, schemaText, type SqlTableInfo } from '../../sqlJs'
+import type { Database } from 'sql.js'
+import { loadRows as loadPgliteRows, runSql as runPgliteSql } from '../../pg'
 import { hiddenDedicatedPortIds, hiddenFieldKeys } from '../fieldVisibility'
 import { NodeShape } from '../NodeShapeUtil'
 import { isInputWired } from '../nodePorts'
@@ -186,7 +187,9 @@ function layout(node: DatabaseNode, sqlWired: boolean) {
 	const sqlExtraPx = sqlWired ? 0 : editorHeightPx(node) + DRAG_HANDLE_PX
 	row++ // write summary / risky confirm line
 	row++ // "schema" output row (WP21 follow-up: every output port is a visible dot)
-	if (external) row += 2 // rows -> table panel (header + controls)
+	// GAPS-12: "Load rows into" (header + the rows port's own row) now renders for every
+	// source, not just the external ones.
+	row += 2
 	const hintRow = row++
 	return { tablesRow, tablesRows, sqlRow, sqlExtraPx, hintRow, rowsCount: row }
 }
@@ -286,24 +289,69 @@ export class DatabaseNodeDefinition extends NodeDefinition<DatabaseNode> {
 		try {
 			const sql = getInputText(inputs, 'sql') || node.sql
 			if (isExternal(source)) return await this.executeExternal(shape, node, source, sql, inputs)
+			// GAPS-12: Built-in Postgres and SQLite load a wired `rows` table the same way the
+			// external sources do (targetTable/loadMode), not just DuckDB/Postgres.
+			const rowsInput = getInputText(inputs, 'rows')
+			const buildPlan = () => {
+				const rowsTable = parseTableText(rowsInput)
+				return buildLoadPlan([rowsTable.headers, ...rowsTable.rows], node.targetTable || '', (node.loadMode as LoadMode) || 'insert', node.upsertKey || undefined)
+			}
 			if (source === 'pglite') {
-				if (!sql.trim()) throw new Error('Type a SQL query')
-				const output = await runPgliteSql(sql, null)
-				updateNode<DatabaseNode>(this.editor, shape, (n) => ({ ...n, error: null, lastOutput: output.slice(0, 200_000), lastInfo: '' }), false)
+				let loadSummary = ''
+				if (rowsInput.trim()) {
+					const plan = buildPlan()
+					await loadPgliteRows(plan.statements)
+					loadSummary = `Loaded ${plan.rowCount} row${plan.rowCount === 1 ? '' : 's'} into ${plan.table}\n\n`
+				}
+				if (!sql.trim() && !loadSummary) throw new Error('Type a SQL query, or wire rows to load into a table')
+				const output = sql.trim() ? await runPgliteSql(sql, null) : loadSummary.trim()
+				updateNode<DatabaseNode>(this.editor, shape, (n) => ({ ...n, error: null, lastOutput: output.slice(0, 200_000), lastInfo: loadSummary.trim() }), false)
 				return { output, schema: null }
 			}
-			// sqlite (default / legacy cards)
-			if (!node.fileUrl) throw new Error('Upload a .sqlite or .db file first')
-			if (!sql.trim()) throw new Error('Type a SQL query, or pick a table above')
-			const db = await getOpenDb(node.fileUrl)
-			const output = runSqlCsv(db, sql)
+			// sqlite (default / legacy cards): wiring rows with no file uploaded yet creates a
+			// fresh, empty in-browser database — the user no longer has to upload one first.
+			let db: Database
+			if (node.fileUrl) db = await getOpenDb(node.fileUrl)
+			else if (rowsInput.trim()) db = await createDatabase()
+			else throw new Error('Upload a .sqlite or .db file first, or wire rows to load into a table')
+			let loadSummary = ''
+			// Collected here, applied in the one `updateNode` call below — two separate calls
+			// would each read the same stale `shape` snapshot, so the second would silently
+			// discard whatever the first just wrote (fileUrl/fileName/fileSize/tables).
+			let fileUrl = node.fileUrl
+			let fileName = node.fileName
+			let fileSize = node.fileSize
+			let tables = node.tables
+			if (rowsInput.trim()) {
+				const plan = buildPlan()
+				execStatements(db, plan.statements)
+				loadSummary = `Loaded ${plan.rowCount} row${plan.rowCount === 1 ? '' : 's'} into ${plan.table}\n\n`
+				const bytes = db.export()
+				fileName = node.fileName || 'database.sqlite'
+				const stored = await storeFile(new File([bytes as BlobPart], fileName, { type: 'application/x-sqlite3' }))
+				openDbs.set(stored.url, Promise.resolve(db))
+				fileUrl = stored.url
+				fileSize = bytes.byteLength
+				tables = JSON.stringify(describeTables(db))
+			}
+			if (!sql.trim() && !loadSummary) throw new Error('Type a SQL query, or pick a table above')
+			const output = sql.trim() ? runSqlCsv(db, sql) : loadSummary.trim()
 			const schema = schemaText(db)
 			const rows = output.includes('\n') ? output.split('\n').length - 1 : output ? 0 : 0
 			const cols = output.split('\n')[0]?.split(',').length ?? 0
 			updateNode<DatabaseNode>(
 				this.editor,
 				shape,
-				(n) => ({ ...n, error: null, lastOutput: output.slice(0, 200_000), lastInfo: `${rows} row${rows === 1 ? '' : 's'} × ${cols} column${cols === 1 ? '' : 's'}` }),
+				(n) => ({
+					...n,
+					error: null,
+					fileUrl,
+					fileName,
+					fileSize,
+					tables,
+					lastOutput: output.slice(0, 200_000),
+					lastInfo: loadSummary.trim() || `${rows} row${rows === 1 ? '' : 's'} × ${cols} column${cols === 1 ? '' : 's'}`,
+				}),
 				false
 			)
 			return { output, schema }
@@ -364,13 +412,17 @@ export class DatabaseNodeDefinition extends NodeDefinition<DatabaseNode> {
 }
 
 /** WP26: quote-aware (a value with a comma, quote, or NULL survives), via `parseTableText`,
- * instead of a naive `split(',')` that broke on exactly those. */
-function parseCsvPreview(csv: string): { headers: string[]; rows: string[][] } {
+ * instead of a naive `split(',')` that broke on exactly those. Returns null (not an empty-looking
+ * table) when the text doesn't parse as a table at all — e.g. a DDL-only run's "(no rows)" note,
+ * or several statements' chunks joined together — so the caller falls back to the plain-text
+ * view instead of showing a deceptively empty grid. */
+function parseCsvPreview(csv: string): { headers: string[]; rows: string[][] } | null {
 	try {
 		const table = parseTableText(csv)
+		if (!table.headers.length) return null
 		return { headers: table.headers, rows: table.rows.slice(0, 50) }
 	} catch {
-		return { headers: [], rows: [] }
+		return null
 	}
 }
 
@@ -389,7 +441,7 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 	const set = (patch: Partial<DatabaseNode>) => updateNode<DatabaseNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
 	const source = sourceOf(node)
 	const external = isExternal(source)
-	const hiddenFields = hiddenFieldKeys(node)
+	const hiddenFields = hiddenFieldKeys(node, { rowsWired })
 
 	const runNow = () => startExecution(editor, new Set([shape.id]))
 	const summary = useMemo(() => (node.sql.trim() ? summarizeScript(node.sql) : null), [node.sql])
@@ -506,7 +558,10 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 		editor.timers.setTimeout(runNow, 0)
 	}
 
-	const preview = source === 'sqlite' && node.lastOutput ? parseCsvPreview(node.lastOutput) : null
+	// DATA-03: PGlite's results are the same RFC 4180 CSV `toCsv()` text as SQLite's, so they get
+	// the same sortable/filterable/expandable grid — not the plain-text block meant for the odd
+	// non-tabular case (DDL-only output, several statements' chunks).
+	const preview = !external && node.lastOutput ? parseCsvPreview(node.lastOutput) : null
 
 	return (
 		<>
@@ -656,7 +711,10 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 
 			<OutputPortRow shapeId={shape.id} portId="schema" label="Schema" dataType="text" />
 
-			{external && !hiddenFields.has('targetTable') && (
+			{/* GAPS-12: Built-in Postgres and SQLite load wired rows the same way the external
+			    sources do (not just DuckDB/Postgres) — so this section is no longer gated on
+			    `external`. */}
+			{!hiddenFields.has('targetTable') && (
 				<>
 					<WireFieldHeader shapeId={shape.id} fieldKey="targetTable" label="Load rows into" dataType="text" />
 					<NodeRow>

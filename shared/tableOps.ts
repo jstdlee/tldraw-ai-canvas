@@ -10,7 +10,7 @@
  * is actually CSV (or vice versa) keeps working instead of throwing. */
 
 import { evaluateFormula } from './formula'
-import { toCsv, parseTableText } from './tableText'
+import { toCsv, parseTableText, toNumber } from './tableText'
 
 export interface Table {
 	headers: string[]
@@ -75,7 +75,15 @@ export function parseDelimited(text: string, sep: string): string[][] {
 		row.push(cell)
 		rows.push(row)
 	}
-	return rows.filter((line) => line.some((part) => part.length > 0))
+	// DATA-06: only a wholly-blank line at the very start/end is dropped (the usual trailing
+	// blank line in pasted CSV) — an interior blank row survives, matching `tableText.ts`'s
+	// `splitDelimited`, which this duplicates for `parseTable`'s still-live callers.
+	const isBlank = (line: string[]) => line.every((part) => part.length === 0)
+	let start = 0
+	while (start < rows.length && isBlank(rows[start])) start++
+	let end = rows.length
+	while (end > start && isBlank(rows[end - 1])) end--
+	return rows.slice(start, end)
 }
 
 /** 'auto' detects TSV when the first line has a tab, else CSV. 'csv'/'tsv' force it. */
@@ -125,10 +133,6 @@ function isNumber(value: string): boolean {
 	return value.trim() !== '' && Number.isFinite(Number(value))
 }
 
-function toNumber(value: string): number {
-	return Number((value ?? '').replace(/,/g, ''))
-}
-
 /** The DataPipe formula column. Delegates to the real engine in shared/formula.ts (tokenizer +
  * parser + evaluator); kept as a thin wrapper so old canvases' stored formulas keep working
  * unchanged (same entry point, same two-argument shape). */
@@ -169,7 +173,9 @@ export function aggregateTable(table: Table, groupBy: string[], aggs: AggSpec[])
 		}
 		groups.get(key)!.push(row)
 	}
-	const headers = [...groupBy, ...parsed.map((a) => a.as || `${a.fn}_${a.column}`)]
+	// P8: "*:count" (no real column, used by count/count_distinct) names its own output column
+	// after the function alone ("count"), not "count_*" — there's no real column to compose with.
+	const headers = [...groupBy, ...parsed.map((a) => a.as || (a.column === '*' ? a.fn : `${a.fn}_${a.column}`))]
 	const rows = [...groups.entries()].map(([key, members]) => {
 		const cells = parsed.map((a) => {
 			const values = members.map((m) => m[a.index] ?? '')

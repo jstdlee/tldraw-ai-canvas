@@ -17,6 +17,7 @@ import {
 	ModelSelect,
 } from '../../../ai/aiConfig'
 import { AgentRunEvent, apiAgentRun } from '../../api/pipelineApi'
+import { agentStatusText } from '../../../../shared/agentStatus'
 import { currentRunSignal, startExecution } from '../../execution/executionState'
 import { AgentCardIcon } from '../../components/icons/AgentCardIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
@@ -25,7 +26,17 @@ import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiMultiSelect, UiNumberInput, UiTextArea } from '../../../ui'
-import { NodeTextResult, OutputPortRow, PortRow, stopEvent, useInputConnected, WireField, WireFieldHeader } from './fields'
+import { NodeTextResult, NodeSelect, OutputPortRow, PortRow, stopEvent, useInputConnected, WireField, WireFieldHeader } from './fields'
+import { fillLlmTemplate, llmTemplateVars, llmVarPorts, llmVarsHeight, LlmVarRows } from './llmSettings'
+import {
+	AGENT_ANSWER_FORMATS,
+	AGENT_ANSWER_FORMAT_LABELS,
+	AgentAnswerFormat,
+	answerFormatInstruction,
+	buildReaskTask,
+	checkAgentAnswer,
+	normalizeAnswerFormat,
+} from '../../../../shared/agentAnswerFormat'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -52,6 +63,9 @@ export const AgentNode = T.object({
 	skills: T.string,
 	systemPrompt: T.string.optional(),
 	maxSteps: T.number,
+	/** WP33 item E: 'text' (default/old cards) | 'table' | 'json'. Optional so a canvas saved
+	 * before this field existed keeps loading (falls back to 'text' — see normalizeAnswerFormat). */
+	answerFormat: T.string.optional(),
 	/** Last run: the final answer, and the step transcript as JSON (for the `steps` output). */
 	lastOutput: T.string.nullable(),
 	lastStepsJson: T.string.nullable(),
@@ -101,45 +115,63 @@ export class AgentNodeDefinition extends NodeDefinition<AgentNode> {
 			skills: '[]',
 			systemPrompt: '',
 			maxSteps: 12,
+			answerFormat: 'text',
 			lastOutput: null,
 			lastStepsJson: null,
 			error: null,
 		}
 	}
+	private vars(node: AgentNode) {
+		return llmTemplateVars([node.task])
+	}
 	getBodyHeightPx(shape: NodeShape, node: AgentNode) {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		// context row, task port row, model row, search/mcp/skills rows, system prompt row,
-		// max steps row, steps-output row, status row (10 rows), + the task textarea, step
-		// list and result boxes.
-		return rowPx * 10 + TASK_PX + STEPS_PX + 120
+		// max steps row, answer format row, steps-output row, status row (11 rows), + the task
+		// textarea, {{vars}} rows (WP33 item E), step list and result boxes.
+		return rowPx * 11 + TASK_PX + llmVarsHeight(this.vars(node), rowPx) + STEPS_PX + 120
 	}
 	getPorts(shape: NodeShape, node: AgentNode): Record<string, ShapePort> {
 		const width = this.getWidthPx(shape, node)
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const baseY = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
+		const totalRows = 11
 		const y = (row: number) => baseY + rowPx * (row + 0.5) + (row >= 2 ? TASK_PX : 0)
+		const vars = this.vars(node)
 		return {
 			context: { id: 'context', x: 0, y: y(0), terminal: 'end', dataType: 'any' },
 			task: { id: 'task', x: 0, y: y(1), terminal: 'end', dataType: 'text' },
 			model: { id: 'model', x: 0, y: y(2), terminal: 'end', dataType: 'model' },
 			output: { id: 'output', x: width, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
-			steps: { id: 'steps', x: width, y: y(8), terminal: 'start', dataType: 'text' },
+			steps: { id: 'steps', x: width, y: y(9), terminal: 'start', dataType: 'text' },
+			...llmVarPorts(vars, baseY + rowPx * totalRows + TASK_PX, rowPx),
 		}
 	}
 	async execute(shape: NodeShape, node: AgentNode, inputs: InputValues): Promise<ExecutionResult> {
 		const taskInput = coerceToText(getInput(inputs, 'task'))
-		const task = (taskInput || node.task || '').trim()
-		if (!task) throw new Error('Type a task, or wire one in.')
+		const taskSource = (taskInput || node.task || '').trim()
+		if (!taskSource) throw new Error('Type a task, or wire one in.')
+		// WP33 item E: {{vars}} in the task, same mechanism as Web search / Generate text.
+		const vars = this.vars(node)
+		const { text: filledTask } = fillLlmTemplate(taskSource, vars, inputs)
 		const context = coerceToText(getInput(inputs, 'context')) || undefined
+		// AI-02/GAPS-02: the `model` port was drawn as wirable but never actually read — same
+		// pattern as TextAI/Generate text/Chat (`llmEffectiveSettings`'s wiredModel).
+		const wiredModel = coerceToText(getInput(inputs, 'model')).trim()
+		const answerFormat = normalizeAnswerFormat(node.answerFormat)
+		const instruction = answerFormatInstruction(answerFormat)
 
 		const stepRows: StepRow[] = []
 		updateNode<AgentNode>(this.editor, shape, (n) => ({ ...n, lastStepsJson: JSON.stringify(stepRows), error: null }))
-		try {
+
+		/** Runs one agent task to its final answer, appending to the shared step list as it
+		 * goes. Throws on a server-reported error or on no answer at all. */
+		const runOnce = async (task: string): Promise<string> => {
 			for await (const event of apiAgentRun(
 				{
 					task,
 					context,
-					model: node.model || undefined,
+					model: wiredModel || node.model || undefined,
 					search: parseIds(node.search),
 					mcpServers: parseIds(node.mcpServers),
 					skills: parseIds(node.skills),
@@ -159,24 +191,36 @@ export class AgentNodeDefinition extends NodeDefinition<AgentNode> {
 					}
 					updateNode<AgentNode>(this.editor, shape, (n) => ({ ...n, lastStepsJson: JSON.stringify(stepRows) }), false)
 				} else if (event.type === 'final') {
-					updateNode<AgentNode>(this.editor, shape, (n) => ({
-						...n,
-						lastOutput: event.output,
-						lastStepsJson: JSON.stringify(event.steps),
-						error: null,
-					}))
-					return { output: event.output, steps: JSON.stringify(event.steps) }
+					return event.output
 				} else if (event.type === 'error') {
 					updateNode<AgentNode>(
 						this.editor,
 						shape,
-						(n) => ({ ...n, error: event.message, lastStepsJson: JSON.stringify(event.steps) }),
+						(n) => ({ ...n, error: event.message, lastStepsJson: JSON.stringify(stepRows) }),
 						false
 					)
 					throw new Error(event.message)
 				}
 			}
 			throw new Error('The agent stopped without an answer.')
+		}
+
+		try {
+			let answer = await runOnce(instruction ? `${filledTask}\n\n${instruction}` : filledTask)
+			let check = checkAgentAnswer(answer, answerFormat)
+			if (!check.ok) {
+				// WP33 item E: invalid for the requested format — re-ask once, quoting the problem.
+				answer = await runOnce(buildReaskTask(filledTask, answerFormat, answer, check.error ?? 'invalid'))
+				check = checkAgentAnswer(answer, answerFormat)
+			}
+			if (!check.ok) throw new Error(`Agent's answer is not valid ${AGENT_ANSWER_FORMAT_LABELS[answerFormat]}: ${check.error}`)
+			updateNode<AgentNode>(this.editor, shape, (n) => ({
+				...n,
+				lastOutput: check.clean,
+				lastStepsJson: JSON.stringify(stepRows),
+				error: null,
+			}))
+			return { output: check.clean, steps: JSON.stringify(stepRows) }
 		} catch (e) {
 			if (!isAbortError(e)) {
 				updateNode<AgentNode>(this.editor, shape, (n) => ({ ...n, error: (e as Error).message }), false)
@@ -240,6 +284,8 @@ function AgentNodeComponent({ shape, node }: NodeComponentProps<AgentNode>) {
 	const skills = useValue('skills', () => $skills.get(), [])
 	const contextWired = useInputConnected(shape.id, 'context')
 	const taskWired = useInputConnected(shape.id, 'task')
+	const modelWired = useInputConnected(shape.id, 'model')
+	const vars = llmTemplateVars([node.task])
 	const set = (patch: Partial<AgentNode>, outOfDate = true) =>
 		updateNode<AgentNode>(editor, shape, (n) => ({ ...n, ...patch }), outOfDate)
 	const run = () => void startExecution(editor, new Set([shape.id]))
@@ -268,11 +314,15 @@ function AgentNodeComponent({ shape, node }: NodeComponentProps<AgentNode>) {
 					/>
 				</div>
 			)}
-			<NodeRow ref={modelRowRef}>
-				<Port shapeId={shape.id} portId="model" />
-				<span className="NodeInputRow-label">Model</span>
-				<ModelSelect className="node-model-select" capability="agent" value={node.model} onChange={(model) => set({ model })} />
-			</NodeRow>
+			{modelWired ? (
+				<PortRow shapeId={shape.id} portId="model" label="Model" dataType="model" />
+			) : (
+				<NodeRow ref={modelRowRef}>
+					<Port shapeId={shape.id} portId="model" />
+					<span className="NodeInputRow-label">Model</span>
+					<ModelSelect className="node-model-select" capability="agent" value={node.model} onChange={(model) => set({ model })} />
+				</NodeRow>
+			)}
 			<WireField shapeId={shape.id} fieldKey="search" label="Search">
 				<UiMultiSelect
 					values={parseIds(node.search) as (typeof SEARCH_PROVIDER_IDS)[number][]}
@@ -301,10 +351,25 @@ function AgentNodeComponent({ shape, node }: NodeComponentProps<AgentNode>) {
 			<WireField shapeId={shape.id} fieldKey="maxSteps" label="Max steps" dataType="number">
 				<UiNumberInput min={1} max={40} value={node.maxSteps} onChange={(v) => set({ maxSteps: v == null ? 12 : Math.min(40, Math.max(1, v)) })} />
 			</WireField>
+			<WireField shapeId={shape.id} fieldKey="answerFormat" label="Answer format">
+				<NodeSelect
+					className="NodeField-select"
+					value={normalizeAnswerFormat(node.answerFormat)}
+					onPointerDown={stopEvent}
+					onChange={(e) => set({ answerFormat: e.target.value as AgentAnswerFormat }, false)}
+				>
+					{AGENT_ANSWER_FORMATS.map((f) => (
+						<option key={f} value={f}>
+							{AGENT_ANSWER_FORMAT_LABELS[f]}
+						</option>
+					))}
+				</NodeSelect>
+			</WireField>
 			<OutputPortRow shapeId={shape.id} portId="steps" label="Steps (JSON)" dataType="text" />
 			<NodeRow>
-				<span className={'NodeStatus' + (node.error ? ' is-error' : '')}>{node.error ?? 'Not run yet'}</span>
+				<span className={'NodeStatus' + (node.error ? ' is-error' : '')}>{agentStatusText(node)}</span>
 			</NodeRow>
+			<LlmVarRows shapeId={shape.id} vars={vars} />
 			<StepList json={node.lastStepsJson} height={STEPS_PX} />
 			<NodeTextResult text={node.lastOutput} empty="Final answer appears here" height={120} />
 		</>

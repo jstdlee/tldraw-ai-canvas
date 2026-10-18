@@ -25,6 +25,21 @@ export async function openDatabase(bytes: Uint8Array): Promise<Database> {
 	return new SQL.Database(bytes)
 }
 
+/** A brand-new, empty database (GAPS-12): used when rows are wired into a Database card before
+ * any .sqlite/.db file has been uploaded. */
+export async function createDatabase(): Promise<Database> {
+	const SQL = await loadSqlJs()
+	return new SQL.Database()
+}
+
+/** Runs each statement in order (GAPS-12's rows-load plan: a CREATE TABLE IF NOT EXISTS followed
+ * by one or more batched INSERTs) — a single `db.exec(fullScript)` would also work, but running
+ * them one at a time avoids relying on sql.js splitting a multi-statement script the same way
+ * the plan's own statement boundaries do. */
+export function execStatements(db: Database, statements: string[]): void {
+	for (const statement of statements) db.exec(statement)
+}
+
 /** Table names, column names, and row counts — for the tables panel. */
 export function describeTables(db: Database): SqlTableInfo[] {
 	const names = (db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")[0]?.values ?? []).map(

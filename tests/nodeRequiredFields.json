@@ -89,6 +89,19 @@
 		"type",
 		"url"
 	],
+	"extract": [
+		"clean",
+		"error",
+		"find",
+		"lang",
+		"lastCode",
+		"lastJson",
+		"lastKind",
+		"lastList",
+		"lastTable",
+		"text",
+		"type"
+	],
 	"file_in": [
 		"action",
 		"content",
@@ -210,6 +223,15 @@
 		"options",
 		"question",
 		"type"
+	],
+	"json_fields": [
+		"error",
+		"json",
+		"lastRest",
+		"lastValues",
+		"paths",
+		"type",
+		"warnings"
 	],
 	"load_image": [
 		"imageUrl",
@@ -353,6 +375,14 @@
 		"text",
 		"type"
 	],
+	"template": [
+		"error",
+		"escape",
+		"lastOutput",
+		"template",
+		"type",
+		"warning"
+	],
 	"text_ai": [
 		"error",
 		"instruction",
@@ -400,6 +430,18 @@
 		"search",
 		"skills",
 		"task",
+		"type"
+	],
+	"merge": [
+		"error",
+		"mode",
+		"separator",
+		"type"
+	],
+	"gallery": [
+		"columns",
+		"error",
+		"lastImages",
 		"type"
 	]
 }

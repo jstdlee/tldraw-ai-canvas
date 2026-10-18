@@ -39,6 +39,11 @@ function portLabel(nodeLabel: string, portId: string, portsOfThatKindOnNode: num
 	return portsOfThatKindOnNode <= 1 ? nodeLabel : `${nodeLabel} · ${portId}`
 }
 
+/** A wirable-field port (WP17), as opposed to a card's own dedicated port. */
+function isFieldPort(portId: string): boolean {
+	return portId.startsWith('field:')
+}
+
 /**
  * Members: node ids inside the group, sorted top-to-bottom then left-to-right
  * (the caller sorts; this function only preserves order). Ports: every port of
@@ -74,6 +79,18 @@ export function computeGroupPorts(
 				(w) => w.toNode === nodeId && w.toPort === port.portId && memberSet.has(w.fromNode)
 			)
 			if (fedByMember) continue
+			// FLOW-05: a field port (a card's own wirable *setting*, not its main data port)
+			// only joins the box's interface when something outside the group is already wired
+			// into it — otherwise every member's every unconnected setting (DataPipe's "Tool",
+			// Text tools' "Param A"/"Param B", …) floods a packed box with noise. A dedicated
+			// port stays exposed either way, wired or not (that's still "the one or two ports
+			// that matter" at the boundary).
+			if (isFieldPort(port.portId)) {
+				const wiredFromOutside = wires.some(
+					(w) => w.toNode === nodeId && w.toPort === port.portId && !memberSet.has(w.fromNode)
+				)
+				if (!wiredFromOutside) continue
+			}
 			inputs.push({
 				id: `i:${idSuffix(nodeId)}:${port.portId}`,
 				label: portLabel(port.nodeLabel, port.portId, nodeInputs.length),

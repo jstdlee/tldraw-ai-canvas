@@ -1,7 +1,7 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { useEffect, useRef, useState } from 'react'
 import { T, TldrawUiButton, useEditor } from 'tldraw'
-import { UiNumberInput, UiSlider, UiTextInput } from '../../../ui'
+import { UiButton, UiNumberInput, UiSlider, UiTextInput } from '../../../ui'
 import { AdjustIcon } from '../../components/icons/AdjustIcon'
 import { CaptureIcon } from '../../components/icons/CaptureIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
@@ -213,14 +213,16 @@ function CameraNodeComponent({ shape, node }: NodeComponentProps<CameraNode>) {
 					))}
 			</div>
 			<NodeRow>
+				{/* UI-10: the house UiButton (used everywhere else in this card family — "Load"/
+				    "Browse" elsewhere have a clear grey background), not tldraw's own
+				    TldrawUiButton. "normal" is the variant without that background on either
+				    component (`.tlui-button__normal` carries no chrome in tldraw's own CSS) — it
+				    read as inert text either way, so the secondary action uses "low" (grey fill),
+				    matching "Load"/"Browse". */}
 				{stream ? (
-					<TldrawUiButton type="primary" onPointerDown={stopEvent} onClick={snap}>
-						Take photo
-					</TldrawUiButton>
+					<UiButton variant="primary" size="sm" label="Take photo" onClick={snap} />
 				) : (
-					<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={start}>
-						{node.lastResultUrl ? 'Retake' : 'Start camera'}
-					</TldrawUiButton>
+					<UiButton variant="low" size="sm" label={node.lastResultUrl ? 'Retake' : 'Start camera'} onClick={start} />
 				)}
 			</NodeRow>
 		</>

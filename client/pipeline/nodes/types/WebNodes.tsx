@@ -4,7 +4,7 @@ import { headersToLines, type ImportedHttpRequest, parseHttpImport } from '../..
 import { formatRunMs } from '../../../../shared/llmUsage'
 import { isAbortError } from '../../../../shared/abort'
 import { useState } from 'react'
-import { T, useEditor } from 'tldraw'
+import { Editor, T, useEditor } from 'tldraw'
 import { apiDownload, apiHttp, apiSave, apiSaveSecret } from '../../api/pipelineApi'
 import { currentRunSignal } from '../../execution/executionState'
 import { TextAreaField } from '../../editors/CodeArea'
@@ -12,6 +12,7 @@ import { LargeEditor } from '../../editors/LargeEditor'
 import { LoadImageIcon } from '../../components/icons/LoadImageIcon'
 import { PromptIcon } from '../../components/icons/PromptIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
+import { slugifyFileName } from '../../../../shared/fileSlug'
 import {
 	getNodeRowHeightPx,
 	GROW_FIELD_EXTRA_PX,
@@ -21,7 +22,8 @@ import {
 } from '../../constants'
 import { Port as PortDot, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
-import { isInputWired } from '../nodePorts'
+import { getNodeDefinition } from '../definitionStore'
+import { getNodePortConnections, isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiButton, UiCheckbox, UiGrowingInput, UiSecretInput, UiTextInput } from '../../../ui'
 import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult, WireField, WireFieldHeader } from './fields'
@@ -563,7 +565,25 @@ export const SaveNode = T.object({
 	lastPath: T.string.nullable(),
 	lastPreview: T.string.nullable(),
 	error: T.string.nullable(),
+	/** GAPS-17 / O: new file (default, "-2"/"-3" suffixed on a name collision) / overwrite
+	 * (always the same path) / append (one line/row per run). New field on an existing type:
+	 * optional, so an old save (no mode at all) keeps behaving exactly like "new". */
+	mode: T.literalEnum('new', 'overwrite', 'append').optional(),
 })
+
+/** `{{name}}` in the file name: the card feeding Save's own input, by its custom label or its
+ * node type's title — a "result-based name" (IMAGE-06) — else Save's own label, else "canvas". */
+function saveNameVar(editor: Editor, shape: NodeShape): string {
+	const connection = getNodePortConnections(editor, shape).find((c) => c.terminal === 'end' && c.ownPortId === 'input')
+	const upstream = connection && editor.getShape<NodeShape>(connection.connectedShapeId)
+	if (upstream) {
+		const customLabel = upstream.props.label
+		if (typeof customLabel === 'string' && customLabel.trim()) return slugifyFileName(customLabel)
+		const def = getNodeDefinition(editor, upstream.props.node)
+		return slugifyFileName(def.heading ?? def.title)
+	}
+	return slugifyFileName(shape.props.label || 'canvas')
+}
 
 export class SaveNodeDefinition extends NodeDefinition<SaveNode> {
 	static type = 'save'
@@ -575,10 +595,10 @@ export class SaveNodeDefinition extends NodeDefinition<SaveNode> {
 	override showsOutput = true
 	resultKeys = ['lastPath', 'lastPreview', 'error'] as const
 	getDefault(): SaveNode {
-		return { type: 'save', fileName: 'canvas-{{date}}', lastPath: null, lastPreview: null, error: null }
+		return { type: 'save', fileName: 'canvas-{{date}}', lastPath: null, lastPreview: null, error: null, mode: 'new' }
 	}
 	getBodyHeightPx(shape: NodeShape, _node: SaveNode) {
-		return getNodeRowHeightPx(shape.props.fontSize) * 3 + 120
+		return getNodeRowHeightPx(shape.props.fontSize) * 4 + 120
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		return {
@@ -589,7 +609,12 @@ export class SaveNodeDefinition extends NodeDefinition<SaveNode> {
 	async execute(shape: NodeShape, node: SaveNode, inputs: InputValues): Promise<ExecutionResult> {
 		const content = coerceToText(getInput(inputs, 'input'))
 		try {
-			const r = await apiSave({ content, fileName: node.fileName || undefined })
+			const r = await apiSave({
+				content,
+				fileName: node.fileName || undefined,
+				mode: node.mode ?? 'new',
+				name: saveNameVar(this.editor, shape),
+			})
 			updateNode<SaveNode>(this.editor, shape, (n) => ({
 				...n,
 				lastPath: r.path,
@@ -621,10 +646,22 @@ function SaveNodeComponent({ shape, node }: NodeComponentProps<SaveNode>) {
 			<PortRow shapeId={shape.id} portId="input" label="Content" dataType="any" hint="text or image" />
 			<WireField shapeId={shape.id} fieldKey="fileName" label="File">
 				<UiTextInput
-					placeholder="name ({{date}} = timestamp)"
+					placeholder="name ({{date}}, {{name}}, {{index}})"
 					value={node.fileName}
 					onChange={(fileName) => updateNode<SaveNode>(editor, shape, (n) => ({ ...n, fileName }))}
 				/>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="mode" label="Mode">
+				<NodeSelect
+					className="NodeField-select"
+					value={node.mode ?? 'new'}
+					onPointerDown={stopEvent}
+					onChange={(e) => updateNode<SaveNode>(editor, shape, (n) => ({ ...n, mode: e.target.value as SaveNode['mode'] }))}
+				>
+					<option value="new">New file</option>
+					<option value="overwrite">Overwrite</option>
+					<option value="append">Append (one line/row per run)</option>
+				</NodeSelect>
 			</WireField>
 			<NodeRow>
 				<span className={'NodeStatus' + (node.error ? ' is-error' : '')} title={node.lastPath ?? ''}>

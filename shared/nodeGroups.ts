@@ -43,9 +43,12 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	postgres: 'data', // superseded by database, kept hidden for old canvases
 	chart: 'data',
 	profile: 'data',
+	json_fields: 'data',
 	// Text
 	prompt_concat: 'text',
 	text_tool: 'text',
+	extract: 'text',
+	template: 'text',
 	// AI models
 	generate_text: 'ai',
 	text_ai: 'ai',
@@ -78,11 +81,13 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	code: 'flow',
 	sleep: 'flow',
 	subgraph: 'flow', // "Group boxes"
+	merge: 'flow',
 	// Output
 	output: 'output',
 	save: 'output',
 	table_view: 'output',
 	html_preview: 'output',
+	gallery: 'output',
 }
 
 export function categoryOf(type: string): string {

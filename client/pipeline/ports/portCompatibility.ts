@@ -2,11 +2,15 @@ import { ShapePort } from './Port'
 
 /**
  * Can a value from an output of type `outputType` flow into an input of type
- * `inputType`? Mostly symmetric (same type, or either side 'any'), with two
+ * `inputType`? Mostly symmetric (same type, or either side 'any'), with three
  * one-way exceptions: a piece of text can be an image URL, so text → image is
- * allowed (image → text is not: an image isn't a piece of text); and a plain
+ * allowed (image → text is not: an image isn't a piece of text); a plain
  * model id is text, so text → model is allowed (model → text is not: a model
- * reference may be an ad-hoc provider, not just an id).
+ * reference may be an ad-hoc provider, not just an id); and GAPS-11: text can
+ * name a number (a form field, a Prompt, a count from a table), so text →
+ * number is allowed and coerced at run (`shared/fieldCoerce.ts`) — the only
+ * way today to feed a number field from anything other than the hidden
+ * legacy Number card or an `any` output.
  */
 export function arePortDataTypesCompatible(
 	outputType: ShapePort['dataType'],
@@ -15,7 +19,7 @@ export function arePortDataTypesCompatible(
 	if (outputType === 'any' || inputType === 'any') return true
 	if (outputType === inputType) return true
 	if (outputType !== 'text') return false
-	return inputType === 'image' || inputType === 'model'
+	return inputType === 'image' || inputType === 'model' || inputType === 'number'
 }
 
 export function findFirstCompatiblePort(

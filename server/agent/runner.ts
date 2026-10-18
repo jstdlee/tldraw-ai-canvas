@@ -81,6 +81,11 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentRunE
 
 	let finished = false
 	let finalText = ''
+	// GAPS-04: distinguishes a genuine provider/model error from the "Request was aborted"
+	// (or similarly worded) noise that `agent.state.errorMessage` picks up when WE cancel an
+	// in-flight request ourselves to enforce maxSteps/maxRunMs — that's expected, not an error
+	// to surface. `AssistantMessage.stopReason` says which one it was for the last message.
+	let lastStopReason: string | undefined
 
 	const unsubscribe = agent.subscribe(async (event: AgentEvent) => {
 		if (event.type === 'turn_start') {
@@ -99,7 +104,9 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentRunE
 		} else if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
 			push({ type: 'text_delta', step, delta: event.assistantMessageEvent.delta })
 		} else if (event.type === 'message_end' && event.message.role === 'assistant') {
-			const text = textOf(event.message as AssistantMessage)
+			const message = event.message as AssistantMessage
+			lastStopReason = message.stopReason
+			const text = textOf(message)
 			if (text) {
 				finalText = text
 				steps.push({ step, kind: 'text', text, ms: Date.now() - stepStartedAt })
@@ -133,17 +140,31 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentRunE
 			yield queue.shift()!
 		}
 		await runPromise
-		const aborted = stoppedReason === 'time' || stoppedReason === 'steps'
-		const note = stoppedReason === 'steps' ? '\n\n(Stopped: reached the step limit.)' : stoppedReason === 'time' ? '\n\n(Stopped: reached the time limit.)' : ''
 		if (stoppedReason === 'external') {
 			yield { type: 'error', message: 'Stopped', steps }
 			return
 		}
-		if (!aborted && agent.state.errorMessage) {
+		// GAPS-04: a step-limit/time-limit stop used to skip straight to the "(no answer)"
+		// success path, hiding whatever error the last allowed step actually hit. Report it
+		// first, whatever stopped the run — but not when the "error" is just our own abort
+		// (enforcing maxSteps/maxRunMs) cutting off an in-flight request; that's expected.
+		if (agent.state.errorMessage && lastStopReason !== 'aborted') {
 			yield { type: 'error', message: agent.state.errorMessage, steps }
 			return
 		}
-		yield { type: 'final', output: (finalText || '(no answer)') + note, steps }
+		if (stoppedReason === 'steps' || stoppedReason === 'time') {
+			// No error, but also no answer: this is not a successful run — downstream cards
+			// must not treat "(no answer)" as real data.
+			if (!finalText) {
+				const limit = stoppedReason === 'steps' ? `the step limit (${maxSteps})` : 'the time limit'
+				yield { type: 'error', message: `Agent hit ${limit} before it answered.`, steps }
+				return
+			}
+			const note = stoppedReason === 'steps' ? '\n\n(Stopped: reached the step limit.)' : '\n\n(Stopped: reached the time limit.)'
+			yield { type: 'final', output: finalText + note, steps }
+			return
+		}
+		yield { type: 'final', output: finalText || '(no answer)', steps }
 	} finally {
 		clearTimeout(hardTimer)
 		opts.signal?.removeEventListener('abort', onExternalAbort)

@@ -5,7 +5,7 @@ import { apiGenerateText } from '../../api/pipelineApi'
 import { currentRunSignal, startExecution } from '../../execution/executionState'
 import { isAbortError } from '../../../../shared/abort'
 import { formatLlmUsage } from '../../../../shared/llmUsage'
-import { GenerateTextIcon } from '../../components/icons/GenerateTextIcon'
+import { EditTextIcon } from '../../components/icons/EditTextIcon'
 import {
 	getNodeRowHeightPx,
 	NODE_HEADER_HEIGHT_PX,
@@ -91,9 +91,12 @@ export function buildTextAIPrompt(node: Pick<TextAINode, 'operation' | 'option' 
 export class TextAINodeDefinition extends NodeDefinition<TextAINode> {
 	static type = 'text_ai'
 	static validator = TextAINode
-	title = 'AI text'
-	heading = 'AI text'
-	icon = <GenerateTextIcon />
+	// UI-09: renamed from "AI text" — paired against "Generate text" the old name gave no hint
+	// which one to pick for a given job. Keeps the `text_ai` type id (RULES.md: rename by
+	// changing title/heading, never the id), so saved canvases keep loading unchanged.
+	title = 'Edit text (AI)'
+	heading = 'Edit text (AI)'
+	icon = <EditTextIcon />
 	category = categoryOf('text_ai')
 	override defaultWidthPx = 380
 	override showsOutput = true

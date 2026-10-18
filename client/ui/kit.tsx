@@ -1160,6 +1160,9 @@ export function UiSegmented<T extends string>({
 					onPointerDown={stopPointer}
 					onKeyDown={stopKey}
 					onClick={() => onChange(option.value)}
+					// UI-05: a label that gets truncated (ellipsis, see ui.css) is still readable on
+					// hover — most options' labels are short enough that this tooltip never shows.
+					tooltip={option.label}
 				>
 					<TldrawUiButtonLabel>{option.label}</TldrawUiButtonLabel>
 				</TldrawUiButton>

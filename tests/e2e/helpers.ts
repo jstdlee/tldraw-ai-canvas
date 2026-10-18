@@ -37,6 +37,24 @@ export function nodeLocator(page: Page, id: string): Locator {
 	return page.locator(`[data-shape-id="${id}"]`)
 }
 
+/** Imports a same-origin or absolute URL into the server's local image store (the same
+ * `/api/images/from-url` endpoint `toImageUrl`/`apiImportImage` use), returning the resulting
+ * `/api/images/…` URL — a quick way for a test to get a real, stored image URL without going
+ * through any one card's own UI. */
+export async function apiImportImage(page: Page, url: string): Promise<string> {
+	return page.evaluate(async (url: string) => {
+		const absolute = url.startsWith('/') ? new URL(url, window.location.origin).toString() : url
+		const res = await fetch('/api/images/from-url', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ url: absolute }),
+		})
+		const data = await res.json()
+		if (!res.ok) throw new Error(data.error || res.statusText)
+		return data.imageUrl as string
+	}, url)
+}
+
 /** Create a node shape directly (setup only — mirrors what `createNodeAt` does, minus the
  * free-spot search tests don't need). Returns the new shape id. */
 export async function createNode(
@@ -58,6 +76,38 @@ export async function createNode(
 			return id
 		},
 		{ node, opts }
+	)
+}
+
+/** Create a node shape from the node type's own default (`getDefault()`) plus overrides, so a
+ * partial props object never fails tldraw's shape validator on a field this test doesn't care
+ * about (unlike `createNode`, which uses exactly the object you give it). Mirrors what
+ * `loadExample.ts`/`createNodeAt` actually do in the app. Returns the new shape id. */
+export async function createDefaultNode(
+	page: Page,
+	type: string,
+	overrides: Record<string, unknown> = {},
+	opts: { x?: number; y?: number; fontSize?: number } = {}
+): Promise<string> {
+	return page.evaluate(
+		async ({ type, overrides, opts }) => {
+			const editor = (window as any).editor
+			// @ts-expect-error dynamic import of an app source file, only resolvable at runtime
+			// by the dev server — see `runNode` below for the same trick.
+			const mod = await import('/client/pipeline/nodes/definitionStore.ts')
+			const base = mod.getNodeDefinition(editor, type).getDefault()
+			const node = { ...base, ...overrides, type }
+			const id = `shape:${crypto.randomUUID()}`
+			editor.createShape({
+				id,
+				type: 'node',
+				x: opts.x ?? 0,
+				y: opts.y ?? 0,
+				props: { node, fontSize: opts.fontSize ?? 16 },
+			})
+			return id
+		},
+		{ type, overrides, opts }
 	)
 }
 

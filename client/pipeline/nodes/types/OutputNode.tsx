@@ -7,6 +7,7 @@ import { ShapePort } from '../../ports/Port'
 import { ValuePreview } from '../../ValuePreview'
 import { NodeShape } from '../NodeShapeUtil'
 import { PortRow, stopEvent, NodeSelect, WireField } from './fields'
+import { WaitingUpstreamHint } from './HtmlPreviewNode'
 import {
 	areAnyInputsOutOfDate,
 	coerceToText,
@@ -107,6 +108,9 @@ function OutputNodeComponent({ shape, node }: NodeComponentProps<OutputNode>) {
 					))}
 				</NodeSelect>
 			</WireField>
+			{/* FLOW-09: this card's own turn may simply not have come up yet because an upstream
+			 * html_form is parked waiting for a click — say so instead of leaving a silent card. */}
+			<WaitingUpstreamHint shapeId={shape.id} />
 			<div className="NodeGrow NodeOutputView" style={{ height: VIEW_HEIGHT_PX - 8 }}>
 				{node.lastValue ? (
 					<ValuePreview value={node.lastValue} kind={node.kind as ContentKind | 'auto'} />

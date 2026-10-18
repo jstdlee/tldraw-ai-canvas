@@ -6,16 +6,17 @@ import {
 	bridgePayloadToJson,
 	buildFormBridgeScript,
 	parseBridgePayload,
+	valueFromSubmissionJson,
 } from '../../../../shared/htmlPreview'
 import { Editor, T, TLShapeId, useEditor, useValue } from 'tldraw'
 import { HtmlFormIcon } from '../../components/icons/HtmlFormIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX } from '../../constants'
 import { currentRunSignal, executionState, startExecution } from '../../execution/executionState'
-import { setNodeRun } from '../../execution/nodeRunState'
+import { getNodeRun, setNodeRun } from '../../execution/nodeRunState'
 import { Port as PortDot, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
-import { getNodeInputPortValues } from '../nodePorts'
+import { getNodeInputPortValues, getNodePortConnections } from '../nodePorts'
 import { IconClose, IconCodeBrackets, IconExpand, UiCheckbox, UiIconButton, UiNumberInput, UiTextArea } from '../../../ui'
 import { OutputPortRow, stopEvent, useInputConnected } from './fields'
 import {
@@ -48,6 +49,11 @@ const DEFAULT_PREVIEW_PX = 220
 const MIN_PREVIEW_PX = 100
 const MAX_PREVIEW_PX = 520
 const SUBMISSION_PX = 64
+
+/** FLOW-09/A2: the run-state message `html_form` sets while its `execute()` promise is parked
+ * waiting for a click — matched by `findWaitingUpstream` below, and shown verbatim in the
+ * card's own status row too, so both say exactly the same thing. */
+const WAITING_FOR_INPUT_MESSAGE = 'Waiting for input…'
 
 const EXAMPLE_PREVIEW_TEXT = '<button style="padding:8px 14px">Hello from the sandbox</button>'
 const EXAMPLE_FORM_TEXT = [
@@ -161,19 +167,26 @@ function SourceRow({
 
 /** The sandboxed iframe itself. Never `allow-same-origin` — the previewed page gets no origin
  * of its own, so it cannot reach the app, its API, cookies, or storage. Pointer events only
- * reach the iframe while the card is selected, so an unselected card never steals a canvas
- * drag/pan from a click that lands on it. */
+ * reach the iframe while the card is selected (or `interactive`), so an unselected *preview*
+ * card never steals a canvas drag/pan from a click that lands on it.
+ *
+ * GAPS-16: the *form* card passes `interactive` unconditionally — unlike a preview, a form's
+ * whole purpose is to be clicked, and the old selected-only gate meant a click on an unselected
+ * form's button reached neither the canvas (the wrapper's own `stopEvent` already swallowed
+ * that) nor the iframe (`pointer-events: none`), so the very first click was silently lost. */
 function PreviewFrame({
 	iframeRef,
 	doc,
 	heightPx,
 	selected,
+	interactive = false,
 	title,
 }: {
 	iframeRef?: React.RefObject<HTMLIFrameElement | null>
 	doc: string
 	heightPx: number
 	selected: boolean
+	interactive?: boolean
 	title: string
 }) {
 	return (
@@ -181,7 +194,7 @@ function PreviewFrame({
 			<iframe
 				ref={iframeRef}
 				className="HtmlPreviewNode-frame"
-				style={{ pointerEvents: selected ? 'auto' : 'none' }}
+				style={{ pointerEvents: selected || interactive ? 'auto' : 'none' }}
 				sandbox="allow-scripts allow-forms"
 				srcDoc={doc}
 				title={title}
@@ -378,6 +391,53 @@ export const HtmlFormNode = T.object({
 	error: T.string.nullable(),
 })
 
+/**
+ * FLOW-09: a card run downstream of an `html_form` (or anything else) that's waiting for a
+ * click just spins with no hint of why. BFS over input wires from `shapeId`, looking for an
+ * upstream card whose run state is this exact "Waiting for input…" message (the one
+ * `HtmlFormNodeDefinition.execute` sets below) — so a stuck card can name what it's waiting on.
+ */
+export function findWaitingUpstream(editor: Editor, shapeId: TLShapeId): string | null {
+	const seen = new Set<TLShapeId>([shapeId])
+	const queue: TLShapeId[] = [shapeId]
+	while (queue.length) {
+		const id = queue.shift()!
+		for (const c of getNodePortConnections(editor, id)) {
+			if (c.terminal !== 'end' || seen.has(c.connectedShapeId)) continue
+			seen.add(c.connectedShapeId)
+			const run = getNodeRun(editor, c.connectedShapeId)
+			if (run?.status === 'running' && run.message === WAITING_FOR_INPUT_MESSAGE) {
+				const shape = editor.getShape<NodeShape>(c.connectedShapeId)
+				const label = shape && (shape.props as { label?: string }).label
+				return (typeof label === 'string' && label.trim()) || shape?.props.node.type || c.connectedShapeId
+			}
+			queue.push(c.connectedShapeId)
+		}
+	}
+	return null
+}
+
+/**
+ * FLOW-09: dropped into any card's `Component` to show "waiting for input in <card>" while a
+ * run is in progress and this card's own turn hasn't come up yet because something upstream
+ * (currently only `html_form`) is parked waiting for the user. Renders nothing otherwise —
+ * including the ordinary case where this card simply hasn't been reached yet in a fast run.
+ */
+export function WaitingUpstreamHint({ shapeId }: { shapeId: TLShapeId }) {
+	const editor = useEditor()
+	const waitingOn = useValue(
+		'waiting upstream hint',
+		() => (executionState.get(editor).runningGraph ? findWaitingUpstream(editor, shapeId) : null),
+		[editor, shapeId]
+	)
+	if (!waitingOn) return null
+	return (
+		<NodeRow>
+			<span className="NodeStatus">Waiting for input in "{waitingOn}"</span>
+		</NodeRow>
+	)
+}
+
 /** A card currently inside `execute()`'s "waiting for the user" promise, resolved by
  * `submitHtmlForm` when its bridge message arrives. Module-level (not node props): this is
  * live run state, not something a saved canvas should remember. */
@@ -430,7 +490,8 @@ export class HtmlFormNodeDefinition extends NodeDefinition<HtmlFormNode> {
 	getBodyHeightPx(shape: NodeShape, node: HtmlFormNode) {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const previewPx = node.heightPx ?? DEFAULT_PREVIEW_PX
-		return rowPx * (ROWS_BEFORE_PREVIEW + 1) + TEXT_PX + OVERRIDE_PX * 3 + previewPx + SUBMISSION_PX
+		// +2 (not +1): the `json` and `value` (A2) output rows below the preview.
+		return rowPx * (ROWS_BEFORE_PREVIEW + 2) + TEXT_PX + OVERRIDE_PX * 3 + previewPx + SUBMISSION_PX
 	}
 	getPorts(shape: NodeShape, node: HtmlFormNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -439,6 +500,9 @@ export class HtmlFormNodeDefinition extends NodeDefinition<HtmlFormNode> {
 		return {
 			...ports,
 			json: { id: 'json', x: width, y: NODE_HEADER_HEIGHT_PX / 2 + rowPx, terminal: 'start', dataType: 'text' },
+			// A2 (GAPS-05): a single, routable value — the clicked data-value, or a one-field
+			// form's own field — so "form → Decision switch" needs no extra card in between.
+			value: { id: 'value', x: width, y: NODE_HEADER_HEIGHT_PX / 2 + rowPx * 2, terminal: 'start', dataType: 'text' },
 		}
 	}
 	async execute(shape: NodeShape, node: HtmlFormNode, inputs: InputValues): Promise<ExecutionResult> {
@@ -453,12 +517,12 @@ export class HtmlFormNodeDefinition extends NodeDefinition<HtmlFormNode> {
 		const fresh = freshSubmissions.get(shape.id)
 		if (fresh !== undefined) {
 			freshSubmissions.delete(shape.id)
-			return { output: doc, json: fresh }
+			return { output: doc, json: fresh, value: valueFromSubmissionJson(fresh) }
 		}
 
 		const signal = currentRunSignal(this.editor)
 		if (signal?.aborted) throw new DOMException('Stopped', 'AbortError')
-		setNodeRun(this.editor, shape.id, { status: 'running', message: 'Waiting for input…' })
+		setNodeRun(this.editor, shape.id, { status: 'running', message: WAITING_FOR_INPUT_MESSAGE })
 		return await new Promise<ExecutionResult>((resolve, reject) => {
 			const onAbort = () => {
 				pendingWaiters.delete(shape.id)
@@ -467,7 +531,7 @@ export class HtmlFormNodeDefinition extends NodeDefinition<HtmlFormNode> {
 			signal?.addEventListener('abort', onAbort)
 			pendingWaiters.set(shape.id, (json) => {
 				signal?.removeEventListener('abort', onAbort)
-				resolve({ output: doc, json })
+				resolve({ output: doc, json, value: valueFromSubmissionJson(json) })
 			})
 		})
 	}
@@ -476,6 +540,7 @@ export class HtmlFormNodeDefinition extends NodeDefinition<HtmlFormNode> {
 		return {
 			output: { value: node.lastHtml ?? null, isOutOfDate, dataType: 'text' },
 			json: { value: node.lastSubmissionJson ?? null, isOutOfDate, dataType: 'text' },
+			value: { value: node.lastSubmissionJson ? valueFromSubmissionJson(node.lastSubmissionJson) : null, isOutOfDate, dataType: 'text' },
 		}
 	}
 	Component = HtmlFormComponent
@@ -531,12 +596,15 @@ function HtmlFormComponent({ shape, node }: NodeComponentProps<HtmlFormNode>) {
 			)}
 			{waiting && (
 				<NodeRow>
-					<span className="NodeStatus">Waiting for input…</span>
+					<span className="NodeStatus">{WAITING_FOR_INPUT_MESSAGE}</span>
 				</NodeRow>
 			)}
-			<PreviewFrame iframeRef={iframeRef} doc={doc} heightPx={heightPx} selected={selected} title="HTML form" />
+			{/* GAPS-16: `interactive` keeps the iframe clickable even while unselected — a form's
+			 * whole purpose is to be clicked, so the first click on it must always count. */}
+			<PreviewFrame iframeRef={iframeRef} doc={doc} heightPx={heightPx} selected={selected} interactive title="HTML form" />
 			<OutputPortRow shapeId={shape.id} portId="output" label="HTML" dataType="text" />
 			<OutputPortRow shapeId={shape.id} portId="json" label="JSON" dataType="text" />
+			<OutputPortRow shapeId={shape.id} portId="value" label="Value" dataType="text" />
 			<div className="NodeScroll HtmlPreviewNode-submission" style={{ height: SUBMISSION_PX }} onPointerDown={stopEvent}>
 				{node.lastSubmissionJson ? <pre>{node.lastSubmissionJson}</pre> : <span className="NodeRow-disconnected">No submission yet</span>}
 			</div>

@@ -329,3 +329,46 @@ export function registerClipHandlers(editor: Editor) {
 		await defaultHandleExternalTextContent(editor, { point: info.point, text, html: info.html })
 	})
 }
+
+/**
+ * IMAGE-01: Ctrl+V of an image file (not a URL — an actual clipboard image, e.g. a screenshot)
+ * had no paste path at all, despite the Load image card's own placeholder text promising
+ * "paste". A capture-phase `paste` listener on `window` runs before tldraw's own (bubble-phase)
+ * paste handling gets a look at the event: when the clipboard has an image file AND exactly one
+ * selected shape is a node card whose type accepts an image (`pastePatch`, the same function the
+ * card footer's own "Paste" menu item already uses), the image lands in that card's own field
+ * and the event is suppressed; otherwise nothing is done, so the native paste proceeds exactly
+ * as it always did (tldraw's own canvas-paste for an image file, or anything else).
+ * Returns an unsubscribe function (app-lifetime in practice; offered for symmetry/tests).
+ */
+export function registerLoadImagePaste(editor: Editor): () => void {
+	const onPaste = (event: ClipboardEvent) => {
+		const files = event.clipboardData?.files
+		const imageFile = files && Array.from(files).find((file) => file.type.startsWith('image/'))
+		if (!imageFile) return
+		const selected = editor.getOnlySelectedShape()
+		if (!selected || !editor.isShapeOfType<NodeShape>(selected, 'node')) return
+		// A placeholder value just to ask "does this node type have a field pastePatch would set
+		// for an image?" before committing to pre-empting the native paste.
+		if (!pastePatch(selected.props.node as unknown as { type: string }, { imageUrl: 'x' })) return
+
+		event.preventDefault()
+		event.stopPropagation()
+		const reader = new FileReader()
+		reader.onload = () => {
+			const imageUrl = String(reader.result)
+			const fresh = editor.getShape<NodeShape>(selected.id)
+			if (!fresh) return
+			const patch = pastePatch(fresh.props.node as unknown as { type: string }, { imageUrl })
+			if (!patch) return
+			editor.updateShape<NodeShape>({
+				id: fresh.id,
+				type: 'node',
+				props: { node: { ...(fresh.props.node as unknown as Record<string, unknown>), ...patch } as NodeShape['props']['node'], isOutOfDate: true },
+			})
+		}
+		reader.readAsDataURL(imageFile)
+	}
+	window.addEventListener('paste', onPaste, { capture: true })
+	return () => window.removeEventListener('paste', onPaste, { capture: true })
+}

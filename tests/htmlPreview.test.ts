@@ -9,6 +9,7 @@ import {
 	parseBridgePayload,
 	previewCsp,
 	splitFencedBlocks,
+	valueFromSubmissionJson,
 } from '../shared/htmlPreview'
 
 describe('splitFencedBlocks', () => {
@@ -125,6 +126,17 @@ describe('buildFormBridgeScript', () => {
 		expect(script).toContain("addEventListener('submit'")
 		expect(script).toContain("addEventListener('click'")
 	})
+
+	it('GAPS-06: skips button/submit/reset controls as fields and reports the submitter separately', () => {
+		const script = buildFormBridgeScript()
+		// Buttons (and submit/reset inputs) must never be collected as a plain [name] field...
+		expect(script).toContain("tag === 'BUTTON'")
+		expect(script).toContain("el.type === 'submit'")
+		// ...and the submit handler passes the DOM SubmitEvent's own `submitter` through, so only
+		// the one button actually clicked ends up in the reported fields.
+		expect(script).toContain('fieldsFromForm(form, e.submitter)')
+		expect(script).toContain('result[submitter.name] = submitter.value')
+	})
 })
 
 describe('parseBridgePayload', () => {
@@ -170,5 +182,29 @@ describe('bridgePayloadToJson', () => {
 	it('spreads a click payload as { clicked, value, ...data }', () => {
 		const json = bridgePayloadToJson({ kind: 'click', clicked: 'Option A', value: 'a', data: { tag: 'x' } })
 		expect(JSON.parse(json)).toEqual({ clicked: 'Option A', value: 'a', tag: 'x' })
+	})
+})
+
+describe('valueFromSubmissionJson (A2 / GAPS-05)', () => {
+	it('reads a click payload\'s own value', () => {
+		const json = bridgePayloadToJson({ kind: 'click', clicked: 'Option A', value: 'a' })
+		expect(valueFromSubmissionJson(json)).toBe('a')
+	})
+
+	it('reads the single field of a one-field submit', () => {
+		const json = bridgePayloadToJson({ kind: 'submit', fields: { style: 'formal' } })
+		expect(valueFromSubmissionJson(json)).toBe('formal')
+	})
+
+	it('is empty for a multi-field submit (no single obvious answer), a click with no value, empty/invalid input', () => {
+		expect(valueFromSubmissionJson(bridgePayloadToJson({ kind: 'submit', fields: { a: '1', b: '2' } }))).toBe('')
+		expect(valueFromSubmissionJson(bridgePayloadToJson({ kind: 'click', clicked: 'Go' }))).toBe('')
+		expect(valueFromSubmissionJson(null)).toBe('')
+		expect(valueFromSubmissionJson('not json')).toBe('')
+		expect(valueFromSubmissionJson('[1,2]')).toBe('')
+	})
+
+	it('stringifies a single non-string field instead of dropping it', () => {
+		expect(valueFromSubmissionJson(JSON.stringify({ agree: true }))).toBe('true')
 	})
 })

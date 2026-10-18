@@ -136,6 +136,14 @@ export class ExecutionGraph {
 		const node = this.nodesById.get(nodeId)
 		if (!node || node.state !== 'waiting') return
 
+		// Merge (WP36 "I"): "first"/"all" readiness isn't "every input ready and non-STOP" — it
+		// needs its own scheduling (ready on the first branch to arrive, or once every wired
+		// branch has settled whether taken or not), so it bypasses the standard gather below.
+		if ((node.shape.props.node as { type: string }).type === 'merge') {
+			await this.executeMergeIfReady(nodeId, node)
+			return
+		}
+
 		const inputs: Record<string, PipelineValue | PipelineValue[]> = {}
 		const ports = getNodePorts(this.editor, nodeId)
 		const sortedConnections = [...node.connections].sort((a, b) => a.order - b.order)
@@ -155,6 +163,12 @@ export class ExecutionGraph {
 
 				const output = dependency.outputs[connection.connectedPortId]
 				if (output === STOP_EXECUTION) {
+					// The required input comes from a branch that was never taken (an If/Decision
+					// switch's other output). This node can't meaningfully run either, but it must
+					// still settle to 'executed' (as STOP) and cascade into its own dependents — or
+					// anything further downstream (notably a Merge card gathering several branches)
+					// would wait on it forever instead of seeing "this branch didn't deliver".
+					await this.settleAsStopped(nodeId, node)
 					return
 				}
 
@@ -163,7 +177,11 @@ export class ExecutionGraph {
 				const outputs = getNodeOutputPortInfo(this.editor, connection.connectedShapeId)
 				const output = outputs[connection.connectedPortId]
 
-				if (!output || output.value === STOP_EXECUTION) {
+				if (!output) {
+					return
+				}
+				if (output.value === STOP_EXECUTION) {
+					await this.settleAsStopped(nodeId, node)
 					return
 				}
 
@@ -228,6 +246,10 @@ export class ExecutionGraph {
 					const cachedOutputs = toExecutionResult(getNodeOutputPortInfo(this.editor, nodeId))
 					this.nodesById.set(nodeId, { ...node, state: 'executed', outputs: cachedOutputs })
 					setNodeRun(this.editor, nodeId, { status: 'ok', message: 'cached' })
+					// IMAGE-03: a cache hit is still a successful "run" of this card — clear the
+					// out-of-date flag the same way a real execution does below, or anything gated
+					// on it (a dimmed preview, the one-output-label spill logic) stays stale forever.
+					this.editor.updateShape({ id: nodeId, type: node.shape.type, props: { isOutOfDate: false } })
 					const dependents = []
 					for (const connection of Object.values(node.connections)) {
 						if (!connection || connection.terminal !== 'start') continue
@@ -240,6 +262,97 @@ export class ExecutionGraph {
 			}
 		}
 
+		await this.runNodeNow(nodeId, node, inputs, hash)
+	}
+
+	/** Mark a node that can never meaningfully run (a required input settled to STOP, i.e. its
+	 * branch was never taken) as 'executed', with every one of its own start-terminal ports also
+	 * set to STOP, then continue the cascade into its dependents. Without this it would stay
+	 * 'waiting' forever: nothing re-visits a node except its dependencies' own post-run cascade,
+	 * so anything further downstream (notably a Merge card gathering several branches) would
+	 * wait on it indefinitely instead of seeing "this branch didn't deliver". No run entry is
+	 * recorded: this is "never ran because its branch wasn't taken", not a failure. */
+	private async settleAsStopped(nodeId: TLShapeId, node: PendingExecutionGraphNode) {
+		if (this.nodesById.get(nodeId)?.state !== 'waiting') return
+		const ports = getNodePorts(this.editor, nodeId)
+		const outputs = Object.fromEntries(
+			Object.values(ports)
+				.filter((port) => port.terminal === 'start')
+				.map((port) => [port.id, STOP_EXECUTION])
+		) as ExecutionResult
+		this.nodesById.set(nodeId, { ...node, state: 'executed', outputs })
+
+		const dependents = []
+		for (const connection of Object.values(node.connections)) {
+			if (!connection || connection.terminal !== 'start') continue
+			if (isFeedbackEnd(this.editor, connection.connectedShapeId, connection.connectedPortId)) continue
+			dependents.push(this.executeNodeIfReady(connection.connectedShapeId))
+		}
+		await Promise.all(dependents)
+	}
+
+	/**
+	 * Merge's own scheduling (WP36 "I"): `in1..inN` ports, grown as the user wires them. Mode
+	 * "first" is ready the moment any wired branch has a real (non-STOP) value — the rest may
+	 * still be waiting or may themselves be STOP, it doesn't matter. Modes "all"/"json" wait
+	 * until every wired branch has *settled* (executed, whether to a value or to STOP — an
+	 * untaken branch is skipped, not waited on forever) before joining whichever delivered.
+	 */
+	private async executeMergeIfReady(nodeId: TLShapeId, node: PendingExecutionGraphNode) {
+		const mode = (node.shape.props.node as { mode?: string }).mode ?? 'first'
+		const ports = getNodePorts(this.editor, nodeId)
+		const inConnections = node.connections
+			.filter(
+				(c): c is NodePortConnection =>
+					!!c && c.terminal === 'end' && /^in\d+$/.test(c.ownPortId) && !ports[c.ownPortId]?.feedback
+			)
+			.sort((a, b) => Number(a.ownPortId.slice(2)) - Number(b.ownPortId.slice(2)))
+		if (inConnections.length === 0) return // nothing wired yet: nothing to do
+
+		const resolved = new Map<string, PipelineValue | STOP_EXECUTION>()
+		for (const connection of inConnections) {
+			const dependency = this.nodesById.get(connection.connectedShapeId)
+			if (dependency) {
+				if (dependency.state !== 'executed') continue
+				resolved.set(connection.ownPortId, dependency.outputs[connection.connectedPortId] ?? STOP_EXECUTION)
+			} else {
+				const output = getNodeOutputPortInfo(this.editor, connection.connectedShapeId)[connection.connectedPortId]
+				if (!output) continue
+				resolved.set(connection.ownPortId, output.value === STOP_EXECUTION ? STOP_EXECUTION : (output.value as PipelineValue))
+			}
+		}
+
+		const hasValue = (v: PipelineValue | STOP_EXECUTION | undefined): v is PipelineValue =>
+			v !== undefined && v !== STOP_EXECUTION
+		const ready =
+			mode === 'first'
+				? [...resolved.values()].some(hasValue)
+				: inConnections.every((c) => resolved.has(c.ownPortId))
+		if (!ready) return
+		if (this.state !== 'executing') return
+		if (this.nodesById.get(nodeId)?.state !== 'waiting') return
+
+		const inputs: Record<string, PipelineValue | PipelineValue[]> = {}
+		for (const connection of inConnections) {
+			const value = resolved.get(connection.ownPortId)
+			if (hasValue(value)) inputs[connection.ownPortId] = value
+		}
+
+		// "first"/"all" readiness depends on arrival timing, not just on the input values, so a
+		// settings+input hash would be meaningless here — Merge always runs fresh.
+		await this.runNodeNow(nodeId, node, inputs)
+	}
+
+	/** Actually run a node's `execute()` now that its inputs are ready, record the run, spill/
+	 * write its output, and cascade into its dependents. Shared by the standard gather above and
+	 * Merge's own scheduler. `hash` (the standard path only) is the run-cache key to store on a
+	 * clean run. */
+	private async runNodeNow(
+		nodeId: TLShapeId,
+		node: PendingExecutionGraphNode,
+		inputs: Record<string, PipelineValue | PipelineValue[]>,
+		hash?: string
+	) {
 		this.nodesById.set(nodeId, {
 			...node,
 			state: 'executing',

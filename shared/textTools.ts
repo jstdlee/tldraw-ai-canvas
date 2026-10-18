@@ -29,6 +29,7 @@ export const TEXT_TOOL_OPS: TextToolInfo[] = [
 	{ id: 'extract_numbers', group: 'Find & extract', label: 'Extract numbers' },
 	{ id: 'extract_hashtags', group: 'Find & extract', label: 'Extract #hashtags and @mentions' },
 	{ id: 'extract_ips', group: 'Find & extract', label: 'Extract IP addresses' },
+	{ id: 'extract_links', group: 'Find & extract', label: 'Extract links → table', a: 'same-site only / all (default all)' },
 	{ id: 'keep_lines', group: 'Find & extract', label: 'Keep lines containing', a: 'text (or /regex/)' },
 	{ id: 'remove_lines', group: 'Find & extract', label: 'Remove lines containing', a: 'text (or /regex/)' },
 	{ id: 'json', group: 'Find & extract', label: 'JSON value', a: 'path, e.g. data.items[0].name' },
@@ -394,6 +395,57 @@ const LOREM =
 
 const TRACKING = /^(utm_[a-z]+|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|igshid|yclid|_hsenc|_hsmi|ref_src|si)$/i
 
+/**
+ * WP35 Part Q: "Extract links" — every `<a href>` in `html`, resolved against `baseUrl` (a
+ * relative link with no base is skipped, not guessed), deduped, as a `url,text` table.
+ * `sameSiteOnly` ("same-site only" in `a`; default "all") drops links to a different host than
+ * `baseUrl`'s own.
+ */
+function extractLinks(html: string, baseUrl: string, sameSiteFlag: string): string {
+	const base = baseUrl.trim()
+	const sameSiteOnly = /^same/i.test(sameSiteFlag.trim())
+	let baseHost: string | null = null
+	if (base) {
+		try {
+			baseHost = new URL(base).hostname
+		} catch {
+			baseHost = null
+		}
+	}
+	const seen = new Set<string>()
+	const rows: string[][] = []
+	const re = /<a\b[^>]*href\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi
+	let m: RegExpExecArray | null
+	while ((m = re.exec(html))) {
+		const hrefRaw = m[1].trim()
+		if (!hrefRaw || hrefRaw.startsWith('#') || /^(javascript|mailto|tel):/i.test(hrefRaw)) continue
+		let url: string
+		try {
+			url = new URL(hrefRaw, base || undefined).toString()
+		} catch {
+			continue // a relative link with no (or no valid) base — can't be resolved
+		}
+		if (sameSiteOnly && baseHost) {
+			let host: string | null = null
+			try {
+				host = new URL(url).hostname
+			} catch {
+				// leave host null — treated as "different site" below
+			}
+			if (host !== baseHost) continue
+		}
+		if (seen.has(url)) continue
+		seen.add(url)
+		const text = m[2]
+			.replace(/<[^>]+>/g, ' ')
+			.replace(/&nbsp;/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim()
+		rows.push([url, text])
+	}
+	return [['url', 'text'], ...rows].map((row) => row.map(csvCell).join(',')).join('\n')
+}
+
 function runMoreTools(op: string, input: string, a: string, b: string, input2: string): string {
 	const lines = () => input.split(/\r?\n/)
 	switch (op) {
@@ -415,6 +467,8 @@ function runMoreTools(op: string, input: string, a: string, b: string, input2: s
 			return [...new Set(input.match(/(^|\s)([#@][\p{L}\p{N}_]+)/gu)?.map((m) => m.trim()) ?? [])].join('\n')
 		case 'extract_ips':
 			return [...new Set(input.match(/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g) ?? [])].join('\n')
+		case 'extract_links':
+			return extractLinks(input, input2, a)
 		case 'keep_lines':
 			return lines().filter(lineFilter(a)).join('\n')
 		case 'remove_lines':

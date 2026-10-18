@@ -202,8 +202,10 @@ export function apiDownload(params: { url: string; fileName?: string }) {
 	return postJson<DownloadResult>('/api/download', params)
 }
 
-/** Save node: write text or an image into data/exports on this machine. */
-export function apiSave(params: { content: string; fileName?: string }) {
+/** Save node: write text or an image into data/exports on this machine. `mode`: new file (the
+ * default, "-2"/"-3" suffixed on a collision) / overwrite (always the same path) / append (one
+ * line/row per run). `name` fills a `{{name}}` in `fileName`. */
+export function apiSave(params: { content: string; fileName?: string; mode?: 'new' | 'overwrite' | 'append'; name?: string }) {
 	return postJson<{ path: string; bytes: number }>('/api/save', params)
 }
 

@@ -5,10 +5,11 @@ import { T, useEditor, useValue } from 'tldraw'
 import { youtubeEmbed } from '../../../../shared/youtube'
 import { getNodeInputPortValues } from '../nodePorts'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
+import { currentRunSignal } from '../../execution/executionState'
 import { ShapePort } from '../../ports/Port'
 import { sleep } from '../../utils/sleep'
 import { NodeShape } from '../NodeShapeUtil'
-import { IconPlay, UiIconButton, UiTextInput } from '../../../ui'
+import { IconPlay, UiButton, UiIconButton, UiTextInput } from '../../../ui'
 import { PortRow, stopEvent, NodeSelect, WireField } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -152,7 +153,9 @@ export class SleepNodeDefinition extends NodeDefinition<SleepNode> {
 		return { input: end('input', 0, rowPx, 'any'), output: out('any') }
 	}
 	async execute(_shape: NodeShape, node: SleepNode, inputs: InputValues): Promise<ExecutionResult> {
-		await sleep(Math.max(0, Math.min(node.ms, 60_000)))
+		// FLOW-04: wait abortably, so Stop interrupts the wait itself (not just whatever was
+		// downstream of it) and the run reports "stopped" rather than running to completion.
+		await sleep(Math.max(0, Math.min(node.ms, 60_000)), currentRunSignal(this.editor))
 		return { output: getInputText(inputs, 'input') }
 	}
 	getOutputInfo(shape: NodeShape, _node: SleepNode, inputs: InfoValues): InfoValues {
@@ -177,24 +180,41 @@ function SleepComponent({ shape, node }: NodeComponentProps<SleepNode>) {
 	)
 }
 
+/** UI-02: a failed fetch used to leave `response.json()` to throw a raw browser exception
+ * ("Failed to execute 'json' on 'Response'...") straight into the dropdown's own text. Check
+ * the response before parsing it, and never show the raw exception message — only a generic,
+ * friendly one, with a Retry affordance (`reload`). */
 function useHub(url: string) {
 	const [models, setModels] = useState<HubModel[]>([])
 	const [error, setError] = useState<string | null>(null)
+	const [attempt, setAttempt] = useState(0)
 	useEffect(() => {
 		let dead = false
-		void fetch(url)
-			.then((response) => response.json())
-			.then((payload: { models?: HubModel[]; error?: string }) => {
+		setError(null)
+		fetch(url)
+			.then(async (response) => {
+				let payload: { models?: HubModel[]; error?: string } | null = null
+				try {
+					payload = await response.json()
+				} catch {
+					// Not JSON at all (a proxy error page, a truncated/aborted body, …).
+				}
 				if (dead) return
-				if (payload.error) setError(payload.error)
+				if (!response.ok || !payload || payload.error) {
+					throw new Error(payload?.error || `Request failed (${response.status})`)
+				}
 				setModels(payload.models ?? [])
 			})
-			.catch((cause) => !dead && setError((cause as Error).message))
+			.catch((cause) => {
+				if (dead) return
+				setModels([])
+				setError(`Couldn't load free models: ${(cause as Error).message || 'network error'}`)
+			})
 		return () => {
 			dead = true
 		}
-	}, [url])
-	return { models, error }
+	}, [url, attempt])
+	return { models, error, reload: () => setAttempt((n) => n + 1) }
 }
 
 export type OpenRouterNode = T.TypeOf<typeof OpenRouterNode>
@@ -219,10 +239,16 @@ export class OpenRouterNodeDefinition extends NodeDefinition<OpenRouterNode> {
 	async execute(shape: NodeShape, node: OpenRouterNode): Promise<ExecutionResult> {
 		let model = node.model
 		if (!model) {
-			const response = await fetch('/api/hub/openrouter')
-			const payload = (await response.json()) as { models?: HubModel[]; error?: string }
-			if (!response.ok) throw new Error(payload.error || 'OpenRouter failed')
-			model = payload.models?.[0]?.id ?? ''
+			let payload: { models?: HubModel[]; error?: string } | null = null
+			try {
+				const response = await fetch('/api/hub/openrouter')
+				payload = await response.json()
+				if (!response.ok && !payload?.error) throw new Error(`Request failed (${response.status})`)
+			} catch (e) {
+				throw new Error(payload?.error || `Couldn't load free models: ${(e as Error).message}`)
+			}
+			if (payload?.error) throw new Error(payload.error)
+			model = payload?.models?.[0]?.id ?? ''
 			if (!model) throw new Error('OpenRouter returned no free model')
 			updateNode<OpenRouterNode>(this.editor, shape, (n) => ({ ...n, model }), false)
 		}
@@ -236,15 +262,24 @@ export class OpenRouterNodeDefinition extends NodeDefinition<OpenRouterNode> {
 
 function OpenRouterComponent({ shape, node }: NodeComponentProps<OpenRouterNode>) {
 	const editor = useEditor()
-	const { models, error } = useHub('/api/hub/openrouter')
+	const { models, error, reload } = useHub('/api/hub/openrouter')
 	return (
 		<WireField shapeId={shape.id} fieldKey="model" label="Model" dataType="model">
-			<NodeSelect className="NodeField-select" value={node.model} onPointerDown={stopEvent} onChange={(e) => updateNode<OpenRouterNode>(editor, shape, (n) => ({ ...n, model: e.target.value }), false)}>
-				<option value="">{error || (models.length ? 'Free models' : 'Loading free models…')}</option>
-				{models.map((model) => (
-					<option key={model.id} value={model.id}>{model.name}</option>
-				))}
-			</NodeSelect>
+			{error ? (
+				<>
+					<span className="NodeStatus is-error" title={error}>
+						Couldn't load free models
+					</span>
+					<UiButton size="sm" variant="low" label="Retry" onClick={reload} />
+				</>
+			) : (
+				<NodeSelect className="NodeField-select" value={node.model} onPointerDown={stopEvent} onChange={(e) => updateNode<OpenRouterNode>(editor, shape, (n) => ({ ...n, model: e.target.value }), false)}>
+					<option value="">{models.length ? 'Free models' : 'Loading free models…'}</option>
+					{models.map((model) => (
+						<option key={model.id} value={model.id}>{model.name}</option>
+					))}
+				</NodeSelect>
+			)}
 		</WireField>
 	)
 }

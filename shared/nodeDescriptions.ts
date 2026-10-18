@@ -48,14 +48,18 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		keywords: ['sql', 'database', 'postgres', 'query', 'import', 'csv'],
 	},
 	text_ai: {
-		title: 'AI text',
-		description: 'Rewrites, translates, summarizes or otherwise edits text with an LLM.',
-		keywords: ['ai', 'llm', 'rewrite', 'translate', 'edit', 'instruction'],
+		// UI-09: paired with generate_text below, which looked almost identical in the
+		// library/search picker (same icon, same "Input"-first layout). Lead with what makes
+		// this one different — it picks a ready-made job and runs it on text you already have —
+		// instead of a generic "AI text" that reads the same as "Generate text" at a glance.
+		title: 'Edit text (AI)',
+		description: 'Pick a ready-made job — summarize, translate, rewrite, classify — and run it on text you already have.',
+		keywords: ['ai', 'llm', 'rewrite', 'translate', 'edit', 'instruction', 'transform', 'existing'],
 	},
 	generate_text: {
 		title: 'Generate text',
-		description: 'Calls a model to generate text from a prompt, optionally about an image.',
-		keywords: ['ai', 'llm', 'generate', 'caption', 'describe', 'vision'],
+		description: 'Write new text from a prompt you type, optionally looking at an image too.',
+		keywords: ['ai', 'llm', 'generate', 'caption', 'describe', 'vision', 'write', 'new', 'compose'],
 	},
 	chat: {
 		title: 'Chat message',
@@ -246,5 +250,30 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		title: 'HTML form',
 		description: 'Same sandboxed preview as HTML preview, but waits for a form submit or a button click and outputs it as JSON.',
 		keywords: ['html', 'form', 'button', 'click', 'submit', 'options', 'cards', 'choice', 'sandbox', 'iframe'],
+	},
+	json_fields: {
+		title: 'JSON fields',
+		description: 'Pulls one or more named paths out of a JSON value, each as its own output, plus the rest.',
+		keywords: ['json', 'fields', 'path', 'extract', 'pick', 'object', 'unpack'],
+	},
+	extract: {
+		title: 'Extract from text',
+		description: 'Finds the first table, JSON, fenced code block, or bullet list inside LLM/Agent prose.',
+		keywords: ['extract', 'parse', 'table', 'json', 'markdown', 'fence', 'code block', 'bullet', 'list', 'llm', 'agent'],
+	},
+	template: {
+		title: 'Template',
+		description: 'Fills {{name}} placeholders from wired values into one piece of text, with JSON/HTML/URL/CSV escaping.',
+		keywords: ['template', 'fill', 'placeholder', 'vars', 'variables', 'merge', 'json', 'html', 'escape'],
+	},
+	merge: {
+		title: 'Merge',
+		description: 'Waits on several branches (e.g. from an If or Decision switch) and combines whichever delivered: first to arrive, all joined, or all as JSON.',
+		keywords: ['merge', 'join', 'combine', 'branch', 'wait', 'first', 'union', 'collect'],
+	},
+	gallery: {
+		title: 'Gallery',
+		description: 'Shows a list of images as a grid (lines, a JSON list, or a table\'s url column), with "Download all" as a zip.',
+		keywords: ['gallery', 'grid', 'images', 'thumbnails', 'zip', 'download', 'batch'],
 	},
 }

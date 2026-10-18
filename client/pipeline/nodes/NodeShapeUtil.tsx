@@ -1,9 +1,10 @@
 import classNames from 'classnames'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import {
 	Circle2d,
 	createShapePropsMigrationIds,
 	createShapePropsMigrationSequence,
+	Editor,
 	getColorValue,
 	Group2d,
 	HTMLContainer,
@@ -40,6 +41,7 @@ import {
 } from '../../ui'
 import {
 	DEFAULT_NODE_FONT_PX,
+	getNodeErrorBannerReservePx,
 	getNodeRowHeightPx,
 	NODE_FOOTER_HEIGHT_PX,
 	NODE_HEADER_HEIGHT_PX,
@@ -62,6 +64,7 @@ import { openFillAssist } from '../assist'
 import { readClipboard } from '../clipboard'
 import { apiImportImage } from '../api/pipelineApi'
 import { clearNodeRun, getNodeRun } from '../execution/nodeRunState'
+import { shortTimeStamp, slugifyFileName } from '../../../shared/fileSlug'
 import { STOP_EXECUTION } from './types/shared'
 import { $notesAll, $notesOpen, toggleNoteOpen } from '../../shell/shellState'
 
@@ -109,6 +112,28 @@ declare module 'tldraw' {
 }
 
 export type NodeShape = TLShape<typeof NODE_TYPE>
+
+/**
+ * DATA-02: whether this card would show the red run-failed banner right now — the same
+ * condition `NodeShapeComponent` uses to decide `showBanner`, minus the per-render "dismissed"
+ * state (a plain React `useState`, not reachable from here). Reserving the banner's height even
+ * briefly after a dismiss is a harmless, rare cosmetic gap; never reserving it while a real
+ * failure is showing is the bug this exists to fix.
+ */
+function hasErrorBanner(editor: Editor, shape: NodeShape): boolean {
+	const storedError = (shape.props.node as { error?: unknown }).error
+	const nodeError = typeof storedError === 'string' && storedError.trim() ? storedError : ''
+	if (nodeError) return true
+	const run = getNodeRun(editor, shape.id)
+	return !!((run?.status === 'error' || run?.status === 'missing') && run.message?.trim())
+}
+
+/** The card's own box height, plus room for the error banner when one would show (DATA-02). */
+function getNodeOuterHeightPx(editor: Editor, shape: NodeShape): number {
+	const base = getNodeHeightPx(editor, shape)
+	if (shape.props.collapsed) return base
+	return hasErrorBanner(editor, shape) ? base + getNodeErrorBannerReservePx(shape.props.fontSize) : base
+}
 
 const nodeShapeVersions = createShapePropsMigrationIds(NODE_TYPE, {
 	FillRequiredNodeFields: 1,
@@ -211,7 +236,9 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 
 		const bodyGeometry = new Rectangle2d({
 			width,
-			height: getNodeHeightPx(this.editor, shape),
+			// DATA-02: taller when a failed-run banner needs room, so it (and the toolbar sitting
+			// below the viewport) never hides it — see getNodeOuterHeightPx.
+			height: getNodeOuterHeightPx(this.editor, shape),
 			isFilled: true,
 		})
 
@@ -274,7 +301,7 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 
 	getIndicatorPath(shape: NodeShape) {
 		const width = getNodeWidthPx(this.editor, shape)
-		const height = getNodeHeightPx(this.editor, shape)
+		const height = getNodeOuterHeightPx(this.editor, shape)
 		const path = new Path2D()
 		// Same radius as the card (--tl-radius-3), so the indicator sits exactly on its edge.
 		path.roundRect(0, 0, width, height, NODE_CARD_RADIUS_PX)
@@ -285,6 +312,68 @@ export class NodeShapeUtil extends ShapeUtil<NodeShape> {
 		}
 		return path
 	}
+}
+
+/** A single canvas 2d context, reused for every card: measuring text this way never forces a
+ * layout reflow the way reading `scrollWidth` off a live DOM node would. */
+let measureCtx: CanvasRenderingContext2D | null | undefined
+
+/**
+ * UI-04: `.NodePortLabel`'s column used to be a flat 32% of the card, truncating short labels
+ * unreadably on a cramped card (JEV's "Context"/"Question"/"Input text" -> "Cont…"/"Ques…"/
+ * "Inpu…"). After each render, measure this one card's own port/field labels and widen the
+ * column (as a `--port-label-w` percentage CSS custom property, which `.NodePortLabel` in
+ * index.css reads) to fit the longest label of 12 characters or fewer — clamped to 28%-42% so
+ * it never crowds out the row's own control. A longer label still wraps (CSS) and, only past
+ * two lines, truncates.
+ *
+ * The percentage is computed against each label's own immediate flex row, not the card's own
+ * width: a `flex-basis` percentage always resolves against its element's actual containing
+ * block, and that is narrower than the full card for a row that shares its width with a
+ * sibling (JEV's input/output rows sit side by side, each roughly half the card) — sizing
+ * against the card there would still leave the label too little room in its real container.
+ */
+function usePortLabelColumnWidth(shapeId: string, fontSize: number | undefined, node: NodeType) {
+	useLayoutEffect(() => {
+		const root = document.querySelector(`[data-shape-id="${CSS.escape(shapeId)}"]`) as HTMLElement | null
+		if (!root) return
+		const labels = root.querySelectorAll<HTMLElement>('.NodePortLabel')
+		if (labels.length === 0) return
+		if (measureCtx === undefined) measureCtx = document.createElement('canvas').getContext('2d')
+		let maxPct = 0
+		for (const el of labels) {
+			// A right-aligned row's label already hugs its own content (`.NodeRow-right >
+			// .NodePortLabel`) — it doesn't need, or want, the shared column width.
+			if (el.closest('.NodeRow-right')) continue
+			const text = el.textContent ?? ''
+			if (text.length === 0 || text.length > 12) continue
+			if (!measureCtx) continue
+			// `.NodePortLabel`'s own parent is the flex row its `flex-basis` percentage resolves
+			// against (see `fields.tsx`'s `PortRow`/`WireField`: Port, then this label, as direct
+			// flex children of one `NodeRow`) — not the row's own width, which flex-basis percent
+			// isn't relative to once padding/other children are accounted for.
+			const container = el.parentElement
+			const containerWidth = container?.getBoundingClientRect().width
+			if (!containerWidth) continue
+			const style = getComputedStyle(el)
+			measureCtx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+			// Canvas text measurement is exact down to the pixel, with nothing to spare — a word
+			// that just barely wrapped (an orphan last letter on its own second line, e.g.
+			// "Questio"/"n") reads worse than a slightly wider column. Half a character's width of
+			// slack (not a flat px value, so it scales with the A-/A+ card font setting) comfortably
+			// fits a short word on one line instead of missing by a hair.
+			const textPx = measureCtx.measureText(text).width + parseFloat(style.fontSize) * 1.5
+			maxPct = Math.max(maxPct, (textPx / containerWidth) * 100)
+		}
+		if (maxPct === 0) {
+			root.style.removeProperty('--port-label-w')
+			return
+		}
+		root.style.setProperty('--port-label-w', `${Math.min(42, Math.max(28, maxPct))}%`)
+		// `node` isn't read directly, but any field/port label text lives inside it — this effect
+		// must re-measure whenever it (or the font size, which also changes every label's own
+		// rendered width) changes.
+	}, [shapeId, fontSize, node])
 }
 
 function NodeShapeComponent({ shape }: { shape: NodeShape }) {
@@ -301,6 +390,18 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 		() => executionState.get(editor).runningGraph?.getNodeStatus(shape.id) === 'executing',
 		[editor, shape.id]
 	)
+
+	// FLOW-06: a card that's part of the current run but hasn't started yet (waiting on an
+	// upstream card, e.g. a Sleep further up the chain) used to show nothing — the footer just
+	// reverted to its idle "Run" label, even for the card the user actually clicked. "waiting" is
+	// only a real run-graph status once a run has started (the graph's own node map; a card not
+	// part of any run has no entry at all), so this never fires outside an actual run.
+	const isPendingInRun = useValue(
+		'is pending in run',
+		() => executionState.get(editor).runningGraph?.getNodeStatus(shape.id) === 'waiting',
+		[editor, shape.id]
+	)
+	const isBusy = isExecuting || isPendingInRun
 
 	const isGraphRunning = useValue(
 		'is graph running',
@@ -348,8 +449,9 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 	const accentColor = shape.props.color
 		? getColorValue(editor.getCurrentTheme().colors[editor.getColorMode()], shape.props.color, 'solid')
 		: undefined
+	usePortLabelColumnWidth(shape.id, fontSize, shape.props.node)
 	const runClass =
-		isExecuting || run?.status === 'running'
+		isBusy || run?.status === 'running'
 			? 'NodeShape_running'
 			: run?.status === 'ok'
 				? 'NodeShape_ok'
@@ -375,6 +477,9 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 					'--node-header-h': `${NODE_HEADER_HEIGHT_PX}px`,
 					'--node-footer-h': `${NODE_FOOTER_HEIGHT_PX}px`,
 					'--node-row-h': `${getNodeRowHeightPx(fontSize)}px`,
+					// DATA-02: caps the error banner's own height to exactly the extra room
+					// getNodeOuterHeightPx reserved for it, so it can never spill past the card's box.
+					...(showBanner ? { '--node-banner-reserve': `${getNodeErrorBannerReservePx(fontSize)}px` } : null),
 					...(fontSize ? { '--node-fs': `${fontSize}px` } : null),
 					...(accentColor ? { '--node-accent': accentColor } : null),
 				} as React.CSSProperties
@@ -400,7 +505,9 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 		>
 			<NodeNote shape={shape} />
 			<div className="NodeShape-heading">
-				<div className="NodeShape-icon">{nodeDefinition.icon}</div>
+				{/* UI-09: a per-type modifier class lets index.css give "AI text"/"Generate text" a
+				    distinct default icon tint — harmless no-op for every other type. */}
+				<div className={classNames('NodeShape-icon', `NodeShape-icon_${shape.props.node.type}`)}>{nodeDefinition.icon}</div>
 				{naming ? (
 					<UiTextInput
 						className="NodeShape-label NodeShape-label-input"
@@ -453,9 +560,9 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 				<UiButton
 					size="sm"
 					variant="low"
-					className={isExecuting ? 'NodeRunButton_busy' : undefined}
-					icon={isExecuting ? <IconStop /> : <IconPlay />}
-					label={isExecuting ? 'Stop' : run?.ms != null ? formatRunMs(run.ms) : 'Run'}
+					className={isBusy ? 'NodeRunButton_busy' : undefined}
+					icon={isBusy ? <IconStop /> : <IconPlay />}
+					label={isBusy ? 'Stop' : run?.ms != null ? formatRunMs(run.ms) : 'Run'}
 					onClick={() => {
 						if (isGraphRunning) stopExecution(editor)
 						else startExecution(editor, new Set([shape.id]))
@@ -497,7 +604,7 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 			) : (
 				<NodeRunStatus
 					shape={shape}
-					running={isExecuting || run?.status === 'running'}
+					running={isBusy || run?.status === 'running'}
 					cards={runningCards}
 					cached={run?.status === 'ok' && run.message === 'cached'}
 					stopped={run?.status === 'stopped'}
@@ -653,12 +760,15 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 		const blobUrl = URL.createObjectURL(blob)
 		const a = document.createElement('a')
 		a.href = blobUrl
-		a.download = `image.${ext}`
+		// IMAGE-06: every download used to be named literally "image.<ext>", colliding across
+		// cards and runs. Name it after the card (or its custom label) plus a short timestamp.
+		const cardName = shape.props.label || definition.heading || definition.title
+		a.download = `${slugifyFileName(cardName)}-${shortTimeStamp()}.${ext}`
 		document.body.appendChild(a)
 		a.click()
 		document.body.removeChild(a)
 		URL.revokeObjectURL(blobUrl)
-	}, [imageUrl])
+	}, [imageUrl, shape.props.label, definition])
 
 	const handleCopyText = useCallback(async () => {
 		if (!textResult) return
@@ -805,15 +915,18 @@ function NodeFooterMenu({ shape }: { shape: NodeShape }) {
 							</TldrawUiButton>
 						</TldrawUiDropdownMenuItem>
 						<TldrawUiDropdownMenuItem noClose>
+							{/* UI-13: "Lock delete" read ambiguously at a glance (lock, then delete? or
+							    prevent deleting?). "Prevent deletion" / "Allow deletion" are each clear on
+							    their own, so the wording still makes sense without needing the checkmark. */}
 							<TldrawUiButton
 								type="menu"
-								title={deleteLocked ? 'Allow delete' : 'Lock delete'}
+								title={deleteLocked ? 'Allow deletion' : 'Prevent deletion'}
 								onClick={() =>
 									editor.updateShape<NodeShape>({ id: shape.id, type: 'node', props: { deleteLocked: !deleteLocked } })
 								}
 							>
 								<TldrawUiButtonCheck checked={deleteLocked} />
-								<TldrawUiButtonLabel>{deleteLocked ? 'Allow delete' : 'Lock delete'}</TldrawUiButtonLabel>
+								<TldrawUiButtonLabel>{deleteLocked ? 'Allow deletion' : 'Prevent deletion'}</TldrawUiButtonLabel>
 							</TldrawUiButton>
 						</TldrawUiDropdownMenuItem>
 						<TldrawUiDropdownMenuItem noClose>

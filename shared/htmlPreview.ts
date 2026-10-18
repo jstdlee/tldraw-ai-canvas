@@ -57,15 +57,21 @@ export function looksLikeFullDocument(html: string): boolean {
 
 /** The CSP meta tag content: blocks all network by default; "Allow network" relaxes it to
  * images/styles/scripts/connections over https/http, but it is never `allow-same-origin` on
- * the iframe itself — that stays the caller's job. */
+ * the iframe itself — that stays the caller's job.
+ *
+ * GAPS-15: a CSP source list may not mix the `'none'` keyword with any other source expression
+ * (every browser's console warns "'img-src' contains the keyword 'none' alongside with other
+ * source expressions", and some treat the whole directive as invalid). `img-src` always lists
+ * `data:`/`blob:` on their own — those already deny network images when network is off, so
+ * `'none'` would be both invalid and redundant here. */
 export function previewCsp(allowNetwork: boolean): string {
-	const net = allowNetwork ? 'https: http:' : "'none'"
+	const net = allowNetwork ? ' https: http:' : ''
 	return [
 		"default-src 'none'",
-		`img-src data: blob: ${net}`,
+		`img-src data: blob:${net}`,
 		"style-src 'unsafe-inline'",
 		"script-src 'unsafe-inline'",
-		...(allowNetwork ? [`connect-src ${net}`, `font-src data: ${net}`, `media-src data: blob: ${net}`] : []),
+		...(allowNetwork ? [`connect-src${net}`, `font-src data:${net}`, `media-src data: blob:${net}`] : []),
 	].join('; ')
 }
 
@@ -195,6 +201,34 @@ export function bridgePayloadToJson(payload: BridgePayload): string {
 }
 
 /**
+ * A2 (GAPS-05): the form card's `value` output — a single, routable string pulled out of a
+ * submission's `json`, so "form → Decision switch" needs no extra card in between. Reads the
+ * already-built `json` text (not the raw `BridgePayload`) since that's what's persisted on the
+ * node: a click's own `value` (its `data-value`), or a submit's one field when the form has
+ * exactly one. Anything else (no `value` key, or more than one submitted field) has no single
+ * obvious answer, so this returns '' rather than guessing.
+ */
+export function valueFromSubmissionJson(json: string | null | undefined): string {
+	if (!json) return ''
+	let obj: unknown
+	try {
+		obj = JSON.parse(json)
+	} catch {
+		return ''
+	}
+	if (!isPlainObject(obj)) return ''
+	// A click payload's json always carries a `clicked` key — never treat that (or any
+	// accompanying data-* attribute) as if it were a submitted field; its own `value` key
+	// (the clicked element's data-value) is the only thing a click can contribute here.
+	if ('clicked' in obj) return typeof obj.value === 'string' ? obj.value : ''
+	const keys = Object.keys(obj)
+	if (keys.length !== 1) return ''
+	const only = obj[keys[0]]
+	if (only == null) return ''
+	return typeof only === 'string' ? only : JSON.stringify(only)
+}
+
+/**
  * The bridge script injected into the form card's document (never the preview-only card's).
  * Plain ES5-ish JS: it runs inside the sandboxed iframe, not through our bundler.
  *  - A `<form>` submit is turned into a FormData-like object: repeated names become arrays,
@@ -206,11 +240,16 @@ export function bridgePayloadToJson(payload: BridgePayload): string {
  */
 export function buildFormBridgeScript(): string {
 	return `(function(){
-		function fieldsFromForm(form){
+		function fieldsFromForm(form, submitter){
 			var result = {};
 			var els = form.querySelectorAll('[name]');
 			for (var i = 0; i < els.length; i++) {
 				var el = els[i];
+				// GAPS-06: a named submit/button/reset control is never one of the form's own
+				// *fields* — without this, every button sharing a name reports as an array of
+				// every button's value, not just the one clicked.
+				var tag = el.tagName;
+				if (tag === 'BUTTON' || (tag === 'INPUT' && (el.type === 'submit' || el.type === 'button' || el.type === 'reset'))) continue;
 				var name = el.getAttribute('name');
 				if (!name || el.disabled) continue;
 				var value;
@@ -237,13 +276,19 @@ export function buildFormBridgeScript(): string {
 					result[name] = value;
 				}
 			}
+			// GAPS-06: the submitter (the button/input[type=submit] actually clicked) reports its
+			// own name/value last, as a plain field — so {"style":"formal"}, not every button's
+			// value collected as an array under a shared name.
+			if (submitter && submitter.name) {
+				result[submitter.name] = submitter.value;
+			}
 			return result;
 		}
 		document.addEventListener('submit', function(e){
 			var form = e.target;
 			if (!form || form.tagName !== 'FORM') return;
 			e.preventDefault();
-			window.parent.postMessage({ ${BRIDGE_MARKER}: true, kind: 'submit', fields: fieldsFromForm(form) }, '*');
+			window.parent.postMessage({ ${BRIDGE_MARKER}: true, kind: 'submit', fields: fieldsFromForm(form, e.submitter) }, '*');
 		}, true);
 		document.addEventListener('click', function(e){
 			var el = e.target && e.target.closest ? e.target.closest('button, [data-value], a[data-value]') : null;

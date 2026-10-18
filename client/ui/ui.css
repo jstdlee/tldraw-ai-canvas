@@ -114,6 +114,17 @@
 	box-shadow: 0 0 0 1px var(--tl-color-focus);
 }
 
+/* UI-07: a few node fields (HTML preview/form's html/css/js overrides) carry fairly long
+ * explanatory placeholder text in a small `_mono` box — the browser's own placeholder style
+ * (very low fixed opacity on top of the font's own size) made it noticeably harder to read than
+ * the rest of the card. One legible, muted colour everywhere a placeholder shows, instead of
+ * leaving it to each browser's own UA default. */
+.UiInput::placeholder,
+.UiTextArea::placeholder {
+	color: var(--tl-color-text-3);
+	opacity: 1;
+}
+
 .UiInput:disabled,
 .UiTextArea:disabled,
 .UiSelect-trigger.tlui-button:disabled {
@@ -375,12 +386,21 @@ textarea.UiTextArea.UiTextArea_grow {
 	flex: 1;
 	padding: 0 0.45em;
 	font-size: var(--fs-body, 0.75em);
+	/* UI-05: a segmented control with several options (e.g. Database's Source picker) must stay
+	   inside the card's own width — clip rather than push a later item past the card's edge. */
+	overflow: hidden;
 }
 
 .UiSegmented-item .tlui-button__label {
 	flex-grow: 0;
 	font-size: inherit;
 	text-align: center;
+	/* UI-05: a label too long for its share of the row (e.g. "Built-in Postgres" among four
+	   options) truncates with an ellipsis instead of overflowing the control's own box — the
+	   full label is still available as a tooltip (UiSegmented passes it through). */
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .UiSegmented-item.is-on {

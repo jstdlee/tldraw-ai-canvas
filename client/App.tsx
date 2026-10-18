@@ -60,7 +60,7 @@ import { watchFieldPortAnchors } from './pipeline/ports/fieldAnchors'
 import { TargetAreaTool } from './tools/TargetAreaTool'
 import { TargetShapeTool } from './tools/TargetShapeTool'
 import { canvasActionOverrides, CanvasContextMenu, CanvasToolsMenuGroup, ExamplesMenu, MarkdownIcon, MermaidIcon } from './clips/CanvasMenus'
-import { registerClipHandlers } from './clips/canvasFeatures'
+import { registerClipHandlers, registerLoadImagePaste } from './clips/canvasFeatures'
 import { clipShapeUtils, clipTools } from './clips/ClipShapes'
 import { FindBar } from './clips/FindBar'
 import { installKeepGroup } from './pipeline/groups/KeepGroupShapeUtil'
@@ -322,6 +322,7 @@ function App() {
 							keepConnectionsAtBottom(editor)
 							disableTransparency(editor, ['connection'])
 							registerClipHandlers(editor)
+						registerLoadImagePaste(editor)
 							watchPackedNodes(editor)
 							watchFieldPortAnchors(editor)
 							registerNodeGuards(editor)
@@ -431,13 +432,20 @@ function ModelHealthToasts() {
 			byModel.set(key, entry)
 		}
 		const lines = [...byModel].map(([model, { caps, reason }]) => `${caps.join(', ')}: ${model} — ${reason}`)
-		toasts.addToast({
+		const id = toasts.addToast({
 			severity: 'warning',
 			title: broken.length === 1 ? 'A default model is not available' : `${broken.length} default models are not available`,
 			description: `${lines.join('\n')}\nPick others in AI providers.`,
 			keepOpen: true,
 			actions: [{ type: 'primary', label: 'AI providers…', onClick: () => openProvidersDialog() }],
 		})
+		// UI-12: `keepOpen` (tldraw's own toast API only offers "4s" or "forever" — no custom
+		// duration) can otherwise sit indefinitely over a card panned into the same corner,
+		// blocking its controls. This warning is worth more than the 4s default, but not forever:
+		// remove it after a generous, fixed window if the user hasn't already dismissed it or
+		// clicked through to AI providers.
+		const dismissAfter = setTimeout(() => toasts.removeToast(id), 15_000)
+		return () => clearTimeout(dismissAfter)
 	}, [health, toasts])
 	return null
 }

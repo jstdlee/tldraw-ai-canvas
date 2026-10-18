@@ -25,6 +25,21 @@ export function getNodeRowHeightPx(fontPx: number | undefined): number {
 
 export const NODE_IMAGE_PREVIEW_HEIGHT_PX = 160 + 8
 
+/**
+ * DATA-02: a failed run's error banner used to render as a sibling placed below the card's own
+ * declared box (`top: calc(100% + …)`), so the shape's own bounds never budgeted room for it —
+ * `zoomToFit` then routinely seated that overflow right under tldraw's fixed bottom toolbar,
+ * hiding the only sign a run failed. The banner now renders inside the shape's own box, in a
+ * slot reserved below the normal header+body+footer height whenever one would show. Sized
+ * generously for `UiErrorBanner`'s own worst case (a title row, plus its message area's own
+ * `max-height: 8em` cap), scaled by the card's font like every other row height (WP16).
+ */
+export const NODE_ERROR_BANNER_RESERVE_PX = 170
+
+export function getNodeErrorBannerReservePx(fontPx: number | undefined): number {
+	return Math.round((NODE_ERROR_BANNER_RESERVE_PX * (fontPx ?? DEFAULT_NODE_FONT_PX)) / DEFAULT_NODE_FONT_PX)
+}
+
 /** WP27 Part B: extra body height to reserve for a `WireField`/`WireFieldHeader` field that
  * uses `UiGrowingInput` (a wrapping, growing single-line field) in place of its usual one-row
  * height — enough room for the control's own max-rows cap (default 6 lines), beyond the one

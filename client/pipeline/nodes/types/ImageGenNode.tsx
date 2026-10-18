@@ -37,6 +37,7 @@ import {
 	NodeComponentProps,
 	NodeDefinition,
 	NodeImage,
+	NodePortLabel,
 	NodeRow,
 	updateNode,
 } from './shared'
@@ -214,6 +215,21 @@ function download(url: string, name: string) {
 	a.remove()
 }
 
+/** IMAGE-06: a tile's "Download" always suggested "image-N.png", even for a jpeg result — fetch
+ * the real bytes and name the download after their actual content type, not a hardcoded guess. */
+async function downloadImageTile(url: string, baseName: string) {
+	try {
+		const response = await fetch(url)
+		const blob = await response.blob()
+		const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
+		const blobUrl = URL.createObjectURL(blob)
+		download(blobUrl, `${baseName}.${ext}`)
+		URL.revokeObjectURL(blobUrl)
+	} catch {
+		download(url, `${baseName}.png`)
+	}
+}
+
 /**
  * WP17: the "More settings" fields (negative, seed) anchor their ports to this section's own
  * header row while it's closed (both at once — `useFieldPortAnchors`), and get their own row
@@ -272,6 +288,7 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 
 	const resultsHeight = (images.length ? GRID_AREA_PX : emptyResultsPx(getNodeRowHeightPx(shape.props.fontSize))) - 8
 	const modelRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'model')
+	const imageRowRef = useFieldPortAnchor<HTMLDivElement>(shape.id, 'image')
 
 	return (
 		<>
@@ -314,8 +331,15 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 			{imageWired ? (
 				<PortRow shapeId={shape.id} portId="image" label="Reference" dataType="image" />
 			) : (
-				<NodeRow>
-					<PortRow shapeId={shape.id} portId="image" label="Ref." dataType="image" hint="optional" />
+				// UI-04: this used to nest a whole second `PortRow` (its own NodeRow, with its own
+				// 32%-of-itself label column) inside this row, next to the URL input — the inner
+				// row's real width was whatever the input's `flex: 1 1 auto` left over (as little
+				// as ~80px), so "Ref." truncated to "R…" even though it's only 4 characters. One
+				// flat row, sized against the full card width like every other label, fixes that;
+				// the "optional" hint is dropped as redundant with the input's own placeholder.
+				<NodeRow ref={imageRowRef}>
+					<Port shapeId={shape.id} portId="image" />
+					<NodePortLabel dataType="image">Ref.</NodePortLabel>
 					<UiTextInput placeholder="reference image URL (optional)" value={node.referenceImage} onChange={(referenceImage) => set({ referenceImage })} />
 				</NodeRow>
 			)}
@@ -333,7 +357,7 @@ function ImageGenNodeComponent({ shape, node }: NodeComponentProps<ImageGenNode>
 								<div className="ImageGenNode-tile-actions">
 									<UiButton size="sm" variant="low" label="Place" onClick={() => void placeImageOnCanvas(editor, shape, src)} />
 									<UiButton size="sm" variant="low" label="Use as ref." onClick={() => set({ referenceImage: src })} />
-									<UiButton size="sm" variant="low" label="Download" onClick={() => download(src, `image-${i + 1}.png`)} />
+									<UiButton size="sm" variant="low" label="Download" onClick={() => void downloadImageTile(src, `generate-image-${i + 1}`)} />
 								</div>
 							</div>
 						))}

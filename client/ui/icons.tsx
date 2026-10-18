@@ -202,6 +202,16 @@ export function IconUpload({ size }: IconProps) {
 	)
 }
 
+export function IconDownload({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M8 3.2v7" />
+			<path d="m4.8 7.8 3.2 3.2 3.2-3.2" />
+			<path d="M3.2 12.8h9.6" />
+		</Svg>
+	)
+}
+
 export function IconTable({ size }: IconProps) {
 	return (
 		<Svg size={size}>
@@ -384,6 +394,36 @@ export function IconOutput({ size }: IconProps) {
 			<path d="M3.2 2.8h5.2v10.4H3.2z" />
 			<path d="M8.4 8h4.4" />
 			<path d="m10.6 5.6 2.4 2.4-2.4 2.4" />
+		</Svg>
+	)
+}
+
+/** A curly brace fanning out into separate lines. The JSON fields card. */
+export function IconJsonFields({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M5.4 2.8c-1 0-1.4.5-1.4 1.6v1.4c0 .7-.3.9-.9 1.1.6.2.9.4.9 1.1v1.4c0 1.1.4 1.6 1.4 1.6" />
+			<path d="M9 5.4h4M9 8h4M9 10.6h4" />
+		</Svg>
+	)
+}
+
+/** A funnel. The Extract-from-text card. */
+export function IconExtract({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M2.6 3.2h10.8l-3.8 4.6v4l-3.2 1.4V7.8z" />
+		</Svg>
+	)
+}
+
+/** A document with mirrored {{ }} marks. The Template card. */
+export function IconTemplate({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="2.6" y="2.6" width="10.8" height="10.8" rx="1.4" />
+			<path d="M6.4 6.4c-.7 0-.9.3-.9.9v.9c0 .3-.2.4-.4.5.2.1.4.2.4.5v.9c0 .6.2.9.9.9" />
+			<path d="M9.6 6.4c.7 0 .9.3.9.9v.9c0 .3.2.4.4.5-.2.1-.4.2-.4.5v.9c0 .6-.2.9-.9.9" />
 		</Svg>
 	)
 }

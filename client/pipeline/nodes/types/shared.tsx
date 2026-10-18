@@ -401,3 +401,14 @@ export function getInputText(inputs: InputValues, key: string, fallback = ''): s
 export function getInputNumber(inputs: InputValues, key: string, fallback = 0): number {
 	return coerceToNumber(getInput(inputs, key), fallback)
 }
+
+/** GAPS-01: a dedicated table/data input, once wired, is the only source — never silently fall
+ * back to the card's own leftover text (which used to make a wired-but-empty or failed-upstream
+ * run quietly show the sample/placeholder table instead of stopping). Throws a clear, named
+ * error when the wired source has nothing to give. `ownText` is only used while unwired. */
+export function wiredOrOwnText(inputs: InputValues, key: string, wired: boolean, ownText: string, sourceTitle: string | null): string {
+	if (!wired) return ownText
+	const text = getInputText(inputs, key)
+	if (!text.trim()) throw new Error(`No table from ${sourceTitle ?? 'the wired card'}`)
+	return text
+}

@@ -60,8 +60,10 @@ const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 const portY = (row: number, rowPx: number) => BASE_Y + rowPx * (row + 0.5)
 const OPTIONS_PX = 72
 const BARS_PX = 90
-// decision, value, mode, options-header, bands-header — always rendered (see getBodyHeightPx).
-const FIXED_ROWS = 5
+// decision, value, mode, options-header, bands-header, threshold-header, margin-header — always
+// rendered (see getBodyHeightPx) so their field-port anchors always register (AI-07), the same
+// reasoning WP17 already applied to options/bands.
+const FIXED_ROWS = 7
 
 interface PortLabel {
 	id: string
@@ -143,7 +145,7 @@ export class DecisionSwitchNodeDefinition extends NodeDefinition<DecisionSwitchN
 		let rows = FIXED_ROWS
 		let extraPx = 0
 		if (mode === 'noul') {
-			rows += 2 // threshold, margin
+			rows += 2 // threshold, margin edit rows (their header rows are already in FIXED_ROWS)
 			rows += outs.length // yes/no/unsure display rows
 		} else if (mode === 'choice') {
 			extraPx += OPTIONS_PX
@@ -196,7 +198,15 @@ export class DecisionSwitchNodeDefinition extends NodeDefinition<DecisionSwitchN
 			outs.map((out) => [
 				out.id,
 				{
-					value: last?.chosen === out.id ? (last.value ?? null) : STOP_EXECUTION,
+					// Before this card has ever run, every port is simply "no value yet" (null) —
+					// matching If's own convention. Claiming STOP_EXECUTION (definitively not
+					// taken) here instead made every output look "up to date" to
+					// staleUpstreamOrder's empty-value check (a Symbol isn't null/''), so a card
+					// downstream of this one — Merge especially, since it's built to tolerate a
+					// STOP input on some branches — would never get a chance to pull this card
+					// into a run at all. Only a real run (an actual `last`) may claim a branch was
+					// genuinely not taken.
+					value: last == null ? null : last.chosen === out.id ? (last.value ?? null) : STOP_EXECUTION,
 					isOutOfDate,
 					dataType: 'any' as const,
 				},
@@ -301,6 +311,8 @@ function DecisionSwitchNodeComponent({ shape, node }: NodeComponentProps<Decisio
 	const last = readLastDecision(node)
 	const optionsWired = useInputConnected(shape.id, 'field:options')
 	const bandsWired = useInputConnected(shape.id, 'field:bands')
+	const thresholdWired = useInputConnected(shape.id, 'field:threshold')
+	const marginWired = useInputConnected(shape.id, 'field:margin')
 
 	const modeOptions: { value: string; label: string }[] = [
 		{ value: 'auto', label: 'Auto (from the decision)' },
@@ -339,15 +351,25 @@ function DecisionSwitchNodeComponent({ shape, node }: NodeComponentProps<Decisio
 				</div>
 			)}
 			<WireFieldHeader shapeId={shape.id} fieldKey="bands" label="Bands" />
+			{/* AI-07: threshold/margin are only meaningful in Yes/No mode, but their header (and
+			 * so their field-port anchor) renders unconditionally, same as options/bands above —
+			 * only the numeric editor itself is hidden by mode. */}
+			<WireFieldHeader shapeId={shape.id} fieldKey="threshold" label="Threshold" dataType="number" />
+			<WireFieldHeader shapeId={shape.id} fieldKey="margin" label="Margin" dataType="number" />
 
 			{mode === 'noul' && (
 				<>
-					<WireField shapeId={shape.id} fieldKey="threshold" label="Threshold" dataType="number">
-						<UiNumberInput value={node.threshold} step={0.05} min={0} max={1} onChange={(threshold) => set({ threshold: threshold ?? 0.5 })} />
-					</WireField>
-					<WireField shapeId={shape.id} fieldKey="margin" label="Margin" dataType="number" hint="0 = off">
-						<UiNumberInput value={node.margin} step={0.05} min={0} max={1} onChange={(margin) => set({ margin: margin ?? 0 })} />
-					</WireField>
+					{!thresholdWired && (
+						<NodeRow>
+							<UiNumberInput value={node.threshold} step={0.05} min={0} max={1} onChange={(threshold) => set({ threshold: threshold ?? 0.5 })} />
+						</NodeRow>
+					)}
+					{!marginWired && (
+						<NodeRow>
+							<UiNumberInput value={node.margin} step={0.05} min={0} max={1} onChange={(margin) => set({ margin: margin ?? 0 })} />
+							<span className="UiField-hint">0 = off</span>
+						</NodeRow>
+					)}
 					<SwitchOutputRow shapeId={shape.id} portId="yes" label="yes" active={last?.chosen === 'yes'} />
 					<SwitchOutputRow shapeId={shape.id} portId="no" label="no" active={last?.chosen === 'no'} />
 					<SwitchOutputRow shapeId={shape.id} portId="unsure" label="unsure" active={last?.chosen === 'unsure'} />

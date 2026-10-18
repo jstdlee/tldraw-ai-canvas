@@ -40,7 +40,10 @@ const importedUrls = new Map<string, Promise<string>>()
 
 /**
  * Resolve any value an 'image' input might carry to an image URL the canvas
- * can show: a stored image URL or data URL passes through; an http(s) URL is
+ * can show: a stored image URL or data URL passes through; an http(s) URL —
+ * or a same-origin relative path (FLOW-02: e.g. `/examples/girl-base.jpg`,
+ * what `load_image`'s own `imageUrl` field holds when a user or an example
+ * sets it directly rather than through the card's own upload/URL flow) — is
  * imported into the local image store once and cached by URL (so a text
  * source wired into several image nodes only downloads it once); anything
  * else is not an image.
@@ -49,24 +52,29 @@ export async function toImageUrl(value: string | null | undefined): Promise<stri
 	const text = (value ?? '').trim()
 	if (!text) throw new Error('No image yet. Paste an image, upload one, or use an image URL.')
 	if (text.startsWith('data:image/') || text.startsWith('/api/images/')) return text
-	if (/^https?:\/\//i.test(text)) {
-		let pending = importedUrls.get(text)
+	const absolute = /^https?:\/\//i.test(text)
+		? text
+		: text.startsWith('/') && typeof window !== 'undefined'
+			? new URL(text, window.location.origin).toString()
+			: null
+	if (absolute) {
+		let pending = importedUrls.get(absolute)
 		if (!pending) {
 			pending = fetch('/api/images/from-url', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ url: text }),
+				body: JSON.stringify({ url: absolute }),
 			}).then(async (res) => {
 				const data = await res.json().catch(() => ({ error: res.statusText }))
 				if (!res.ok) throw new Error(String((data as { error?: string }).error || res.statusText))
 				return (data as { imageUrl: string }).imageUrl
 			})
-			importedUrls.set(text, pending)
+			importedUrls.set(absolute, pending)
 		}
 		try {
 			return await pending
 		} catch (error) {
-			importedUrls.delete(text)
+			importedUrls.delete(absolute)
 			throw error
 		}
 	}

@@ -61,7 +61,12 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	web_search: { inn: ['query'], out: ['output', 'results', 'urls', 'answer'] },
 	table_view: { inn: ['data'], out: ['output', 'json'] },
 	html_preview: { inn: ['text', 'html', 'css', 'js'], out: ['output'] },
-	html_form: { inn: ['text', 'html', 'css', 'js'], out: ['output', 'json'] },
+	html_form: { inn: ['text', 'html', 'css', 'js'], out: ['output', 'json', 'value'] },
+	json_fields: { inn: ['json'], out: ['rest'] },
+	extract: { inn: ['text'], out: ['table', 'json', 'code', 'list'] },
+	template: { inn: [], out: ['output'] },
+	merge: { inn: ['in1', 'in2', 'in3', 'in4'], out: ['output'] },
+	gallery: { inn: ['images'], out: ['output'] },
 }
 
 describe('llm usage', () => {
@@ -176,8 +181,9 @@ describe('examples', () => {
 				const from = byId.get(wire.from)
 				const to = byId.get(wire.to)
 				expect(from && PORTS[from.type].out).toContain(wire.fromPort)
-				// `var:<name>` ports (WP10 template variables) are dynamic, not in this fixed map.
-				if (wire.toPort.startsWith('var:')) continue
+				// `var:<name>` ports (WP10 template variables) and `field:<key>` ports (WP17: every
+				// wirable field) are dynamic, per-type-and-per-field — not in this fixed map.
+				if (wire.toPort.startsWith('var:') || wire.toPort.startsWith('field:')) continue
 				expect(to && PORTS[to.type].inn).toContain(wire.toPort)
 			}
 		}

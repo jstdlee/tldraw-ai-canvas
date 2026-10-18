@@ -120,6 +120,69 @@ describe('agent runner: pi-agent-core + pi-ai, no network (faux model + fake MCP
 		if (final?.type === 'final') expect(final.output).toMatch(/step limit/)
 	})
 
+	// GAPS-04: a step-limit stop used to always report "success" — `(no answer)\n\n(Stopped:
+	// reached the step limit.)` — even when there was never any real answer, or when the last
+	// allowed step actually failed. Downstream cards consumed that placeholder as if it were data.
+	it('reports an error (not a fake success) when the step limit is hit with no answer at all', async () => {
+		const reg = registerFauxProvider({ models: [{ id: 'faux-4' }] })
+		// More than enough tool-call responses queued (never a text answer) so the step limit
+		// itself is what stops the run, not the faux provider running out of responses.
+		reg.setResponses(Array.from({ length: 6 }, () => fauxAssistantMessage([fauxToolCall('web_search', { query: 'a' })])))
+		const events = await collect(
+			runAgent({
+				model: reg.getModel(),
+				systemPrompt: 'test',
+				task: 'never answers',
+				tools: [fakeWebSearchTool],
+				maxSteps: 1,
+				maxRunMs: 15_000,
+			})
+		)
+		reg.unregister()
+		const final = events.find((e) => e.type === 'final')
+		const error = events.find((e) => e.type === 'error') as Extract<AgentRunEvent, { type: 'error' }> | undefined
+		expect(final, 'a step-limit stop with no answer must not be a "final" (success) event').toBeUndefined()
+		expect(error?.message).toMatch(/step limit \(1\)/)
+	})
+
+	it('reports the last allowed step\'s real error instead of hiding it behind "(no answer)"', async () => {
+		const reg = registerFauxProvider({ models: [{ id: 'faux-5' }] })
+		reg.setResponses([fauxAssistantMessage([], { stopReason: 'error', errorMessage: 'insufficient_quota' })])
+		const events = await collect(
+			runAgent({
+				model: reg.getModel(),
+				systemPrompt: 'test',
+				task: 'anything',
+				tools: [fakeWebSearchTool],
+				maxSteps: 1,
+				maxRunMs: 15_000,
+			})
+		)
+		reg.unregister()
+		const error = events.find((e) => e.type === 'error') as Extract<AgentRunEvent, { type: 'error' }> | undefined
+		expect(error?.message).toBe('insufficient_quota')
+		expect(events.find((e) => e.type === 'final')).toBeUndefined()
+	})
+
+	it('keeps a partial answer (with a note) when the model did answer before hitting the step limit', async () => {
+		const reg = registerFauxProvider({ models: [{ id: 'faux-6' }] })
+		reg.setResponses([fauxAssistantMessage('Here is what I found so far.')])
+		const events = await collect(
+			runAgent({
+				model: reg.getModel(),
+				systemPrompt: 'test',
+				task: 'summarize',
+				tools: [fakeWebSearchTool],
+				maxSteps: 1,
+				maxRunMs: 15_000,
+			})
+		)
+		reg.unregister()
+		const final = events.find((e) => e.type === 'final') as Extract<AgentRunEvent, { type: 'final' }> | undefined
+		expect(final?.output).toContain('Here is what I found so far.')
+		expect(final?.output).toMatch(/step limit/)
+	})
+
 	it('propagates external abort as a stop, not a crash', async () => {
 		const reg = registerFauxProvider({ models: [{ id: 'faux-3' }] })
 		reg.setResponses([

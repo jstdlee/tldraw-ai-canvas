@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { buildChart, CHART_KINDS, columnsNumberFirst, resolveColumns } from '../../../../shared/chartOption'
 import type { ChartSpec, ChartTheme } from '../../../../shared/chartOption'
@@ -18,7 +18,7 @@ import { readSpreadsheet } from '../../excel'
 import { storeFile, loadFileBytes } from '../../fileStore'
 import { storeBlob } from '../../imageOps'
 import { sleep } from '../../utils/sleep'
-import { getNodeInputPortValues, isInputWired } from '../nodePorts'
+import { getNodeInputPortValues, getWiredSourceTitle, isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { hiddenFieldKeys } from '../fieldVisibility'
 import { fieldPortId } from '../../../../shared/fieldOverrides'
@@ -49,6 +49,7 @@ import {
 	NodeDefinition,
 	NodeRow,
 	updateNode,
+	wiredOrOwnText,
 } from './shared'
 
 const BASE = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
@@ -109,6 +110,9 @@ function layout(node: TableNode, dataWired = false) {
 	const params = spec?.params ?? []
 	let row = 0
 	const dataRow = row++
+	// DATA-07: the "data" port now always gets its own row (a visible dot even while unwired);
+	// the Inline/File source picker is a separate row underneath, only while unwired.
+	if (!dataWired) row++ // source picker row
 	// The file-upload row only renders when the data port is not wired (same condition as the component).
 	const fileRow = !dataWired && node.source === 'file' ? row++ : null
 	const opRow = row++
@@ -133,12 +137,16 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 	getDefault(): TableNode {
 		return {
 			type: 'table',
-			text: SAMPLE,
+			// GAPS-01: a fresh card starts empty (a placeholder explains the format), not seeded
+			// with sample data — a saved canvas that already has SAMPLE in `text` keeps it as is.
+			text: '',
 			format: 'auto',
 			op: 'select',
 			columns: 'name,score',
 			column: 'score',
-			as: 'number',
+			// DATA-08: '' (not a stale enum value meaningful only to some other op) — every op
+			// that reads `as` already treats '' as "use the sensible default" (see runTable).
+			as: '',
 			expr: 'upper(name)',
 			sep: ' ',
 			pattern: 'a',
@@ -191,10 +199,14 @@ export class TableNodeDefinition extends NodeDefinition<TableNode> {
 	}
 	async execute(shape: NodeShape, node: TableNode, inputs: InputValues): Promise<ExecutionResult> {
 		await sleep(30)
-		const text = getInputText(inputs, 'data') || node.text
 		const extra = getInputText(inputs, 'extra')
-		const job: TableJob = { ...node, extra }
 		try {
+			// GAPS-01: resolved (and, when wired-but-empty, allowed to throw) inside the try so
+			// "No table from <source>" always lands in `node.error` too, like every other
+			// failure here — not just the engine's own generic run-status banner.
+			const dataWired = isInputWired(this.editor, shape.id, 'data')
+			const text = wiredOrOwnText(inputs, 'data', dataWired, node.text, getWiredSourceTitle(this.editor, shape.id, 'data'))
+			const job: TableJob = { ...node, extra }
 			const output = runTable(text, job, extra)
 			const rows = output.includes('\n') ? output.split('\n').length - 1 : 0
 			const cols = output.split('\n')[0]?.split(',').length ?? 0
@@ -310,6 +322,8 @@ const FORMULA_FUNCTIONS: { value: string; label: string; group: string; hint: st
 	{ value: 'split', label: 'split', group: 'Text', hint: 'split(s, sep, i)' },
 	{ value: 'concat', label: 'concat', group: 'Text', hint: 'concat(a, b, …)' },
 	{ value: 'text', label: 'text', group: 'Text', hint: 'text(x)' },
+	{ value: 'domain', label: 'domain', group: 'Text', hint: 'domain(url)' },
+	{ value: 'path', label: 'path', group: 'Text', hint: 'path(url)' },
 	{ value: 'number', label: 'number', group: 'Number', hint: 'number(x)' },
 	{ value: 'round', label: 'round', group: 'Number', hint: 'round(x, d)' },
 	{ value: 'floor', label: 'floor', group: 'Number', hint: 'floor(x)' },
@@ -687,14 +701,18 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 	const source = node.source ?? (dataWired ? 'input' : 'inline')
 	const spec = opSpec(node.op) ?? TABLE_OPS[0]
 
+	// GAPS-01: once "data" is wired, it's the only source for the live preview below — a
+	// wired-but-empty/failed value must never fall back to showing the old `text` instead.
 	const effectiveText = useValue(
 		'datapipe input text',
 		() => {
-			const wired = getNodeInputPortValues(editor, shape.id).data?.value
-			if (typeof wired === 'string' && wired.trim()) return wired
+			if (dataWired) {
+				const wired = getNodeInputPortValues(editor, shape.id).data?.value
+				return typeof wired === 'string' ? wired : ''
+			}
 			return node.text
 		},
-		[editor, shape.id, node.text]
+		[editor, shape.id, node.text, dataWired]
 	)
 	const inputTable = useMemo(() => {
 		try {
@@ -787,11 +805,13 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 
 	return (
 		<>
-			{dataWired ? (
-				<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
-			) : (
+			{/* DATA-07: "data" always gets its own row with a visible, draggable port dot (it
+			    used to borrow this row for the Inline/File picker while unwired, leaving "data"
+			    with no dot at all in the default state — the fix Profile/Table view already
+			    have). The source picker is its own row underneath, only while unwired. */}
+			<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
+			{!dataWired && (
 				<NodeRow>
-					<span className="NodePortLabel">Table</span>
 					<UiSegmented
 						value={source === 'file' ? 'file' : 'inline'}
 						options={[
@@ -808,6 +828,7 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 					mono
 					rows={4}
 					value={node.text}
+					placeholder="Paste a table: CSV, TSV, JSON array, or Markdown"
 					onChange={(text) => set({ text })}
 				/>
 			)}
@@ -843,7 +864,10 @@ function TableComponent({ shape, node }: NodeComponentProps<TableNode>) {
 				</>
 			)}
 			<UiField label="Operation">
-				<UiSelect value={node.op} options={OP_OPTIONS} onChange={(op) => set({ op })} />
+				{/* DATA-08: switching the operation resets "as" — its valid values are different
+				    for nearly every op that reads it (condition/order/convert-to/fill-with/…),
+				    so a leftover value from the previous op is never a stale, invalid choice. */}
+				<UiSelect value={node.op} options={OP_OPTIONS} onChange={(op) => set({ op, as: '' })} />
 			</UiField>
 			<div className="NodeHint">{spec.description}</div>
 			{spec.params.map((param) => (
@@ -1055,7 +1079,9 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	getDefault(): ChartNode {
 		return {
 			type: 'chart',
-			text: SAMPLE,
+			// GAPS-01: a fresh card starts empty, not seeded with sample data; a saved canvas
+			// that already has SAMPLE in `text` keeps it as is.
+			text: '',
 			format: 'csv',
 			kind: 'bar',
 			xCol: 'name',
@@ -1093,13 +1119,24 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 		}
 	}
 	async execute(shape: NodeShape, node: ChartNode, inputs: InputValues): Promise<ExecutionResult> {
-		const text = getInputText(inputs, 'data') || node.text
-		const table = parseTableText(text)
-		if (table.headers.length === 0) throw new Error('No table to chart. Wire in a table, or paste one into Text.')
-		const columns = resolveColumns(table, chartXFor(node), splitList(node.yCol))
-		const series = node.series && table.headers.includes(node.series) ? node.series : ''
-		const spec = chartSpecFrom(node, columns.xCol, columns.yCols, series)
+		// Falls back to the node's own text if resolving the wired value itself throws (GAPS-01),
+		// so the catch below always has something to store.
+		let text = node.text
 		try {
+			const dataWired = isInputWired(this.editor, shape.id, 'data')
+			text = wiredOrOwnText(inputs, 'data', dataWired, node.text, getWiredSourceTitle(this.editor, shape.id, 'data'))
+			const table = parseTableText(text)
+			if (table.headers.length === 0) throw new Error('No table to chart. Wire in a table, or paste one into Text.')
+			// P8: a Y column explicitly named (by the user, or the default) that matches nothing
+			// in the real table is an error, not a silently different chart — `resolveColumns`'s
+			// own fallback below is only meant to pick a sensible column when none was named.
+			const requestedY = splitList(node.yCol)
+			if (requestedY.length > 0 && !requestedY.some((col) => table.headers.includes(col))) {
+				throw new Error(`Chart: no column named "${requestedY.join('", "')}" for Y. Columns: ${table.headers.join(', ')}`)
+			}
+			const columns = resolveColumns(table, chartXFor(node), requestedY)
+			const series = node.series && table.headers.includes(node.series) ? node.series : ''
+			const spec = chartSpecFrom(node, columns.xCol, columns.yCols, series)
 			const option = buildChart(table, spec, getChartTheme(this.editor))
 			const imageUrl = await renderChartPng(option)
 			updateNode<ChartNode>(this.editor, shape, (n) => ({ ...n, text, error: null, imageUrl }), false)
@@ -1209,20 +1246,27 @@ type EchartsInstance = { dispose: () => void; setOption: (option: object, notMer
 
 function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	const editor = useEditor()
-	const ref = useRef<HTMLDivElement>(null)
+	const hostRef = useRef<HTMLDivElement | null>(null)
+	const hostGenerationRef = useRef(0)
 	const chartRef = useRef<EchartsInstance | null>(null)
+	const chartObserverRef = useRef<ResizeObserver | null>(null)
 	const applyOptionRef = useRef<(() => void) | null>(null)
 	const [zoomOpen, setZoomOpen] = useState(false)
 	const set = (patch: Partial<ChartNode>) => updateNode<ChartNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
-	// Prefer the wired table. The sample text on the node is only a fallback.
+	const dataWired = useInputConnected(shape.id, 'data')
+	const sourceTitle = useValue('chart source title', () => getWiredSourceTitle(editor, shape.id, 'data'), [editor, shape.id])
+	// GAPS-01: once "data" is wired, it's the only source for the live preview — a
+	// wired-but-empty/failed value must never fall back to the card's own leftover text.
 	const source = useValue(
 		'chart source',
 		() => {
-			const value = getNodeInputPortValues(editor, shape.id).data?.value
-			if (typeof value === 'string' && value.trim()) return value
+			if (dataWired) {
+				const value = getNodeInputPortValues(editor, shape.id).data?.value
+				return typeof value === 'string' ? value : ''
+			}
 			return node.text
 		},
-		[editor, shape.id, node.text]
+		[editor, shape.id, node.text, dataWired]
 	)
 	const table = useMemo(() => {
 		try {
@@ -1246,27 +1290,38 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	// re-`import()`/`init()`-ed on every option-affecting change (every keystroke in a title
 	// field, every column pick). `applyOptionRef` always holds the latest `setOption` call, so
 	// whichever effect finishes last (mount, or a data/option change) can safely invoke it.
-	useEffect(() => {
-		const host = ref.current
+	//
+	// DATA-01: the host `<div>` below only renders once there's a table and a Y column to plot,
+	// so a card that mounts before its wired data arrives would never get a `ref.current` to
+	// init against with a mount-only effect (an empty deps array only runs once, at that first,
+	// host-less mount, and never again when the div later appears). A callback ref fixes this:
+	// it fires every time the div actually attaches or detaches, by definition.
+	const attachHost = useCallback((host: HTMLDivElement | null) => {
+		// The host changed (or disappeared): tear down whatever was attached to the old one.
+		chartObserverRef.current?.disconnect()
+		chartObserverRef.current = null
+		chartRef.current?.dispose()
+		chartRef.current = null
+		hostRef.current = host
 		if (!host) return
-		let dead = false
-		let observer: ResizeObserver | null = null
+		// React StrictMode re-invokes a ref callback (null, then the *same* host element) once
+		// right after mount, to surface missing cleanup — a plain "is this still the current
+		// host" check can't tell that apart from a genuinely new attach, since the element is
+		// identical either way. A generation counter can: each call claims the next number, and
+		// its async `init()` only runs if no *later* call has claimed one since — otherwise two
+		// `echarts.init()` calls can land on the same DOM node with neither ever disposed.
+		const generation = ++hostGenerationRef.current
 		void import('echarts').then((mod) => {
-			if (dead) return
+			if (hostGenerationRef.current !== generation) return
 			const chart = mod.init(host)
 			chartRef.current = chart
 			applyOptionRef.current?.()
 			chart.resize()
 			// The card can be resized or change its text size. The chart follows the area it has.
-			observer = new ResizeObserver(() => chart.resize())
+			const observer = new ResizeObserver(() => chart.resize())
 			observer.observe(host)
+			chartObserverRef.current = observer
 		})
-		return () => {
-			dead = true
-			observer?.disconnect()
-			chartRef.current?.dispose()
-			chartRef.current = null
-		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
 
@@ -1402,12 +1457,12 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 			)}
 			<ChartTitlesSection shape={shape} node={node} set={set} fields={titleFields} />
 			{table.headers.length === 0 ? (
-				<UiEmpty text="Wire in a table, or paste one into Text" />
+				<UiEmpty text={dataWired ? `No table from ${sourceTitle ?? 'the wired card'}` : 'Wire in a table, or paste one into Text'} />
 			) : columns.yCols.length === 0 ? (
 				<UiEmpty text="Pick a number column for Y" />
 			) : (
 				<div className="ChartNode-viewWrap">
-					<div ref={ref} className="ChartNode-view" />
+					<div ref={attachHost} className="ChartNode-view" />
 					{node.imageUrl && <FieldMax title="Open the chart" onClick={() => setZoomOpen(true)} />}
 				</div>
 			)}
@@ -1466,7 +1521,9 @@ export class ProfileNodeDefinition extends NodeDefinition<ProfileNode> {
 	override showsOutput = true
 	override defaultWidthPx = 480
 	getDefault(): ProfileNode {
-		return { type: 'profile', text: SAMPLE, format: 'auto', error: null, lastOutput: null }
+		// GAPS-01: a fresh card starts empty, not seeded with sample data; a saved canvas that
+		// already has SAMPLE in `text` keeps it as is.
+		return { type: 'profile', text: '', format: 'auto', error: null, lastOutput: null }
 	}
 	getBodyHeightPx(shape: NodeShape) {
 		// Data port row + (unwired: the "text" field's own label row) + the header line + a
@@ -1480,8 +1537,11 @@ export class ProfileNodeDefinition extends NodeDefinition<ProfileNode> {
 		return { data: end('data', 0, rowPx), output: out(this.getWidthPx(shape, node)) }
 	}
 	async execute(shape: NodeShape, node: ProfileNode, inputs: InputValues): Promise<ExecutionResult> {
-		const text = getInputText(inputs, 'data') || node.text
 		try {
+			// GAPS-01: resolved inside the try so a wired-but-empty "No table from <source>"
+			// lands in `node.error` too, same as any other failure here.
+			const dataWired = isInputWired(this.editor, shape.id, 'data')
+			const text = wiredOrOwnText(inputs, 'data', dataWired, node.text, getWiredSourceTitle(this.editor, shape.id, 'data'))
 			const table = parseTableText(text)
 			const { headers, rows } = profileTableRows(profileTable(table))
 			const output = toCsv(headers, rows)
@@ -1578,14 +1638,19 @@ function ProfileComponent({ shape, node }: NodeComponentProps<ProfileNode>) {
 	const editor = useEditor()
 	const dataWired = useInputConnected(shape.id, 'data')
 	const set = (patch: Partial<ProfileNode>) => updateNode<ProfileNode>(editor, shape, (n) => ({ ...n, ...patch }), false)
+	const sourceTitle = useValue('profile source title', () => getWiredSourceTitle(editor, shape.id, 'data'), [editor, shape.id])
+	// GAPS-01: once "data" is wired, it's the only source — a wired-but-empty/failed value must
+	// never fall back to showing the old `text` instead.
 	const effectiveText = useValue(
 		'profile input text',
 		() => {
-			const wired = getNodeInputPortValues(editor, shape.id).data?.value
-			if (typeof wired === 'string' && wired.trim()) return wired
+			if (dataWired) {
+				const wired = getNodeInputPortValues(editor, shape.id).data?.value
+				return typeof wired === 'string' ? wired : ''
+			}
 			return node.text
 		},
-		[editor, shape.id, node.text]
+		[editor, shape.id, node.text, dataWired]
 	)
 	// WP26: every table arriving here (wired or pasted into Text) is read through
 	// `parseTableText` — CSV, TSV, semicolon CSV, JSON, or a Markdown table, auto-detected. The
@@ -1612,7 +1677,14 @@ function ProfileComponent({ shape, node }: NodeComponentProps<ProfileNode>) {
 			{!dataWired && (
 				<>
 					<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Text" />
-					<UiTextArea className="NodeField-textarea" mono rows={4} value={node.text} onChange={(text) => set({ text })} />
+					<UiTextArea
+						className="NodeField-textarea"
+						mono
+						rows={4}
+						value={node.text}
+						placeholder="Paste a table: CSV, TSV, JSON array, or Markdown"
+						onChange={(text) => set({ text })}
+					/>
 				</>
 			)}
 			{table ? (
@@ -1639,7 +1711,7 @@ function ProfileComponent({ shape, node }: NodeComponentProps<ProfileNode>) {
 					)}
 				</>
 			) : (
-				<UiEmpty text="Give this card a table to profile" />
+				<UiEmpty text={dataWired ? `No table from ${sourceTitle ?? 'the wired card'}` : 'Give this card a table to profile'} />
 			)}
 		</>
 	)

@@ -15,7 +15,7 @@ import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { getNodeInputPortValues } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextArea } from '../../../ui'
-import { PortRow, useInputConnected, NodeTextResult, WireFieldHeader } from './fields'
+import { PortRow, preview, useInputConnected, NodeTextResult, WireFieldHeader } from './fields'
 import {
 	DEFAULT_LLM_SETTINGS,
 	fillLlmTemplate,
@@ -209,10 +209,9 @@ function GenerateTextNodeComponent({ shape, node }: NodeComponentProps<GenerateT
 						{inputPort.isOutOfDate ? (
 							<NodePlaceholder />
 						) : (
-							<span title={String(inputPort.value)}>
-								{String(inputPort.value ?? '').slice(0, 20)}
-								{String(inputPort.value ?? '').length > 20 ? '...' : ''}
-							</span>
+							// GAPS-13: `preview()` turns an untaken branch's STOP_EXECUTION into "" instead
+							// of the raw "Symbol(STOP_EXECUTION)" a bare String(value) produced.
+							<span title={preview(inputPort.value)}>{preview(inputPort.value)}</span>
 						)}
 					</span>
 				) : (

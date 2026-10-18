@@ -91,10 +91,18 @@
 
 .ai-dialog__body {
 	padding: 16px;
-	overflow: auto;
+	/* AI-03/UI-01: this used to be the one scroll region for everything (list + model table +
+	   "Default model"/Skills). Once the model table got tall (20+ models), the flex column below
+	   shrank `.ai-dialog__columns` well below its content height (a Chromium flex-shrink/grid
+	   intrinsic-size interaction), and because that child keeps `overflow: visible`, its table
+	   rows kept painting past their shrunk box, stacking on top of "Default model"/Skills
+	   instead of pushing them down. Now the columns region scrolls on its own (below) and body
+	   only arranges the three sections top-to-bottom. */
+	overflow: hidden;
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
+	min-height: 0;
 }
 
 .ai-dialog input:not([type='checkbox']),
@@ -113,7 +121,13 @@
 	display: grid;
 	grid-template-columns: 180px 1fr;
 	gap: 16px;
+	/* An explicit min-height (not "auto") so flexbox never falls back to shrinking this past its
+	   content: an explicit min-height always wins over the automatic min size. Grows past it with
+	   `flex: 1 1 auto` when the dialog has room, and clips (its own scroll children handle
+	   overflow) rather than letting a tall model table paint over "Default model"/Skills below. */
 	min-height: 260px;
+	flex: 1 1 auto;
+	overflow: hidden;
 }
 
 .ai-dialog__list {
@@ -122,6 +136,8 @@
 	gap: 2px;
 	border-right: 1px solid var(--tl-color-divider);
 	padding-right: 12px;
+	overflow-y: auto;
+	min-height: 0;
 }
 
 .ai-dialog__list-item {
@@ -200,6 +216,8 @@
 	flex-direction: column;
 	gap: 12px;
 	min-width: 0;
+	overflow-y: auto;
+	min-height: 0;
 }
 
 .ai-grid {

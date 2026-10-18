@@ -37,6 +37,25 @@ describe('parseDecision', () => {
 		expect(parsed.probabilities).toBeNull()
 		expect(parsed.answer).toBe('{not valid json')
 	})
+
+	it('GAPS-05: a JSON object with a string value/answer/choice becomes the answer, not the raw JSON', () => {
+		expect(parseDecision('{"value":"formal"}')).toEqual({ probabilities: null, answer: 'formal' })
+		expect(parseDecision('{"answer":"yes"}')).toEqual({ probabilities: null, answer: 'yes' })
+		expect(parseDecision('{"choice":"b"}')).toEqual({ probabilities: null, answer: 'b' })
+		// `value` wins when more than one of value/answer/choice is present.
+		expect(parseDecision('{"value":"a","answer":"b"}').answer).toBe('a')
+	})
+
+	it('a JSON object with none of probabilities/value/answer/choice falls through to plain answer', () => {
+		expect(parseDecision('{"clicked":"Go"}').answer).toBe('{"clicked":"Go"}')
+	})
+
+	it('AI-04: an untagged probs object carries no kind; a tagged one does (filtered out of probabilities)', () => {
+		expect(parseDecision('{"yes":0.3,"no":0.7}').kind).toBeUndefined()
+		const tagged = parseDecision('{"low":0.2,"mid":0.3,"high":0.5,"__kind":"score"}')
+		expect(tagged.kind).toBe('score')
+		expect(tagged.probabilities).toEqual({ low: 0.2, mid: 0.3, high: 0.5 })
+	})
 })
 
 describe('detectMode / resolveMode', () => {
@@ -56,6 +75,16 @@ describe('detectMode / resolveMode', () => {
 	it('resolveMode honors an explicit mode over auto-detection', () => {
 		expect(resolveMode('score', parseDecision('yes'))).toBe('score')
 		expect(resolveMode('auto', parseDecision('yes'))).toBe('noul')
+	})
+
+	it('AI-04: a tagged __kind resolves Auto to Score, even when the labels alone would read as choice', () => {
+		const tagged = parseDecision('{"low":0.2,"mid":0.3,"high":0.5,"__kind":"score"}')
+		expect(detectMode(tagged)).toBe('score')
+		expect(resolveMode('auto', tagged)).toBe('score')
+		// A tag wins even over the yes/no shape heuristic (a score decision whose two levels
+		// happen to be named "yes"/"no" must stay Score, not fall into the yes/no gate).
+		const yesNoScore = parseDecision('{"yes":0.3,"no":0.7,"__kind":"score"}')
+		expect(detectMode(yesNoScore)).toBe('score')
 	})
 })
 

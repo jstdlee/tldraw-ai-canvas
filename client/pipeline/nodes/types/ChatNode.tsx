@@ -16,7 +16,7 @@ import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { getNodeInputPortValues, getNodePortConnections, NodePortConnection } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
 import { UiTextArea } from '../../../ui'
-import { useInputConnected, PortRow, WireFieldHeader } from './fields'
+import { preview, useInputConnected, PortRow, WireFieldHeader } from './fields'
 
 import {
 	DEFAULT_LLM_SETTINGS,
@@ -298,7 +298,9 @@ function ChatNodeComponent({ shape, node }: NodeComponentProps<ChatNode>) {
 						) : isImageValue(String(attach.value ?? '')) ? (
 							'image'
 						) : (
-							String(attach.value ?? '').slice(0, 24)
+							// GAPS-13: preview() turns an untaken branch's STOP_EXECUTION into "" instead
+							// of the raw "Symbol(STOP_EXECUTIO…" a bare String(value).slice(...) produced.
+							preview(attach.value)
 						)}
 					</span>
 				) : (

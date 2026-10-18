@@ -6,7 +6,7 @@ import { getConnectionBindings } from '../connection/ConnectionBindingUtil'
 import { PortDataType } from '../constants'
 import { PortId } from '../ports/Port'
 import type { NodeShape } from './NodeShapeUtil'
-import { getNodeOutputInfo, getNodeTypePorts } from './nodeTypes'
+import { getNodeDefinition, getNodeOutputInfo, getNodeTypePorts } from './nodeTypes'
 import {
 	areAnyInputsOutOfDate,
 	InfoValues,
@@ -133,6 +133,21 @@ const nodeInputPortValuesCache = createComputedCache(
 )
 
 /**
+ * GAPS-01: the title of the card wired into a given input port, or null if that port has no
+ * wire to a real node. Used to name the source in "No table from <source>" errors, instead of
+ * silently falling back to the card's own leftover text.
+ */
+export function getWiredSourceTitle(editor: Editor, shapeId: TLShapeId, portId: PortId): string | null {
+	const connection = getNodePortConnections(editor, shapeId).find(
+		(c) => c.terminal === 'end' && c.ownPortId === portId
+	)
+	if (!connection) return null
+	const shape = editor.getShape(connection.connectedShapeId)
+	if (!shape || !editor.isShapeOfType<NodeShape>(shape, 'node')) return null
+	return getNodeDefinition(editor, shape.props.node).title
+}
+
+/**
  * Get the values of the output ports for a node. This is cached.
  */
 export function getNodeOutputPortInfo(editor: Editor, shape: NodeShape | TLShapeId): InfoValues {
@@ -151,7 +166,15 @@ const nodeOutputPortInfoCache = createComputedCache(
 		const inputs = getNodeInputPortValues(editor, node)
 		const nodePorts = getNodePorts(editor, node)
 		const blocking = Object.entries(inputs).filter(([portId]) => !nodePorts[portId]?.feedback)
-		if (blocking.some(([, input]) => hasStopExecution(input))) {
+		// Merge (WP36 "I") is specifically built to tolerate an untaken branch (STOP_EXECUTION)
+		// on some of its inputs — that's the whole point of "first"/"all" mode. The generic rule
+		// below ("any blocking STOP input means every output is STOP too") is correct for every
+		// other card, but for Merge it would always report STOP reactively whenever even one
+		// branch hasn't delivered — which, before a real Run has ever happened, is permanently
+		// true for every branch, so this card (and anything chained after it) would never look
+		// "stale" to `staleUpstreamOrder` and clicking Run further downstream would never reach
+		// it. Its own getOutputInfo already handles a mix of real values and STOP correctly.
+		if ((node.props.node as { type: string }).type !== 'merge' && blocking.some(([, input]) => hasStopExecution(input))) {
 			const ports = getNodePorts(editor, node)
 			return Object.fromEntries(
 				Object.values(ports)

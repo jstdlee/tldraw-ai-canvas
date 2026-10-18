@@ -53,7 +53,9 @@ describe('table operations', () => {
 	it('groups and aggregates (sum, count, avg)', () => {
 		const data = 'city,score\nParis,3\nOslo,5\nParis,7'
 		expect(runTable(data, job({ op: 'groupby', column: 'city', columns: 'score:sum' }))).toBe('city,sum_score\nParis,10\nOslo,5')
-		expect(runTable(data, job({ op: 'groupby', column: 'city', columns: '*:count' }))).toBe('city,count_*\nParis,2\nOslo,1')
+		// P8: "*:count" names its column "count", not "count_*" (tests/tableOps.test.ts covers this
+		// more fully, including "*:count_distinct").
+		expect(runTable(data, job({ op: 'groupby', column: 'city', columns: '*:count' }))).toBe('city,count\nParis,2\nOslo,1')
 	})
 
 	it('pivots rows into columns', () => {

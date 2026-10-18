@@ -157,6 +157,7 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 	const [mcpStatus, setMcpStatus] = useState<Record<string, string>>({})
 	const [skills, setSkills] = useState<SkillInfo[] | null>(null)
 	const [skillsBusy, setSkillsBusy] = useState(false)
+	const [skillsError, setSkillsError] = useState<string | null>(null)
 
 	const provider = selected?.kind === 'model' ? (providers.find((p) => p.id === selected.id) ?? null) : null
 	const providerModels = provider ? models.filter((m) => m.providerId === provider.id) : []
@@ -340,8 +341,13 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 	}
 	const rescanSkills = () => {
 		setSkillsBusy(true)
+		setSkillsError(null)
 		fetchSkills(true)
 			.then(setSkills)
+			// AI-05: this used to have no .catch() at all, so a failed rescan (415 from the
+			// server's CSRF guard, or any other error) was an unhandled rejection — nothing
+			// shown, list never refreshed.
+			.catch((e) => setSkillsError((e as Error).message))
 			.finally(() => setSkillsBusy(false))
 	}
 
@@ -776,6 +782,7 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 						<span className="ai-spacer" />
 						<UiButton onClick={rescanSkills} disabled={skillsBusy} label={skillsBusy ? 'Scanning…' : 'Rescan'} />
 					</div>
+					{skillsError && <div className="ai-status is-error">Rescan failed: {skillsError}</div>}
 					{skills && skills.length === 0 && <UiEmpty text="No skills found yet." />}
 					{skills && skills.length > 0 && (
 						<div className="ai-fetched">

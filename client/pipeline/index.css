@@ -335,6 +335,11 @@ body {
 	text-align: right;
 	font-style: italic;
 	min-width: 0;
+	/* UI-03: an italic glyph's ink can paint slightly past its own advance-width box — with no
+	   padding, a right-aligned line's last letter sat flush against this box's edge and the
+	   line-clamp's own `overflow:hidden` clipped that overhang ("not connected" -> "not
+	   connectea"). A little breathing room on the right keeps the overhang inside the box. */
+	padding-right: 0.2em;
 	display: -webkit-box;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 2;
@@ -360,16 +365,25 @@ body {
 
 .NodePortLabel {
 	/* Tinted per port data type via inline style (PORT_TYPE_COLORS), not a flat text color.
-	   WP27 Part B: a fixed-width column (~32% of the card) so every row's label lines up,
-	   however long one gets — the overflow ellipsises, and NodePortLabel sets `title` so the
-	   full text is still reachable on hover. */
+	   WP27 Part B: a column so every row's label lines up, however long one gets — NodePortLabel
+	   also sets `title` so the full text is reachable on hover even once it's cut down.
+	   UI-04: a flat 32% was unreadable for a short label on a cramped card ("Context" ->
+	   "Cont…"). `--port-label-w` is set per card by `usePortLabelColumnWidth`
+	   (NodeShapeUtil.tsx), measured from that card's own labels and clamped to 28%-42% so a
+	   label of 12 characters or fewer is never truncated; it falls back to the old 32% before
+	   that measurement has run (first paint) or for a card with no eligible label. A longer
+	   label wraps to a second line before the line-clamp's own ellipsis kicks in, instead of
+	   truncating a single line straight away. */
 	font-size: var(--fs-label);
 	font-weight: 500;
-	flex: 0 0 32%;
-	max-width: 32%;
+	flex: 0 0 var(--port-label-w, 32%);
+	max-width: var(--port-label-w, 32%);
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	white-space: normal;
+	word-break: break-word;
 }
 
 /* A label used in a right-aligned row (OutputPortRow, port-only rows) still shouldn't eat a
@@ -633,6 +647,10 @@ body {
 .WireField-control > .UiInput,
 .WireField-control > .UiSelect,
 .WireField-control > .UiTextArea,
+/* UI-05: a segmented control (e.g. Database's Source picker) must shrink with its row too,
+   not keep its unconstrained content width — the only thing that lets a card with several
+   options (one with a long label, "Built-in Postgres") stay inside the card's own edge. */
+.WireField-control > .UiSegmented,
 .WireField-control input.UiInput,
 .WireField-control textarea.UiTextArea {
 	flex: 1 1 auto;
@@ -1522,11 +1540,16 @@ body {
 }
 
 .NodeErrorBanner {
-	position: absolute;
-	left: 0;
-	top: calc(100% + 6px);
+	/* DATA-02: part of the card's own normal flow (not a sibling positioned below its box), in
+	   the extra height NodeShapeUtil.tsx's getNodeOuterHeightPx reserves for exactly this —
+	   so the banner always stays inside the shape's own bounds, even after zoomToFit seats the
+	   card's bottom edge right under tldraw's fixed toolbar. max-height is a belt-and-suspenders
+	   cap at that same reserve, in case a message is unusually tall; it scrolls, never overflows. */
+	flex: 0 0 auto;
 	width: 100%;
-	z-index: 4;
+	margin-top: 6px;
+	max-height: var(--node-banner-reserve, none);
+	overflow: auto;
 	pointer-events: all;
 }
 
@@ -1578,6 +1601,29 @@ body {
 	max-width: 100%;
 	max-height: 100%;
 	object-fit: contain;
+}
+
+/* IMAGE-02: a multi-image value (Generate image's own newline-joined port, a For each
+   collection, …) renders as a small grid instead of one broken `<img src>` with an embedded
+   newline. */
+.ValuePreview-images {
+	width: 100%;
+	height: 100%;
+	overflow: auto;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+	gap: var(--tl-space-2);
+	padding: var(--tl-space-2);
+	align-content: start;
+}
+
+.ValuePreview-images-tile {
+	width: 100%;
+	aspect-ratio: 1 / 1;
+	object-fit: cover;
+	border-radius: var(--tl-radius-2);
+	border: 1px solid var(--tl-color-divider);
+	cursor: pointer;
 }
 
 .ValuePreview-mermaid svg {
@@ -3006,6 +3052,60 @@ body {
 	background-color: hsl(0 0% 14%);
 }
 
+/* Gallery (WP36 "P"): a grid of images with a user-set column count, plus a "Download all". */
+.GalleryNode-grid {
+	margin: var(--tl-space-2) var(--tl-space-4);
+	border-radius: var(--tl-radius-3);
+	border: 1px solid var(--tl-color-divider);
+	background: var(--tl-color-muted-0);
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	pointer-events: all;
+}
+
+.GalleryNode-tiles {
+	display: grid;
+	grid-template-columns: repeat(var(--gallery-columns, 3), 1fr);
+	gap: var(--tl-space-2);
+	padding: var(--tl-space-2);
+}
+
+.GalleryNode-tile {
+	position: relative;
+	aspect-ratio: 1 / 1;
+	border-radius: var(--tl-radius-2);
+	overflow: hidden;
+	background-color: hsl(0 0% 96%);
+	border: 1px solid var(--tl-color-divider);
+	cursor: pointer;
+
+	img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.FieldMax {
+		opacity: 0;
+		transition: opacity 120ms ease;
+	}
+
+	&:hover .FieldMax,
+	&:focus-within .FieldMax {
+		opacity: 1;
+	}
+}
+
+.tl-theme__dark .GalleryNode-tile {
+	background-color: hsl(0 0% 14%);
+}
+
+.GalleryNode-downloadAll {
+	margin: 0 var(--tl-space-2) var(--tl-space-2);
+	align-self: flex-start;
+}
+
 /* Row labels look the same in every card, also outside the rows they were first styled for. */
 .NodeBody .NodeInputRow-label {
 	font-size: var(--fs-label);
@@ -3137,4 +3237,58 @@ body {
 .HtmlPreviewNode-submission > .NodeRow-disconnected {
 	padding: var(--tl-space-2) var(--tl-space-3);
 	display: block;
+}
+
+/* ---- WP37 UI polish ---- */
+
+/* UI-08/AI-09: the "Plan"/"Working…" button shared a row with the model <select>, which had no
+   explicit flex-basis of its own but renders at `width:100%` (`.UiSelect`) — its flex-basis
+   resolves to that, so it claimed the row and squeezed the button below its own label's width
+   ("Plan" -> "Pl…"). `flex: 0 0 auto` keeps the button at its natural size; the select (already
+   `min-width:0`-friendly) shrinks instead. */
+.BuildPanel-row > .UiButton {
+	flex: 0 0 auto;
+}
+
+/* UI-06 (same family as UI-04/UI-08): "Load" next to the source URL field shared `flex: 1 1
+   auto` with the text input, so it could shrink below its own label's width ("Load" -> "L…").
+   The input already handles shrinking fine on its own; the button should not shrink at all. */
+.LoadImageNode-browse {
+	flex: 0 0 auto;
+}
+
+/* UI-09: "AI text" and "Generate text" otherwise read as the same card (same icon, same muted
+   icon colour) in the library/search picker and on the canvas. A per-type tint on the header
+   icon — still a tldraw theme colour, not a hex value — gives them a second, quicker-to-spot
+   difference alongside the two cards' now-distinct icons (TextAINodeDefinition/
+   GenerateTextNodeDefinition). The Ctrl/Cmd+B colour chord (`.NodeShape_accent`) still wins
+   when the user picks one, via the extra class on its own selector below.
+   `.NodeShape-icon` itself is set further up this file nested inside `.NodeShape { … }`, which
+   compiles to the descendant selector `.NodeShape .NodeShape-icon` (two classes) — a single
+   class here would lose that tie-break by specificity regardless of this rule coming later in
+   the file, so this also matches on `.NodeShape-icon` to stay at least as specific. */
+.NodeShape-icon.NodeShape-icon_text_ai {
+	color: var(--tl-color-text-1);
+}
+
+.NodeShape-icon.NodeShape-icon_generate_text {
+	color: var(--tl-color-primary);
+}
+
+.NodeShape_accent .NodeShape-icon.NodeShape-icon_text_ai,
+.NodeShape_accent .NodeShape-icon.NodeShape-icon_generate_text {
+	color: var(--node-accent);
+}
+
+/* UI-12: toasts (tldraw's own `.tlui-toast__viewport`) default to the bottom-right corner, which
+   this app also uses for the chat-float button and the main toolbar — a card panned into that
+   corner could end up with a `keepOpen` toast genuinely covering its own footer controls (see
+   `ModelHealthToasts` in App.tsx, the one toast that stays up instead of auto-dismissing). Top-
+   right is away from both the bottom toolbar and that corner's other floating controls.
+   `.tlui-toast__viewport` itself already has `pointer-events:none` with only each toast's own
+   box opted back in (`> *`), so this is purely about where that box sits, not its hit area. */
+.tlui-toast__viewport {
+	align-items: flex-end;
+	justify-content: flex-start;
+	padding: var(--tl-space-5, 20px) var(--tl-space-3) 0 0;
 }

@@ -81,3 +81,13 @@ export async function runSql(sql: string, input?: string | null): Promise<string
 	}
 	return chunks.join('\n\n')
 }
+
+/** GAPS-12: load CSV rows into the built-in Postgres — the same CREATE TABLE IF NOT EXISTS /
+ * batched INSERT plan the external sources use (`shared/dbLoadRows.ts`'s `buildLoadPlan`), run
+ * one statement at a time rather than through `runSql`'s own `;`+newline statement splitter
+ * (a batched INSERT's literal text values can themselves contain a newline right after a
+ * semicolon, e.g. a multi-line CSV cell, which that simple splitter isn't meant to survive). */
+export async function loadRows(statements: string[]): Promise<void> {
+	const db = await getPg()
+	for (const statement of statements) await db.query(statement)
+}

@@ -41,11 +41,11 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	random: ['mode'],
 	if: ['condition', 'operand'],
 	logic: ['op'],
-	for_each: ['split', 'separator', 'rangeFrom', 'rangeTo', 'rangeStep', 'joiner', 'noResult'],
+	for_each: ['split', 'separator', 'rangeFrom', 'rangeTo', 'rangeStep', 'joiner', 'collect', 'resultColumn', 'noResult'],
 	router: ['outputCount'],
 	code: ['lang', 'code', 'inputCount', 'outputCount'],
 	output: ['kind'],
-	save: ['fileName'],
+	save: ['fileName', 'mode'],
 	// table: op params only (DataPipe's own design — see RULES/WP17: "only the op's params
 	// are shown and get ports"). "text"/"format"/"op" are never wired: see the note below.
 	table: [...new Set(TABLE_OPS.flatMap((spec) => spec.params.map((p) => p.field)))],
@@ -63,7 +63,12 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	url_in: ['url', 'fetchBody'],
 	sleep: ['ms'],
 	table_view: ['text'],
-	agent: ['search', 'mcpServers', 'skills', 'systemPrompt', 'maxSteps'],
+	agent: ['search', 'mcpServers', 'skills', 'systemPrompt', 'maxSteps', 'answerFormat'],
+	json_fields: ['paths'],
+	extract: ['find', 'lang', 'clean'],
+	template: ['template', 'escape'],
+	merge: ['mode', 'separator'],
+	gallery: ['columns'],
 }
 
 /** Fields deliberately left unwired, each with a reason (kept with the `wire: false` flag

@@ -156,7 +156,11 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 			const pass = input || context || result.answer
 			return {
 				output: result.answer,
-				probs: JSON.stringify(result.probabilities),
+				// AI-04: tag `probs` with this decision's own kind — a flat {label: probability}
+				// object is otherwise indistinguishable between choice and score, so Decision
+				// switch's Auto mode can never resolve Score. `__kind` is filtered out of
+				// `probabilities` by any reader that only keeps numeric entries (decisionRoute.ts).
+				probs: JSON.stringify({ ...result.probabilities, __kind: node.kind }),
 				final,
 				...(node.kind === 'noul' ? { yes: isYes ? pass : STOP_EXECUTION, no: isYes ? STOP_EXECUTION : pass } : {}),
 			}
@@ -170,7 +174,7 @@ export class JevNodeDefinition extends NodeDefinition<JevNode> {
 		const r = node.lastResult ? (JSON.parse(node.lastResult) as JevResult) : null
 		const info: InfoValues = {
 			output: { value: r?.answer ?? null, isOutOfDate, dataType: 'text' },
-			probs: { value: r ? JSON.stringify(r.probabilities) : null, isOutOfDate, dataType: 'text' },
+			probs: { value: r ? JSON.stringify({ ...r.probabilities, __kind: r.type }) : null, isOutOfDate, dataType: 'text' },
 			final: { value: node.lastFinal, isOutOfDate, dataType: 'text' },
 		}
 		if (node.kind === 'noul') {

@@ -466,7 +466,7 @@ function dateAdd(date: Date, n: number, unit: string): Date {
 
 const FUNCTION_NAMES = [
 	'upper', 'lower', 'trim', 'len', 'left', 'right', 'mid', 'replace', 'contains', 'startswith',
-	'endswith', 'split', 'concat', 'text',
+	'endswith', 'split', 'concat', 'text', 'domain', 'path',
 	'number', 'round', 'floor', 'ceil', 'abs', 'min', 'max', 'pow', 'sqrt',
 	'if', 'ifs', 'coalesce', 'isempty',
 	'date', 'year', 'month', 'day', 'weekday', 'week', 'quarter', 'hour', 'datediff', 'dateadd', 'today',
@@ -481,6 +481,21 @@ function levenshtein(a: string, b: string): number {
 		}
 	}
 	return dp[a.length][b.length]
+}
+
+/** P8: `domain(url)`/`path(url)` for a formula column built from a URL (e.g. a web-search
+ * result) — accepts a URL with no scheme (adds `https://` to parse it) so a bare host like
+ * "example.com/blog/post-1" still works. */
+function parseUrlFormula(text: string): URL {
+	try {
+		return new URL(text)
+	} catch {
+		try {
+			return new URL(`https://${text}`)
+		} catch {
+			throw new FormulaError(`Formula: "${text}" is not a URL`)
+		}
+	}
 }
 
 function unknownFunctionError(name: string): FormulaError {
@@ -549,6 +564,12 @@ function callFunction(name: string, args: Value[], ctx: Ctx): Value {
 		case 'text':
 			requireArgs(name, args, 1)
 			return toText(args[0])
+		case 'domain':
+			requireArgs(name, args, 1)
+			return parseUrlFormula(toText(args[0]).trim()).hostname
+		case 'path':
+			requireArgs(name, args, 1)
+			return parseUrlFormula(toText(args[0]).trim()).pathname
 		case 'number':
 			requireArgs(name, args, 1)
 			return asNumber(args[0], `a number for number(${JSON.stringify(toText(args[0]))})`)

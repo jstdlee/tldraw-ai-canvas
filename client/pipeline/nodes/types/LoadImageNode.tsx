@@ -35,6 +35,9 @@ export const LoadImageNode = T.object({
 	imageUrl: T.string.nullable(),
 	/** A URL or a file path. Play copies it into the image store. */
 	source: T.string.optional(),
+	/** IMAGE-05: the same message whether the broken URL came from the Source field or a wired
+	 * `url` port — new field on an existing type, so it's optional (old saves have none). */
+	error: T.string.nullable().optional(),
 })
 
 export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
@@ -50,6 +53,7 @@ export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
 			type: 'load_image',
 			imageUrl: null,
 			source: '',
+			error: null,
 		}
 	}
 	getBodyHeightPx(shape: NodeShape) {
@@ -79,8 +83,23 @@ export class LoadImageNodeDefinition extends NodeDefinition<LoadImageNode> {
 		const source = fromPort || (node.source ?? '').trim()
 		let imageUrl = node.imageUrl
 		if (source) {
-			imageUrl = fromPort ? await toImageUrl(fromPort) : await apiImportImage(source)
-			updateNode<LoadImageNode>(this.editor, shape, (n) => ({ ...n, imageUrl, source: fromPort ? n.source : source }))
+			try {
+				imageUrl = fromPort ? await toImageUrl(fromPort) : await apiImportImage(source)
+			} catch (e) {
+				// IMAGE-05: store the same message the Source field's own "Load" button shows
+				// inline, then still throw — the run banner is the normal way a card reports
+				// failure (RULES.md), and a wired `url` port has no field-level UI of its own to
+				// show it inline instead.
+				const message = (e as Error).message
+				updateNode<LoadImageNode>(this.editor, shape, (n) => ({ ...n, error: message }), false)
+				throw e
+			}
+			updateNode<LoadImageNode>(this.editor, shape, (n) => ({
+				...n,
+				imageUrl,
+				source: fromPort ? n.source : source,
+				error: null,
+			}))
 		}
 		await sleep(200)
 		return { output: imageUrl }
@@ -144,13 +163,12 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 	const urlWired = useInputConnected(shape.id, 'url')
 	const [isDragOver, setIsDragOver] = useState(false)
 	const [zoom, setZoom] = useState(false)
-	const [loadError, setLoadError] = useState<string | null>(null)
 
 	const handleFile = useCallback(
 		async (file: File) => {
 			if (!file.type.startsWith('image/')) return
 			const dataUrl = await readFileAsDataUrl(file)
-			updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl: dataUrl, source: '' }))
+			updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl: dataUrl, source: '', error: null }))
 		},
 		[editor, shape]
 	)
@@ -186,12 +204,15 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 	const loadSource = useCallback(async () => {
 		const source = (node.source ?? '').trim()
 		if (!source) return
-		setLoadError(null)
+		updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, error: null }), false)
 		try {
 			const imageUrl = await apiImportImage(source)
-			updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl }))
+			updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, imageUrl, error: null }))
 		} catch (e) {
-			setLoadError((e as Error).message)
+			// IMAGE-05: stored on the node (not just local state), so this exact message is also
+			// what the run-failed banner shows if the card is run some other way (a wired `url`
+			// port, Run without cache, …) — one message, however the failure happened.
+			updateNode<LoadImageNode>(editor, shape, (n) => ({ ...n, error: (e as Error).message }), false)
 		}
 	}, [editor, node.source, shape])
 
@@ -240,7 +261,7 @@ function LoadImageNodeComponent({ shape, node }: NodeComponentProps<LoadImageNod
 					</>
 				) : (
 					<div className="NodeImagePreview-empty">
-						<span>{isDragOver ? 'Drop image here' : loadError ?? 'Drop, browse, paste, or enter a URL'}</span>
+						<span>{isDragOver ? 'Drop image here' : node.error ?? 'Drop, browse, paste, or enter a URL'}</span>
 					</div>
 				)}
 			</div>

@@ -102,7 +102,13 @@ export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<strin
 	// "extra") is dropped, unless it's already wired — then it's kept near the header so the
 	// wire doesn't dangle.
 	const hiddenDedicated = hiddenDedicatedPortIds(node)
-	const hiddenFields = hiddenFieldKeys(node)
+	// DATA-09/GAPS-12: a couple of cases (Profile/Table view's "text", Database's load-mode
+	// fields) depend on whether a dedicated port is wired — not something `node`'s own props can
+	// answer — so pass it along here, where editor/shape are both in scope.
+	const hiddenFields = hiddenFieldKeys(node, {
+		dataWired: isInputWired(editor, shape.id, 'data'),
+		rowsWired: isInputWired(editor, shape.id, 'rows'),
+	})
 	const wirable = wirableFieldsFor(node as { type: string } & Record<string, unknown>)
 
 	const candidates: PortCandidate[] = [
@@ -132,7 +138,12 @@ export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<strin
 	if (import.meta.env?.DEV && !shape.props.collapsed) {
 		// Rows register their anchors in a layout effect after the first render, so check
 		// again a moment later and only warn if the anchor is still missing.
-		const warnOnce = (key: string, message: string) => {
+		// DATA-09: a field/port that is visible now but becomes conditionally hidden before the
+		// 2s recheck (e.g. a card created, then wired, within that window — unmounting its row
+		// and clearing its anchor as part of that, same as hiding it from the start would) must
+		// not warn either; `isHiddenNow` re-evaluates hidden-ness against the *current* shape,
+		// not the one captured when this was scheduled.
+		const warnOnce = (key: string, message: string, isHiddenNow: (current: NodeShape) => boolean) => {
 			const warnKey = `${shape.id}:${key}`
 			if (warnedMissingFieldAnchors.has(warnKey)) return
 			warnedMissingFieldAnchors.add(warnKey)
@@ -140,6 +151,10 @@ export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<strin
 				const current = editor.getShape(shape.id)
 				if (!current || (current as NodeShape).props.collapsed) return
 				if (getFieldPortAnchors(editor, shape.id)?.[key] !== undefined) {
+					warnedMissingFieldAnchors.delete(warnKey)
+					return
+				}
+				if (isHiddenNow(current as NodeShape)) {
 					warnedMissingFieldAnchors.delete(warnKey)
 					return
 				}
@@ -157,7 +172,8 @@ export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<strin
 					warnOnce(
 						port.id,
 						`[WP21] "${port.id}" output on a "${node.type}" card has no port anchor — render ` +
-							`a <Port>/OutputPortRow in its row so it's visible and draggable.`
+							`a <Port>/OutputPortRow in its row so it's visible and draggable.`,
+						(current) => hiddenDedicatedPortIds(current.props.node).has(port.id)
 					)
 				}
 				continue
@@ -173,7 +189,8 @@ export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<strin
 				warnOnce(
 					port.id,
 					`[WP17] "${port.id}" on a "${node.type}" card has no port anchor — its row never ` +
-						`registered one (PortRow/NodeInputRow, or a useFieldPortAnchor ref).`
+						`registered one (PortRow/NodeInputRow, or a useFieldPortAnchor ref).`,
+					(current) => hiddenDedicatedPortIds(current.props.node).has(port.id)
 				)
 			}
 		}
@@ -183,7 +200,12 @@ export function getNodeTypePorts(editor: Editor, shape: NodeShape): Record<strin
 				warnOnce(
 					field.key,
 					`[WP17] "${field.key}" on a "${node.type}" card has no field-port anchor — ` +
-						`its port is stuck on the header row. Wrap its control in WireField/WireFieldHeader.`
+						`its port is stuck on the header row. Wrap its control in WireField/WireFieldHeader.`,
+					(current) =>
+						hiddenFieldKeys(current.props.node, {
+							dataWired: isInputWired(editor, shape.id, 'data'),
+							rowsWired: isInputWired(editor, shape.id, 'rows'),
+						}).has(field.key)
 				)
 			}
 		}

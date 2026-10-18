@@ -2,24 +2,40 @@ import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ContentKind, detectContentKind } from '../../shared/contentKind'
+import { parseImageList } from '../../shared/imageList'
 import { renderMermaid } from '../clips/ClipShapes'
 import { FieldMax, ImageZoom, LargeEditor } from './editors/LargeEditor'
 
 const stop = (e: React.SyntheticEvent) => e.stopPropagation()
 
-/** Shows any node value: text, image, Markdown, Mermaid, JSON or a link card. */
+/** Shows any node value: text, image(s), Markdown, Mermaid, JSON or a link card. */
 export function ValuePreview({ value, kind = 'auto' }: { value: string; kind?: ContentKind | 'auto' }) {
 	const k = kind === 'auto' ? detectContentKind(value) : kind
 	const [open, setOpen] = useState(false)
+	// IMAGE-02: a value carrying more than one image (Generate image's own newline-joined
+	// "images" port, a For each loop's collected results, …) used to get a `src` with an
+	// embedded newline — not a valid URL, so it rendered as one broken, collapsed image. A list
+	// of 2+ renders as a small grid instead; a single image keeps the plain `<img>` below.
+	const images = k === 'image' ? parseImageList(value) : []
+	const [zoomSrc, setZoomSrc] = useState<string | null>(null)
 	const title = k === 'image' ? 'Image' : k === 'mermaid' ? 'Mermaid' : k === 'json' ? 'JSON' : k === 'markdown' ? 'Markdown' : 'Output'
 	return (
 		<div className={`ValuePreview ValuePreview_${k}`} onPointerDown={stop} onWheel={stop}>
 			<FieldMax title={`Open ${title}`} onClick={() => setOpen(true)} />
-			{open && k === 'image' && <ImageZoom src={value.trim()} onClose={() => setOpen(false)} />}
+			{open && k === 'image' && images.length <= 1 && <ImageZoom src={value.trim()} onClose={() => setOpen(false)} />}
 			{open && k !== 'image' && (
 				<LargeEditor title={title} value={k === 'json' ? prettyJson(value) : value} lang={k === 'json' ? 'json' : 'text'} readOnly onChange={() => {}} onClose={() => setOpen(false)} />
 			)}
-			{k === 'image' && <img className="ValuePreview-image" src={value.trim()} alt="" draggable={false} />}
+			{zoomSrc && <ImageZoom src={zoomSrc} onClose={() => setZoomSrc(null)} />}
+			{k === 'image' && images.length > 1 ? (
+				<div className="ValuePreview-images">
+					{images.map((src, i) => (
+						<img key={src + i} className="ValuePreview-images-tile" src={src} alt={`image ${i + 1}`} draggable={false} onClick={() => setZoomSrc(src)} />
+					))}
+				</div>
+			) : (
+				k === 'image' && <img className="ValuePreview-image" src={value.trim()} alt="" draggable={false} />
+			)}
 			{k === 'url' && <LinkPreview url={value.trim()} />}
 			{k === 'mermaid' && <MermaidPreview code={value} />}
 			{k === 'markdown' && (

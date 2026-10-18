@@ -1,6 +1,7 @@
-import { mkdirSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { authHeader } from '../shared/httpBuild'
+import { fillSaveFileName, SaveMode } from '../shared/saveTemplate'
 import { resolveSecret } from '../shared/secrets'
 import { ConfigError, DATA_DIR } from './config'
 import { resolveImage, saveImage } from './images'
@@ -218,7 +219,21 @@ export async function downloadUrl(url: string, fileName?: string): Promise<Downl
 }
 
 /** Save node: write text or an image to data/exports. */
-export async function saveContent(content: string, fileName?: string): Promise<{ path: string; bytes: number }> {
+/** Force the real content-type's extension onto a name (GAPS-17): a resize/filter card always
+ * writes a known image format, so a user-typed `.jpg` on PNG bytes would leave a file whose
+ * name lies about its own content — strip whatever extension the template produced and use the
+ * real one instead. Non-image content keeps a user-chosen extension (text has no single "real"
+ * format the way an image does), only adding one when the name has none at all. */
+function withRealExtension(name: string, ext: string, isImage: boolean): string {
+	if (isImage) return name.replace(/\.[a-z0-9]{1,5}$/i, '') + ext
+	return /\.[a-z0-9]{1,5}$/i.test(name) ? name : name + ext
+}
+
+export async function saveContent(
+	content: string,
+	fileName?: string,
+	opts: { mode?: SaveMode; name?: string } = {}
+): Promise<{ path: string; bytes: number }> {
 	const isImage = /^(data:image\/|\/api\/images\/)/.test(content)
 	let bytes: Uint8Array
 	let ext = '.txt'
@@ -237,10 +252,57 @@ export async function saveContent(content: string, fileName?: string): Promise<{
 			}
 		}
 	}
+
+	const mode = opts.mode ?? 'new'
 	const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
-	let name = safeFileName((fileName || `canvas-${stamp}`).replace('{{date}}', stamp), `canvas-${stamp}`)
-	if (!/\.[a-z0-9]{1,5}$/i.test(name)) name += ext
-	const path = uniquePath(EXPORT_DIR, name)
+	const template = fileName || 'canvas-{{date}}'
+	const baseVars = { date: stamp, name: opts.name || 'canvas' }
+	const nameFor = (index: number) =>
+		withRealExtension(
+			safeFileName(fillSaveFileName(template, { ...baseVars, index: String(index) }), `canvas-${stamp}`),
+			ext,
+			isImage
+		)
+
+	mkdirSync(EXPORT_DIR, { recursive: true })
+
+	if (mode === 'overwrite') {
+		const path = join(EXPORT_DIR, nameFor(1))
+		writeFileSync(path, bytes)
+		return { path, bytes: bytes.byteLength }
+	}
+
+	if (mode === 'append') {
+		// {{index}} = which row/line this run is appending — 1 for a new file, otherwise the
+		// existing line count + 1 (binary/image content just counts prior writes instead).
+		const probeName = nameFor(1)
+		const probePath = join(EXPORT_DIR, probeName)
+		let index = 1
+		let prior: Uint8Array | null = null
+		if (exists(probePath)) {
+			prior = readFileSync(probePath)
+			index = isImage ? 2 : new TextDecoder().decode(prior).split('\n').filter(Boolean).length + 1
+		}
+		const name = nameFor(index)
+		const path = join(EXPORT_DIR, name)
+		const sameFile = name === probeName
+		const base = sameFile ? prior : exists(path) ? readFileSync(path) : null
+		const sep = isImage || !base ? new Uint8Array(0) : new TextEncoder().encode('\n')
+		const out = base ? new Uint8Array([...base, ...sep, ...bytes]) : bytes
+		writeFileSync(path, out)
+		return { path, bytes: out.byteLength }
+	}
+
+	// "new": a template using {{index}} gets the first free slot for that token; a template
+	// that doesn't keeps the original behavior unchanged — uniquePath's own "-2"/"-3" suffix
+	// (probing index would just recheck the same fixed name every time, pointlessly).
+	let index = 1
+	if (template.includes('{{index}}')) {
+		for (; index < 10_000; index++) {
+			if (!exists(join(EXPORT_DIR, nameFor(index)))) break
+		}
+	}
+	const path = uniquePath(EXPORT_DIR, nameFor(index))
 	writeFileSync(path, bytes)
 	return { path, bytes: bytes.byteLength }
 }

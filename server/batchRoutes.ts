@@ -151,16 +151,26 @@ export function registerBatchRoutes(app: Hono) {
 			...(thinking ? { reasoning_effort: thinking } : {}),
 		}
 		const started = Date.now()
-		const response = await fetch(endpoint, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				...(key ? { Authorization: `Bearer ${key}` } : {}),
-			},
-			body: JSON.stringify(payload),
-			// Stop (WP19 Part 2) closes the client request; combine with the hard timeout.
-			signal: AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(60_000)]),
-		})
+		let response: Response
+		try {
+			response = await fetch(endpoint, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(key ? { Authorization: `Bearer ${key}` } : {}),
+				},
+				body: JSON.stringify(payload),
+				// Stop (WP19 Part 2) closes the client request; combine with the hard timeout.
+				signal: AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(60_000)]),
+			})
+		} catch (error) {
+			// AI-06: a network-level failure (connection refused, DNS, timeout) throws Node's
+			// own bare `fetch failed` TypeError with no useful context — give the endpoint and
+			// the real reason instead.
+			const cause = (error as { cause?: { code?: string; message?: string } })?.cause
+			const reason = cause?.code ?? cause?.message ?? (error as Error).message
+			throw new Error(`Could not reach ${endpoint}: ${reason}`)
+		}
 		if (!response.ok) throw new Error((await response.text()).slice(0, 400) || `Model ${response.status}`)
 		const data = (await response.json()) as {
 			choices?: { message?: { content?: string | { text?: string }[] }; text?: string }[]
@@ -178,10 +188,19 @@ export function registerBatchRoutes(app: Hono) {
 	})
 
 	app.get('/api/hub/openrouter', async (c) => {
-		const response = await fetch('https://openrouter.ai/api/v1/models', { signal: AbortSignal.timeout(15_000) })
-		if (!response.ok) throw new Error(`OpenRouter ${response.status}`)
-		const models = freeModels(modelsFromPayload(await response.json(), 'OpenRouter /api/v1/models'))
-		return c.json({ models })
+		// UI-02: this used to let a network failure (no internet, OpenRouter down/slow) throw
+		// straight out of the handler. `app.onError` still turns that into JSON, but give a
+		// friendly, specific message here rather than a bare fetch error.
+		try {
+			const response = await fetch('https://openrouter.ai/api/v1/models', { signal: AbortSignal.timeout(15_000) })
+			if (!response.ok) throw new Error(`OpenRouter returned ${response.status}`)
+			const models = freeModels(modelsFromPayload(await response.json(), 'OpenRouter /api/v1/models'))
+			return c.json({ models })
+		} catch (error) {
+			const cause = (error as { cause?: { code?: string; message?: string } })?.cause
+			const reason = cause?.code ?? cause?.message ?? (error as Error).message
+			return c.json({ error: `Could not reach OpenRouter: ${reason}` }, 502)
+		}
 	})
 
 	app.post('/api/history', (c) => c.json({ ok: true }))

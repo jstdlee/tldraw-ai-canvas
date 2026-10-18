@@ -58,7 +58,12 @@ export function isImageValue(value: unknown): value is string {
 	)
 }
 
-function preview(value: unknown) {
+/** GAPS-13: a short, human preview of any wired value for a connected-row's inline summary —
+ * `STOP_EXECUTION` (an untaken If/Decision switch branch) becomes "" rather than the raw
+ * `Symbol(STOP_EXECUTION)` a bare `String(value)` would produce. Exported so node components
+ * with their own hand-rolled "connected" row (GenerateTextNode, ChatNode's Attach row) can reuse
+ * it instead of re-deriving the same preview logic. */
+export function preview(value: unknown) {
 	if (value == null || value === STOP_EXECUTION) return ''
 	if (isImageValue(value)) return 'image'
 	// A Model provider output: show the model name, not its JSON.

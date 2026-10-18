@@ -36,12 +36,12 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	random: { in: ['list', 'a', 'b'], out: ['output'], fields: ['mode'] },
 	if: { in: ['input', 'test'], out: ['then', 'else'], fields: ['condition', 'operand'] },
 	logic: { in: ['a', 'b'], out: ['output'], fields: ['op'] },
-	for_each: { in: ['list', 'result'], out: ['item', 'output'], fields: ['noResult'] },
+	for_each: { in: ['list', 'result'], out: ['item', 'output'], fields: ['noResult', 'collect', 'resultColumn'] },
 	router: { in: ['input'], out: ['out_0', 'out_1', 'out_2'], fields: ['outputCount'] },
 	code: { in: ['a', 'b', 'c', 'd'], out: ['output', 'out2', 'out3'], fields: ['lang', 'code', 'inputCount', 'outputCount', 'inputNames', 'outputNames'] },
 	subgraph: { in: [], out: [], fields: ['title'] },
 	output: { in: ['input'], out: ['output'], fields: ['kind'] },
-	save: { in: ['input'], out: ['output'], fields: ['fileName'] },
+	save: { in: ['input'], out: ['output'], fields: ['fileName', 'mode'] },
 	table: { in: ['data', 'extra'], out: ['output'], fields: ['text', 'format', 'op', 'columns', 'columns2', 'column', 'expr', 'pattern', 'name', 'totals'] },
 	chart: {
 		in: ['data'],
@@ -78,9 +78,14 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	},
 	html_form: {
 		in: ['text', 'html', 'css', 'js'],
-		out: ['output', 'json'],
+		out: ['output', 'json', 'value'],
 		fields: ['text', 'html', 'css', 'js', 'allowNetwork', 'heightPx'],
 	},
+	json_fields: { in: ['json'], out: ['rest'], fields: ['json', 'paths'] },
+	extract: { in: ['text'], out: ['table', 'json', 'code', 'list'], fields: ['text', 'find', 'lang', 'clean'] },
+	template: { in: [], out: ['output'], fields: ['template', 'escape'] },
+	merge: { in: ['in1', 'in2', 'in3', 'in4'], out: ['output'], fields: ['mode', 'separator'] },
+	gallery: { in: ['images'], out: ['output'], fields: ['columns'] },
 }
 
 export function catalogPrompt(): string {

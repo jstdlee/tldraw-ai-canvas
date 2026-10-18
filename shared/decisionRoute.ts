@@ -15,9 +15,26 @@ export interface ParsedDecision {
 	probabilities: Record<string, number> | null
 	/** The decision's own best answer, whichever form the input took. */
 	answer: string | null
+	/**
+	 * The decision's own declared kind, when the source tagged it — e.g. JEV's `probs` output
+	 * carries a reserved `__kind` key alongside its probabilities. A flat `{label: probability}`
+	 * object is otherwise structurally indistinguishable between a choice and a score decision
+	 * (GAPS-04/AI-04), so `detectMode` prefers this tag over its shape-guessing heuristic when
+	 * it's present. Absent (not just `undefined`) whenever the source didn't tag it, so a plain
+	 * `ParsedDecision` without this field still deep-equals older callers' expectations.
+	 */
+	kind?: ResolvedDecisionMode
 }
 
-/** Parse the wired "decision" value: a JSON object of probabilities, or plain text. */
+const DECISION_KINDS = new Set(['noul', 'choice', 'score'])
+
+function kindTag(value: unknown): ResolvedDecisionMode | undefined {
+	return typeof value === 'string' && DECISION_KINDS.has(value) ? (value as ResolvedDecisionMode) : undefined
+}
+
+/** Parse the wired "decision" value: a JSON object of probabilities (optionally tagged with a
+ * `__kind`), a JSON object with a string `value`/`answer`/`choice` (e.g. an HTML form's `json`
+ * output routed straight in — GAPS-05), or plain text. */
 export function parseDecision(raw: string | null | undefined): ParsedDecision {
 	const text = (raw ?? '').trim()
 	if (!text) return { probabilities: null, answer: null }
@@ -25,14 +42,22 @@ export function parseDecision(raw: string | null | undefined): ParsedDecision {
 		try {
 			const obj: unknown = JSON.parse(text)
 			if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-				const entries = Object.entries(obj as Record<string, unknown>).filter(
+				const record = obj as Record<string, unknown>
+				const entries = Object.entries(record).filter(
 					(entry): entry is [string, number] => typeof entry[1] === 'number'
 				)
 				if (entries.length) {
 					const probabilities = Object.fromEntries(entries)
 					const answer = entries.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
-					return { probabilities, answer }
+					const kind = kindTag(record.__kind)
+					return kind ? { probabilities, answer, kind } : { probabilities, answer }
 				}
+				// No numeric entries: a plain decision object (e.g. an HTML form's `json`, or
+				// something built by hand) — use its own string `value`/`answer`/`choice`.
+				const stringAnswer = [record.value, record.answer, record.choice].find(
+					(v): v is string => typeof v === 'string' && v.trim() !== ''
+				)
+				if (stringAnswer !== undefined) return { probabilities: null, answer: stringAnswer.trim() }
 			}
 		} catch {
 			// Not JSON after all: fall through and treat the whole thing as plain text.
@@ -43,8 +68,10 @@ export function parseDecision(raw: string | null | undefined): ParsedDecision {
 
 const YES_NO_KEYS = new Set(['yes', 'no'])
 
-/** Guess the mode from the decision's own shape: exactly {yes, no} keys means yes/no. */
+/** Guess the mode from the decision's own shape: a tagged `kind` wins outright; otherwise
+ * exactly {yes, no} keys means yes/no. */
 export function detectMode(parsed: ParsedDecision): ResolvedDecisionMode {
+	if (parsed.kind) return parsed.kind
 	if (parsed.probabilities) {
 		const keys = Object.keys(parsed.probabilities).map((k) => k.toLowerCase())
 		if (keys.length === 2 && keys.every((k) => YES_NO_KEYS.has(k))) return 'noul'

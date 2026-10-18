@@ -38,6 +38,11 @@ import { ModelSourceNodeDefinition } from './types/ModelSourceNode'
 import { RawModelNodeDefinition } from './types/RawModelNode'
 import { OpenRouterNodeDefinition, SleepNodeDefinition, VideoNodeDefinition } from './types/ToolNodes'
 import { HtmlFormNodeDefinition, HtmlPreviewNodeDefinition } from './types/HtmlPreviewNode'
+import { JsonFieldsNodeDefinition } from './types/JsonFieldsNode'
+import { ExtractNodeDefinition } from './types/ExtractNode'
+import { TemplateNodeDefinition } from './types/TemplateNode'
+import { MergeNodeDefinition } from './types/MergeNode'
+import { GalleryNodeDefinition } from './types/GalleryNode'
 import type { NodeDefinition, NodeDefinitionConstructor } from './types/shared'
 import {
 	getNodeDefinition as getNodeDefinitionFromStore,
@@ -80,6 +85,9 @@ export const NodeDefinitions = {
 	agent: AgentNodeDefinition,
 	model_source: ModelSourceNodeDefinition,
 	prompt_concat: PromptConcatNodeDefinition,
+	json_fields: JsonFieldsNodeDefinition,
+	extract: ExtractNodeDefinition,
+	template: TemplateNodeDefinition,
 	// Image (runs in the browser)
 	crop: CropNodeDefinition,
 	image_resize: ImageResizeNodeDefinition,
@@ -96,6 +104,7 @@ export const NodeDefinitions = {
 	router: RouterNodeDefinition,
 	code: CodeNodeDefinition,
 	subgraph: SubgraphNodeDefinition,
+	merge: MergeNodeDefinition,
 	// Web
 	http: HttpNodeDefinition,
 	download: DownloadNodeDefinition,
@@ -111,6 +120,7 @@ export const NodeDefinitions = {
 	database: DatabaseNodeDefinition,
 	table_view: TableViewNodeDefinition,
 	html_preview: HtmlPreviewNodeDefinition,
+	gallery: GalleryNodeDefinition,
 	openrouter: OpenRouterNodeDefinition,
 	raw_model: RawModelNodeDefinition,
 	video: VideoNodeDefinition,
