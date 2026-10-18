@@ -18,13 +18,13 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	generate_text: { in: ['input', 'prompt', 'model', 'system', 'params'], out: ['output'], fields: ['model', 'system', 'promptText'] },
 	chat: { in: ['parent', 'attach', 'model', 'system', 'params'], out: ['output'], fields: ['userMessage', 'model', 'system'] },
 	model_source: { in: [], out: ['model', 'modelId', 'baseURL'], fields: ['baseURL', 'keyRef', 'model', 'filter', 'kind'] },
-	jev: { in: ['context', 'question', 'input'], out: ['output', 'probs', 'final'], fields: ['kind', 'question', 'options', 'filter'] },
+	jev: { in: ['context', 'question', 'input'], out: ['output', 'probs', 'final', 'yes', 'no'], fields: ['kind', 'question', 'options', 'filter'] },
 	decision_switch: {
 		in: ['decision', 'value'],
 		out: ['yes', 'no', 'unsure', 'other'],
 		fields: ['mode', 'threshold', 'margin', 'options', 'bands'],
 	},
-	load_image: { in: [], out: ['output'], fields: ['imageUrl', 'source'] },
+	load_image: { in: ['url'], out: ['output'], fields: ['imageUrl', 'source'] },
 	camera: { in: [], out: ['output'], fields: [] },
 	capture: { in: [], out: ['output'], fields: [] },
 	crop: { in: ['image'], out: ['output'], fields: [] },
@@ -38,7 +38,7 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	logic: { in: ['a', 'b'], out: ['output'], fields: ['op'] },
 	for_each: { in: ['list', 'result'], out: ['item', 'output'], fields: ['noResult', 'collect', 'resultColumn'] },
 	router: { in: ['input'], out: ['out_0', 'out_1', 'out_2'], fields: ['outputCount'] },
-	code: { in: ['a', 'b', 'c', 'd'], out: ['output', 'out2', 'out3'], fields: ['lang', 'code', 'inputCount', 'outputCount', 'inputNames', 'outputNames'] },
+	code: { in: ['in1', 'in2'], out: ['output'], fields: ['lang', 'code', 'inputCount', 'outputCount', 'inputNames', 'outputNames'] },
 	subgraph: { in: [], out: [], fields: ['title'] },
 	output: { in: ['input'], out: ['output'], fields: ['kind'] },
 	save: { in: ['input'], out: ['output'], fields: ['fileName', 'mode'] },
@@ -84,7 +84,7 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	json_fields: { in: ['json'], out: ['rest'], fields: ['json', 'paths'] },
 	extract: { in: ['text'], out: ['table', 'json', 'code', 'list'], fields: ['text', 'find', 'lang', 'clean'] },
 	template: { in: [], out: ['output'], fields: ['template', 'escape'] },
-	merge: { in: ['in1', 'in2', 'in3', 'in4'], out: ['output'], fields: ['mode', 'separator'] },
+	merge: { in: ['in1', 'in2'], out: ['output'], fields: ['mode', 'separator'] },
 	gallery: { in: ['images'], out: ['output'], fields: ['columns'] },
 }
 

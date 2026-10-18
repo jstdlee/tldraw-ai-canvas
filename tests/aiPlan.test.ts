@@ -158,6 +158,71 @@ describe('validatePlan', () => {
 		expect(cleaned.wires).toHaveLength(1)
 	})
 
+	// GAPS-08: var:* only makes sense on the types that actually fill a {{name}} template
+	// (shared/nodeSpecs.ts's DYNAMIC_PORTS) — any other type must reject it like any other
+	// unknown port, so the AI never "successfully" wires something that lands nowhere.
+	it('rejects a var:<name> input port on a type with no template variables', () => {
+		const existing = [node('a', 'prompt', [], ['output']), node('b', 'crop', ['image'], ['output'])]
+		const plan = parseAiPlan(JSON.stringify({ wires: [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'var:city' }] }))
+		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
+		expect(cleaned.wires).toEqual([])
+		expect(errors.length).toBe(1)
+	})
+
+	// GAPS-08: Decision switch's choice-mode options and score-mode bands each get their own
+	// `opt:<slug>`/`band:<slug>` output, named by their own text — not fixed ports, but still a
+	// valid wire source/target per shared/nodeSpecs.ts's DYNAMIC_PORTS.
+	it('accepts a decision_switch opt:<slug> output and a band:<slug> output', () => {
+		const existing = [
+			node('sw', 'decision_switch', ['decision', 'value'], ['yes', 'no', 'unsure', 'other']),
+			node('out1', 'output', ['input'], ['output']),
+			node('out2', 'output', ['input'], ['output']),
+		]
+		const plan = parseAiPlan(
+			JSON.stringify({
+				wires: [
+					{ from: 'sw', fromPort: 'opt:formal', to: 'out1', toPort: 'input' },
+					{ from: 'sw', fromPort: 'band:high', to: 'out2', toPort: 'input' },
+				],
+			})
+		)
+		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
+		expect(errors).toEqual([])
+		expect(cleaned.wires).toHaveLength(2)
+	})
+
+	// GAPS-08: For each's "table rows" split gives one `row:<column>` output per column, and
+	// Code's port ids are `in1`.. / `output`, `out2`.. (sized by Input/Output count), not the
+	// fixed a/b/c/d this catalogue used to claim.
+	it('accepts a for_each row:<column> output and a code in3/out2 beyond the default size', () => {
+		const existing = [
+			node('loop', 'for_each', ['list', 'result'], ['item', 'output']),
+			node('fn', 'code', ['in1', 'in2'], ['output']),
+			node('out', 'output', ['input'], ['output']),
+		]
+		const plan = parseAiPlan(
+			JSON.stringify({
+				wires: [
+					{ from: 'loop', fromPort: 'row:name', to: 'fn', toPort: 'in3' },
+					{ from: 'fn', fromPort: 'out2', to: 'out', toPort: 'input' },
+				],
+			})
+		)
+		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
+		expect(errors).toEqual([])
+		expect(cleaned.wires).toHaveLength(2)
+	})
+
+	// GAPS-08: the opt:/band:/path:/row:/var:/code-in/out dynamic ports are still rejected for
+	// a node type that doesn't declare that rule — e.g. "opt:" only exists on decision_switch.
+	it('rejects an opt:<slug> output on a type other than decision_switch', () => {
+		const existing = [node('sw', 'if', ['input', 'test'], ['then', 'else']), node('out', 'output', ['input'], ['output'])]
+		const plan = parseAiPlan(JSON.stringify({ wires: [{ from: 'sw', fromPort: 'opt:yes', to: 'out', toPort: 'input' }] }))
+		const { plan: cleaned, errors } = validatePlan(plan, existing, NODE_SPECS)
+		expect(cleaned.wires).toEqual([])
+		expect(errors.length).toBe(1)
+	})
+
 	it('rejects an incompatible data type (image output into a plain text-only input is fine; model into image is not)', () => {
 		const existing = [node('img', 'load_image', [], ['output']), node('crop', 'crop', ['image'], ['output'])]
 		const ok = parseAiPlan(JSON.stringify({ wires: [{ from: 'img', fromPort: 'output', to: 'crop', toPort: 'image' }] }))

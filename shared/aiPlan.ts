@@ -4,6 +4,7 @@
  */
 
 import type { FieldSpec, NodeSpec } from './nodeSpecs'
+import { findDynamicPort } from './nodeSpecs'
 import { extractJsonObject } from './nodeAssist'
 import { fieldKeyFromPortId, fieldPortDataType, wirableFields } from './fieldOverrides'
 
@@ -274,10 +275,10 @@ export function validatePlan(
 			errors.push(`unwire "${item.to}": not an existing node`)
 			continue
 		}
-		const isVar = item.toPort.startsWith('var:')
+		const isDynamicIn = !!findDynamicPort(node.type, item.toPort, 'in')
 		const fieldKey = fieldKeyFromPortId(item.toPort)
 		const isWirableField = fieldKey != null && wirableFields(specs[node.type]).some((f) => f.key === fieldKey)
-		if (!isVar && !isWirableField && !node.inputs.includes(item.toPort)) {
+		if (!isDynamicIn && !isWirableField && !node.inputs.includes(item.toPort)) {
 			errors.push(`unwire: "${item.toPort}" is not an input of ${item.to}`)
 			continue
 		}
@@ -307,7 +308,6 @@ export function validatePlan(
 	}
 
 	const dataType = (ref: string, portId: string, direction: 'in' | 'out'): string => {
-		if (direction === 'in' && portId.startsWith('var:')) return 'text'
 		const node = resolved.get(ref)
 		const spec = node ? specs[node.type] : undefined
 		if (direction === 'in') {
@@ -316,7 +316,10 @@ export function validatePlan(
 			if (field) return fieldPortDataType(field.kind)
 		}
 		const list = direction === 'in' ? spec?.inputs : spec?.outputs
-		return list?.find((p) => p.id === portId)?.dataType ?? 'any'
+		const declared = list?.find((p) => p.id === portId)?.dataType
+		if (declared) return declared
+		const dynamic = node ? findDynamicPort(node.type, portId, direction) : undefined
+		return dynamic?.dataType ?? 'any'
 	}
 
 	const wiresClean: PlanWire[] = []
@@ -330,15 +333,15 @@ export function validatePlan(
 			errors.push(`wire: "${wire.from}" cannot wire to itself`)
 			continue
 		}
-		if (!from.outputs.includes(wire.fromPort)) {
+		if (!from.outputs.includes(wire.fromPort) && !findDynamicPort(from.type, wire.fromPort, 'out')) {
 			errors.push(`wire: "${wire.fromPort}" is not an output of ${wire.from}`)
 			continue
 		}
-		const isVar = wire.toPort.startsWith('var:')
+		const isDynamicIn = !!findDynamicPort(to.type, wire.toPort, 'in')
 		// WP17: `field:<key>` is also a valid target, for any field the type doesn't mark wire: false.
 		const fieldKey = fieldKeyFromPortId(wire.toPort)
 		const isWirableField = fieldKey != null && wirableFields(specs[to.type]).some((f) => f.key === fieldKey)
-		if (!isVar && !isWirableField && !to.inputs.includes(wire.toPort)) {
+		if (!isDynamicIn && !isWirableField && !to.inputs.includes(wire.toPort)) {
 			errors.push(`wire: "${wire.toPort}" is not an input of ${wire.to}`)
 			continue
 		}

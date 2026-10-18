@@ -148,7 +148,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('text_tool'),
 		purpose: purpose('text_tool'),
 		useWhen: 'Use for a no-AI text transform: splitting, replacing, encoding, case, counting, extracting.',
-		inputs: [port('input', 'text', 'The main text.'), port('input2', 'text', 'A second text, used by tools that compare or append two values.')],
+		inputs: [port('input', 'any', 'The main text.'), port('input2', 'any', 'A second text, used by tools that compare or append two values.')],
 		outputs: [port('output', 'text', 'The transformed text.')],
 		fields: [
 			field('op', 'enum', 'Tool', 'Which text operation to run.', TEXT_TOOL_OP_IDS),
@@ -169,10 +169,10 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		useWhen: 'Use to call a web API or fetch a page; the server makes the request (no CORS limits).',
 		inputs: [
 			port('url', 'text', 'Overrides the URL field when wired.'),
-			port('body', 'text', 'Overrides the body field when wired.'),
+			port('body', 'any', 'Overrides the body field when wired.'),
 			port('request', 'text', 'A captured request (cURL, raw HTTP, or "Copy as fetch") parsed at run time; overrides method/url/query/headers/body/auth when wired.'),
 		],
-		outputs: [port('output', 'text', 'Response text, or extracted readable text.')],
+		outputs: [port('output', 'any', 'Response text, or extracted readable text.')],
 		fields: [
 			field('method', 'enum', 'Method', 'HTTP method.', ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'], 'GET'),
 			field('url', 'url', 'URL', 'The address to call.'),
@@ -197,7 +197,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		purpose: purpose('download'),
 		useWhen: 'Use to save a URL to a file on this machine.',
 		inputs: [port('url', 'text', 'Overrides the URL field when wired.')],
-		outputs: [port('output', 'text', 'The saved file path.')],
+		outputs: [port('output', 'any', 'The saved file path.')],
 		fields: [
 			field('url', 'url', 'URL', 'The file to download.'),
 			field('fileName', 'text', 'File name', 'Name to save as; empty guesses one from the URL.'),
@@ -230,7 +230,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		title: title('postgres'),
 		group: groupOf('postgres'),
 		purpose: purpose('postgres'),
-		useWhen: 'Use to run SQL against a Postgres database the user has configured.',
+		useWhen: 'Superseded by "Database" (source: Built-in Postgres/SQLite/Postgres/DuckDB); never add this type, only old canvases may still have one.',
 		inputs: [port('input', 'text', 'CSV/TSV to import, when mode is import.')],
 		outputs: [port('output', 'text', 'Query result as text/CSV.')],
 		fields: [
@@ -240,10 +240,11 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			field('sourceUrl', 'url', 'Source URL', 'Fetch this CSV/TSV URL when nothing is wired in (mode = import).'),
 		],
 		assistant: {
-			role: 'You write the SQL statement, or the import mode settings, for this node.',
-			chips: ['Select rows where…', 'Create a table from this CSV', 'Count rows grouped by…'],
+			role: 'This node type is replaced by "Database"; suggest that instead of changing this one, unless it is already on the canvas.',
+			chips: [],
 			rules: ['Never invent a table or column name you were not given.'],
 		},
+		hidden: true,
 	},
 	text_ai: {
 		type: 'text_ai',
@@ -252,16 +253,21 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		purpose: purpose('text_ai'),
 		useWhen: 'Use to transform text you already have (summarize, translate, rewrite, classify…), picked from a fixed list of jobs — not for writing new text from a blank prompt, which is generate_text.',
 		inputs: [
-			port('input', 'text', 'The text (or image/URL) to work on.'),
-			port('model', 'text', 'Overrides the model field when wired.'),
+			port('input', 'any', 'The text (or image/URL) to work on.'),
+			port('model', 'model', 'Overrides the model field when wired.'),
 			port('system', 'text', 'Overrides the system prompt field when wired.'),
 			port('params', 'text', 'JSON overrides for temperature/maxTokens/thinking.'),
 		],
 		outputs: [port('output', 'text', 'The model’s answer.')],
 		fields: [
 			field('operation', 'enum', 'Operation', 'The canned job to run.', TEXT_AI_OP_IDS),
-			field('option', 'text', 'Option', 'The operation’s one parameter (e.g. target language, max points).'),
-			field('instruction', 'longtext', 'Extra instruction', 'Added on top of the operation’s own prompt.'),
+			field(
+				'option',
+				'text',
+				'Option',
+				'The operation’s one parameter — length/count/language/tone, e.g. "3 sentences", "Chinese", "friendly and short". Put it here, not in Extra instruction. Empty uses that operation’s own default (e.g. summarize defaults to "3 sentences"); "fix"/"Custom instruction" ignore it.'
+			),
+			field('instruction', 'longtext', 'Extra instruction', 'Added on top of the operation’s own prompt. For length/tone/language, use Option instead — Extra instruction can conflict with it.'),
 			field('promptOverride', 'longtext', 'Prompt override', 'Replaces the generated job prompt entirely, when set.'),
 			...llmFields(),
 		],
@@ -279,12 +285,12 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		inputs: [
 			port('input', 'any', 'Text, an image, or a URL to read.'),
 			port('prompt', 'text', 'Overrides the prompt field when wired.'),
-			port('model', 'text', 'Overrides the model field when wired.'),
+			port('model', 'model', 'Overrides the model field when wired.'),
 			port('system', 'text', 'Overrides the system prompt field when wired.'),
 			port('params', 'text', 'JSON overrides for temperature/maxTokens/thinking.'),
 		],
 		outputs: [port('output', 'text', 'The model’s reply.')],
-		fields: [field('promptText', 'longtext', 'Prompt', 'What to ask the model, used when the prompt port is not wired.'), ...llmFields()],
+		fields: [field('promptText', 'longtext', 'Prompt', 'What to ask the model, used when the prompt port is not wired. Supports {{vars}} (own var:<name> input ports).'), ...llmFields()],
 		assistant: {
 			role: 'You write the prompt this node sends to the model.',
 			chips: ['Describe the input in detail', 'Write a caption', 'Answer: …'],
@@ -298,13 +304,13 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		useWhen: 'Use for one turn of a branching conversation; chain several to build multi-turn chat.',
 		inputs: [
 			port('parent', 'text', 'The previous turn, continuing the conversation.'),
-			port('attach', 'image', 'An image attached to this turn.'),
-			port('model', 'text', 'Overrides the model field when wired.'),
+			port('attach', 'any', 'An image attached to this turn.'),
+			port('model', 'model', 'Overrides the model field when wired.'),
 			port('system', 'text', 'Overrides the system prompt field when wired.'),
 			port('params', 'text', 'JSON overrides for temperature/maxTokens/thinking.'),
 		],
 		outputs: [port('output', 'text', 'The assistant’s reply for this turn.')],
-		fields: [field('userMessage', 'longtext', 'Message', 'What the user says in this turn.'), ...llmFields()],
+		fields: [field('userMessage', 'longtext', 'Message', 'What the user says in this turn. Supports {{vars}} (own var:<name> input ports).'), ...llmFields()],
 		assistant: {
 			role: 'You write the user message for this turn of the conversation.',
 			chips: ['Ask it to…', 'Follow up about…'],
@@ -340,11 +346,13 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('jev'),
 		purpose: purpose('jev'),
 		useWhen: 'Use to turn free-form input into a yes/no, a choice among options, or a score, with probabilities.',
-		inputs: [port('context', 'text', 'Background text the question is about.'), port('question', 'text', 'Overrides the question field when wired.'), port('input', 'any', 'Alternate input, e.g. an image to judge.')],
+		inputs: [port('context', 'any', 'Background text the question is about.'), port('question', 'text', 'Overrides the question field when wired.'), port('input', 'any', 'Alternate input, e.g. an image to judge.')],
 		outputs: [
 			port('output', 'text', 'The chosen answer (label or score).'),
 			port('probs', 'text', 'Probabilities per option, as JSON.'),
 			port('final', 'text', 'Only emits on the winning branch (yes/no kind); use to gate downstream nodes.'),
+			port('yes', 'any', 'Kind: yes/no only (the default) — the input passed through when the answer is yes; the other branch gets nothing.'),
+			port('no', 'any', 'Kind: yes/no only (the default) — the input passed through when the answer is no; the other branch gets nothing.'),
 		],
 		fields: [
 			field('kind', 'enum', 'Kind', 'Yes/no, multiple choice, or a score.', JEV_KIND_IDS),
@@ -368,10 +376,10 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			port('value', 'any', 'The value to route; defaults to the decision text itself when not wired.'),
 		],
 		outputs: [
-			port('yes', 'any', 'Yes/no mode: emits when P(yes) is at or above the threshold.'),
-			port('no', 'any', 'Yes/no mode: emits when P(yes) is below the threshold.'),
-			port('unsure', 'any', 'Yes/no mode: emits instead of yes/no when within `margin` of the threshold (off when margin is 0).'),
-			port('other', 'any', 'Choice mode: emits when the decision matches none of the configured options.'),
+			port('yes', 'any', 'Yes/no mode (default): emits when P(yes) is at or above the threshold.'),
+			port('no', 'any', 'Yes/no mode (default): emits when P(yes) is below the threshold.'),
+			port('unsure', 'any', 'Yes/no mode (default): emits instead of yes/no when within `margin` of the threshold (off when margin is 0).'),
+			port('other', 'any', 'Choice mode only: emits when the decision matches none of the configured options.'),
 		],
 		fields: [
 			field('mode', 'enum', 'Mode', 'Yes/no, choice, or score — or auto, which follows the shape of the decision.', ['auto', 'noul', 'choice', 'score']),
@@ -383,6 +391,11 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		assistant: {
 			role: 'You set the mode (or leave it on auto) and its own fields (threshold/margin, options, or bands) so the right branch fires.',
 			chips: ['Route by yes/no at 0.5', 'One output per option', 'Low/mid/high score bands'],
+			rules: [
+				'Choice mode\'s real outputs are not "yes"/"no"/"other" alone: it is one `opt:<slug-of-the-option-text>` port per line of Options (lower-cased, non-letters/digits to "_"), plus the fixed "other" — e.g. options "Short\\nFormal" gives `opt:short`, `opt:formal`, `other`. Wire by that slug.',
+				'Score mode\'s outputs are one `band:<slug-of-the-band-name>` port per line of Bands, the same slug rule.',
+				'To route the original input (not just the decision label) through the chosen branch, wire it into this card\'s own `value` input too — each chosen output then carries `value`, not the decision text.',
+			],
 		},
 	},
 	load_image: {
@@ -391,7 +404,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('load_image'),
 		purpose: purpose('load_image'),
 		useWhen: 'Use to bring an image onto the canvas from a URL, a paste, or a drag-and-drop.',
-		inputs: [],
+		inputs: [port('url', 'text', 'Overrides the Image URL field when wired — a data URL, an absolute http(s) URL, or a same-origin path.')],
 		outputs: [port('output', 'image', 'The loaded image.')],
 		fields: [
 			field('imageUrl', 'url', 'Image URL', 'The image to load (URL or data URL).'),
@@ -502,7 +515,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		purpose: purpose('image_tool'),
 		useWhen: 'Use for a single-image utility: info, format conversion, pixelate, border, round corners, watermark, pad to square, data URL, film look.',
 		inputs: [port('image', 'image', 'The image to process.')],
-		outputs: [port('output', 'image', 'The processed image (most tools); text tools write to the card instead.')],
+		outputs: [port('output', 'any', 'The processed image (most tools); the "info" tool\'s own text instead.')],
 		fields: [
 			field('tool', 'enum', 'Tool', 'Which image tool to run.', IMAGE_TOOL_IDS),
 			field('a', 'text', 'Param A', 'First parameter the chosen tool needs.'),
@@ -541,13 +554,13 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		inputs: [
 			port('prompt', 'text', 'Overrides the prompt field when wired.'),
 			port('image', 'image', 'A reference image for image-to-image.'),
-			port('model', 'text', 'Overrides the model field when wired.'),
+			port('model', 'model', 'Overrides the model field when wired.'),
 			port('system', 'text', 'Overrides the system prompt field when wired.'),
 			port('params', 'text', 'JSON overrides for temperature/maxTokens/thinking.'),
 		],
 		outputs: [port('output', 'image', 'The first generated image.'), port('images', 'text', 'All generated image URLs, as JSON.')],
 		fields: [
-			field('prompt', 'longtext', 'Prompt', 'What to generate.'),
+			field('prompt', 'longtext', 'Prompt', 'What to generate. Supports {{vars}} (own var:<name> input ports).'),
 			field('n', 'number', 'Count', 'How many images to generate (1, 2 or 4).'),
 			field('size', 'enum', 'Size', 'Output image size.', ['1024x1024', '1536x1024', '1024x1536', 'auto']),
 			field('negative', 'text', 'Negative prompt', 'What to avoid showing.'),
@@ -580,17 +593,23 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('random'),
 		purpose: purpose('random'),
 		useWhen: 'Use to pick a random number, or a random item from a list.',
-		inputs: [port('list', 'text', 'Overrides the list field when wired.'), port('a', 'text', 'Overrides the low bound (number mode).'), port('b', 'text', 'Overrides the high bound (number mode).')],
+		inputs: [port('list', 'any', 'Overrides the list field when wired.'), port('a', 'any', 'Overrides the low bound (number mode).'), port('b', 'any', 'Overrides the high bound (number mode).')],
 		outputs: [port('output', 'text', 'The random result.')],
 		fields: [
-			field('mode', 'enum', 'Mode', 'What to randomize.', ['number', 'pick', 'shuffle']),
-			field('a', 'text', 'Low / n/a', 'Low bound for number mode.'),
-			field('b', 'text', 'High / n/a', 'High bound for number mode.'),
+			field(
+				'mode',
+				'enum',
+				'Mode',
+				'What to randomize: a number in a range, one/several picks from the list, a shuffled list, a coin flip (heads/tails), a dice roll (1..sides, "a" = sides, default 6), a UUID, a password (length = "a", default 16), or a hex colour.',
+				['number', 'pick', 'shuffle', 'coin', 'dice', 'uuid', 'password', 'color']
+			),
+			field('a', 'text', 'Low / n/a', 'Low bound (number mode); dice sides (dice mode); password length (password mode); unused otherwise.'),
+			field('b', 'text', 'High / n/a', 'High bound for number mode; unused otherwise.'),
 			field('list', 'longtext', 'List', 'One item per line, for pick/shuffle mode.'),
 		],
 		assistant: {
 			role: 'You set the mode and its parameters (range, or list).',
-			chips: ['Random number 1-100', 'Pick one of…', 'Shuffle this list'],
+			chips: ['Random number 1-100', 'Pick one of…', 'Shuffle this list', 'Flip a coin', 'Roll a 20-sided die', 'Generate a UUID', 'A 16-character password'],
 		},
 	},
 	if: {
@@ -599,7 +618,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('if'),
 		purpose: purpose('if'),
 		useWhen: 'Use to route a value down one of two branches based on a condition.',
-		inputs: [port('input', 'any', 'The value to test and pass through.'), port('test', 'text', 'Overrides the operand field when wired.')],
+		inputs: [port('input', 'any', 'The value to test and pass through.'), port('test', 'any', 'Overrides the operand field when wired.')],
 		outputs: [port('then', 'any', 'Emits the input when the condition is true.'), port('else', 'any', 'Emits the input when the condition is false.')],
 		fields: [
 			field('condition', 'enum', 'Condition', 'How the input is compared to the operand.', ['truthy', 'empty', 'equals', 'not_equals', 'contains', 'starts', 'ends', 'regex', 'gt', 'gte', 'lt', 'lte', 'is_image', 'is_json']),
@@ -630,7 +649,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('for_each'),
 		purpose: purpose('for_each'),
 		useWhen: 'Use to run the rest of the graph once per item in a list (or once per row of a table), then collect the results — as lines, joined text, a JSON array, or added back onto the table as a new column.',
-		inputs: [port('list', 'text', 'The list (or table) to iterate; split by the separator, or by rows for "table rows". Not used in "range" mode.'), port('result', 'any', 'Wire the per-item result back in here.')],
+		inputs: [port('list', 'any', 'The list (or table) to iterate; split by the separator, or by rows for "table rows". Not used in "range" mode.'), port('result', 'any', 'Wire the per-item result back in here.')],
 		outputs: [port('item', 'text', 'The current item (for "table rows", the row as a JSON object); "table rows" also has one `row:<column>` output per column.'), port('output', 'text', 'The collected results, per "Collect".')],
 		fields: [
 			field('split', 'enum', 'Split by', 'How the list field is split into items; "range" loops over whole numbers, "rows" loops over a table\'s rows (header kept).', ['lines', 'separator', 'paragraphs', 'json', 'regex', 'range', 'rows']),
@@ -646,6 +665,10 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		assistant: {
 			role: 'You set how the list is split and how the results are collected back.',
 			chips: ['One per line', 'Comma separated', 'Numbers 1 to 10', 'Loop over table rows, add a column'],
+			rules: [
+				'For a CSV/table input (e.g. rows from Read from or Table view), use Split: "table rows" and Collect: "table" — not "lines", which treats the header as the first item.',
+				'Split: "table rows" also gives one `row:<column>` output per column of the table (lower-cased, non-letters/digits to "_"), each the current row\'s value for that column — wire a specific column straight into the loop body instead of parsing `item`\'s JSON.',
+			],
 		},
 	},
 	router: {
@@ -669,24 +692,32 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('code'),
 		purpose: purpose('code'),
 		useWhen: 'Use when no other node does the transform: a small custom function with your own inputs/outputs.',
-		inputs: [port('a', 'any', 'Input 1.'), port('b', 'any', 'Input 2.'), port('c', 'any', 'Input 3.'), port('d', 'any', 'Input 4.')],
-		outputs: [port('output', 'any', 'Output 1.'), port('out2', 'any', 'Output 2.'), port('out3', 'any', 'Output 3.')],
+		// Real port ids are `in1`..`in20` and `output`,`out2`..`out20` — stable regardless of the
+		// variable names in code — sized by the `inputCount`/`outputCount` fields (1-20 each;
+		// default 2 inputs, 1 output). Only the default-size ports are listed here; wiring
+		// `in3`..`in20`/`out2`..`out20` is still valid once the node's own Input/Output count is
+		// raised (see `DYNAMIC_PORTS`).
+		inputs: [port('in1', 'any', 'Input 1 (variable name set by Input names, default "a").'), port('in2', 'any', 'Input 2 (default "b").')],
+		outputs: [port('output', 'any', 'Output 1 (variable name set by Output names, default "output").')],
 		fields: [
 			field('lang', 'enum', 'Language', 'The language this code runs in.', ['ts', 'js', 'py']),
 			field('code', 'code', 'Code', 'The function body: read the named inputs, return the named outputs.'),
-			field('inputCount', 'number', 'Input count', 'How many input ports this node has (1-4).'),
-			field('outputCount', 'number', 'Output count', 'How many output ports this node has (1-3).'),
+			field('inputCount', 'number', 'Input count', 'How many input ports this node has (1-20): in1, in2, …'),
+			field('outputCount', 'number', 'Output count', 'How many output ports this node has (1-20): output, out2, …'),
 			// wire: false — the card stores these as a `string[]` (one name per port), not the
 			// comma-separated string this spec describes for the AI; wiring a plain text value in
 			// would corrupt that array. Revisit if/when the AI-facing shape and the stored shape
 			// are unified.
-			field('inputNames', 'text', 'Input names', 'Comma-separated names for the input ports, read as arguments in code.', undefined, undefined, false),
-			field('outputNames', 'text', 'Output names', 'Comma-separated names for the output ports, returned from code.', undefined, undefined, false),
+			field('inputNames', 'text', 'Input names', 'Comma-separated variable names for the input ports (in1, in2, …), read as arguments in code; default a, b, c…', undefined, undefined, false),
+			field('outputNames', 'text', 'Output names', 'Comma-separated variable names for the output ports (output, out2, …), returned from code; default matches the port id.', undefined, undefined, false),
 		],
 		assistant: {
 			role: 'You write the code for this node: a small TypeScript/JavaScript/Python function matching the input/output count.',
 			chips: ['Parse this JSON and pick a field', 'Compute…', 'Combine the two inputs'],
-			rules: ['The code must only use its declared inputs and return its declared outputs; no network or file access.'],
+			rules: [
+				'The code must only use its declared inputs and return its declared outputs; no network or file access.',
+				'Wire ports are `in1`, `in2`, … and `output`, `out2`, … (never `a`/`b`/`c`/`d`), sized by Input count/Output count; the code itself reads/returns the variable names from Input names/Output names (default a, b, c… / output, out2…).',
+			],
 		},
 	},
 	subgraph: {
@@ -875,7 +906,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('raw_model'),
 		purpose: purpose('raw_model'),
 		useWhen: 'Use for full manual control of a model call: custom endpoint, model id, system prompt, temperature, thinking.',
-		inputs: [port('prompt', 'text', 'The prompt to send.'), port('model', 'text', 'Overrides the model field when wired.')],
+		inputs: [port('prompt', 'text', 'The prompt to send.'), port('model', 'model', 'Overrides the model field when wired.')],
 		outputs: [port('output', 'text', 'The model’s reply.')],
 		fields: [
 			field('url', 'url', 'Endpoint', 'OpenAI-compatible chat completions URL.'),
@@ -1009,7 +1040,10 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		assistant: {
 			role: 'You write the task, pick a model with the agent capability, and choose which search providers, MCP servers and skills it may use.',
 			chips: ['Research X and summarize it', 'Look up the current price of…', 'Use the configured MCP server to…'],
-			rules: ['Only choose search/MCP/skill ids that are actually configured; leave the lists empty otherwise.'],
+			rules: [
+				'Only choose search/MCP/skill ids that are actually configured; leave the lists empty otherwise.',
+				'Each `{{name}}` written in Task gets its own `var:<name>` input port (same convention as Web search/Generate text) — wire a value into it instead of editing Task at run time.',
+			],
 		},
 	},
 	table_view: {
@@ -1063,7 +1097,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		title: title('html_form'),
 		group: groupOf('html_form'),
 		purpose: purpose('html_form'),
-		useWhen: 'Use for option cards, buttons, or a form that need a user click or submit before the pipeline continues — e.g. an LLM writes "3 option cards as HTML", this card shows them and waits, then outputs the chosen value as JSON for the next card (an If, a router, …).',
+		useWhen: 'Use for option cards, buttons, or a form that need a user click or submit before the pipeline continues — e.g. an LLM writes "3 option cards as HTML", this card shows them and waits, then outputs the chosen value for the next card (an If or a Decision switch).',
 		inputs: [
 			port('text', 'text', 'Buttons/options or a <form> — a fragment, a full page, or LLM output with fenced ```html/```css/```js blocks.'),
 			port('html', 'text', 'Overrides the html fenced block (or the Text field) when wired.'),
@@ -1088,8 +1122,8 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			chips: ['Make 3 option cards as HTML', 'Turn this into clickable choices', 'Build a short form'],
 			rules: [
 				'Leave "Allow network" off unless the user explicitly asks for network access.',
-				'A clickable option needs a `data-value` (or `value`) attribute — that becomes the JSON `value` a downstream If/router can test.',
-				'Route the choice by wiring `value` (not `json`, the whole HTML page) into a Decision switch\'s `decision` input.',
+				'A clickable option needs a `data-value` (or `value`) attribute — that becomes the single `value` a downstream card can test.',
+				'`output` is the assembled HTML page — never wire it into anything expecting the user\'s answer. For one value (route a choice), wire `value` into a Decision switch\'s `decision` input. For several form fields, wire `json` into a JSON fields card instead.',
 			],
 		},
 	},
@@ -1159,11 +1193,10 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		group: groupOf('merge'),
 		purpose: purpose('merge'),
 		useWhen: 'Use after an If or Decision switch to recombine its branches into one value downstream — e.g. one Save or Output after several possible prompts, one per choice.',
+		// in1/in2 always exist; in3.. appear once wired (DYNAMIC_PORTS) — never a fixed count.
 		inputs: [
 			port('in1', 'any', 'Branch 1.'),
 			port('in2', 'any', 'Branch 2.'),
-			port('in3', 'any', 'Branch 3.'),
-			port('in4', 'any', 'Branch 4.'),
 		],
 		outputs: [port('output', 'any', 'Whichever branch(es) delivered, combined per Mode.')],
 		fields: [
@@ -1203,6 +1236,60 @@ export function hasSpecForEveryPort(): boolean {
 	return Object.keys(NODE_PORTS).every((type) => !!NODE_SPECS[type])
 }
 
+// ---------------------------------------------------------------------------
+// WP38 (GAPS-08/R): dynamic ports — ids that depend on the node's own content (an option
+// list, a paths field, a column set, a port count), so they cannot be literal entries in
+// NODE_SPECS.inputs/outputs the way `decision`/`output`/… are. `shared/aiPlan.ts` uses this
+// list to accept a plan wire into/out of one of these instead of rejecting it as "not a port
+// of this node"; `tests/e2e/ai-catalog-ports.spec.ts` uses it to check the real node
+// definitions (`getPorts()`) agree with what's declared here, for both the default state and a
+// representative variant of each dynamic family.
+// ---------------------------------------------------------------------------
+export interface DynamicPortRule {
+	type: string
+	direction: 'in' | 'out'
+	/** A real port id on this node matches when it starts with this prefix. */
+	prefix: string
+	dataType: string
+	note: string
+}
+
+export const DYNAMIC_PORTS: DynamicPortRule[] = [
+	// {{name}} template variables (shared/templateVars.ts): one `var:<name>` input port per
+	// distinct {{name}} found in the node's own template-ish field(s) — only on the types that
+	// actually fill a template; wiring var:* into any other type is rejected.
+	{ type: 'agent', direction: 'in', prefix: 'var:', dataType: 'any', note: 'One per {{name}} in Task.' },
+	{ type: 'chat', direction: 'in', prefix: 'var:', dataType: 'any', note: 'One per {{name}} in Message or System prompt.' },
+	{ type: 'generate_text', direction: 'in', prefix: 'var:', dataType: 'any', note: 'One per {{name}} in Prompt or System prompt.' },
+	{ type: 'image_gen', direction: 'in', prefix: 'var:', dataType: 'any', note: 'One per {{name}} in Prompt.' },
+	{ type: 'raw_model', direction: 'in', prefix: 'var:', dataType: 'any', note: 'One per {{name}} in System prompt.' },
+	{ type: 'template', direction: 'in', prefix: 'var:', dataType: 'any', note: 'One per {{name}} in Template.' },
+	{ type: 'text_ai', direction: 'in', prefix: 'var:', dataType: 'any', note: 'One per {{name}} in Prompt override, Extra instruction, or System prompt.' },
+	{ type: 'web_search', direction: 'in', prefix: 'var:', dataType: 'any', note: 'One per {{name}} in Query.' },
+	// Decision switch: choice mode outputs one `opt:<slug>` per line of Options (plus the fixed
+	// "other"); score mode outputs one `band:<slug>` per line of Bands. Slug: lower-case,
+	// non-alphanumerics to "_" (shared/decisionRoute.ts's slugOption).
+	{ type: 'decision_switch', direction: 'out', prefix: 'opt:', dataType: 'any', note: 'Choice mode: one per line of Options.' },
+	{ type: 'decision_switch', direction: 'out', prefix: 'band:', dataType: 'any', note: 'Score mode: one per line of Bands.' },
+	// JSON fields: one `path:<slug>` output per line of Paths (shared/jsonFields.ts's slugPath).
+	{ type: 'json_fields', direction: 'out', prefix: 'path:', dataType: 'text', note: 'One per line of Paths.' },
+	// For each (Split: table rows): one `row:<column>` output per column of the table.
+	{ type: 'for_each', direction: 'out', prefix: 'row:', dataType: 'text', note: 'Split: table rows — one per column of the table.' },
+	// Code: in1..in20 / output, out2..out20, sized by Input count / Output count (default:
+	// in1, in2, output). `codeInputId`/`codeOutputId` in shared/codePorts.ts.
+	{ type: 'code', direction: 'in', prefix: 'in', dataType: 'any', note: 'in1..in20, sized by Input count.' },
+	{ type: 'code', direction: 'out', prefix: 'out', dataType: 'any', note: 'output, out2..out20, sized by Output count.' },
+	// Merge: in1, in2 always exist; in3..in20 appear automatically once wired — one spare port
+	// past the highest one connected, with no count field (shared/.../MergeNode.tsx's
+	// mergeInputCount). Wire a 3rd+ branch directly into in3/in4/…
+	{ type: 'merge', direction: 'in', prefix: 'in', dataType: 'any', note: 'in3..in20 appear once wired (in1/in2 always exist).' },
+]
+
+/** The dynamic-port rule a real or planned port id matches for this node type, if any. */
+export function findDynamicPort(type: string, portId: string, direction: 'in' | 'out'): DynamicPortRule | undefined {
+	return DYNAMIC_PORTS.find((rule) => rule.type === type && rule.direction === direction && portId.startsWith(rule.prefix))
+}
+
 function clamp(text: string, max = 400): string {
 	return text.length > max ? text.slice(0, max - 1) + '…' : text
 }
@@ -1229,6 +1316,11 @@ export function nodeSpecText(type: string): string {
 		'Fields:',
 		...(spec.fields.length ? spec.fields.map(fieldLine) : ['    none']),
 	]
+	const dynamic = DYNAMIC_PORTS.filter((rule) => rule.type === type)
+	if (dynamic.length) {
+		lines.push('Dynamic ports (not in the lists above; valid anyway, named by content):')
+		for (const rule of dynamic) lines.push(`    - ${rule.direction} \`${rule.prefix}*\` (${rule.dataType}): ${rule.note}`)
+	}
 	if (type === 'table') {
 		lines.push('Operations (op) and their own parameters:')
 		for (const op of TABLE_OPS) {

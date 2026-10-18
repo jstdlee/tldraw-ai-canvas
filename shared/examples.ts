@@ -145,13 +145,16 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'net_tool', x: 0, y: 0, props: { tool: 'my_ips', target: '' } },
 		{ id: 'b', type: 'output', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
-	step('net-sql', 'Postgres in the browser', 'PGlite runs in the page. The first run loads it. Play runs the SQL.', [
+	// Replaces the old "Postgres in the browser" example (the hidden/superseded `postgres`
+	// type): same PGlite-in-the-page engine, via the real "Database" card (source: Built-in
+	// Postgres).
+	step('database-sql', 'Postgres in the browser', 'PGlite runs in the page. The first run loads it. Play runs the SQL.', [
 		{
 			id: 'a',
-			type: 'postgres',
+			type: 'database',
 			x: 0,
 			y: 0,
-			props: { sql: 'CREATE TABLE IF NOT EXISTS notes (id serial PRIMARY KEY, body text);\nINSERT INTO notes (body) VALUES (\'hello\');\nSELECT * FROM notes;' },
+			props: { source: 'pglite', sql: 'CREATE TABLE IF NOT EXISTS notes (id serial PRIMARY KEY, body text);\nINSERT INTO notes (body) VALUES (\'hello\');\nSELECT * FROM notes;' },
 		},
 		{ id: 'b', type: 'output', x: 520, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
@@ -224,7 +227,7 @@ export const EXAMPLES: CanvasExample[] = [
 	step('logic-code', 'Code node', 'TypeScript, JavaScript, or Python. Python runs in WASM.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'canvas nodes' } },
 		{ id: 'b', type: 'code', x: 460, y: 0, props: { lang: 'ts', inputCount: 1, code: WORD_COUNT } },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'a' }]),
+	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'in1' }]),
 	step('logic-pack', 'Packed node', 'A packed node stands in for a group. Select nodes and use Pack into one node.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Pack me with another node.' } },
 		{ id: 'b', type: 'subgraph', x: 460, y: 0 },
@@ -253,7 +256,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ id: 'gate', type: 'if', x: 0, y: 760, props: { condition: 'gt', operand: '0' } },
 			{ id: 'view', type: 'output', x: 460, y: 760, props: { kind: 'markdown' } },
 			{ id: 'file', type: 'save', x: 920, y: 760, props: { fileName: 'brief.md' } },
-			{ id: 'sql', type: 'postgres', x: 1380, y: 760, props: { sql: "CREATE TABLE IF NOT EXISTS desk (id serial PRIMARY KEY, topic text);\nSELECT 'desk ready' AS status;" } },
+			{ id: 'sql', type: 'database', x: 1380, y: 760, props: { source: 'pglite', sql: "CREATE TABLE IF NOT EXISTS desk (id serial PRIMARY KEY, topic text);\nSELECT 'desk ready' AS status;" } },
 		],
 		wires: [
 			{ from: 'page', fromPort: 'output', to: 'fetch', toPort: 'url' },
@@ -263,11 +266,10 @@ export const EXAMPLES: CanvasExample[] = [
 			{ from: 'summary', fromPort: 'output', to: 'draft', toPort: 'input' },
 			{ from: 'topic', fromPort: 'output', to: 'join', toPort: 'prefix' },
 			{ from: 'draft', fromPort: 'output', to: 'join', toPort: 'main' },
-			{ from: 'join', fromPort: 'output', to: 'count', toPort: 'a' },
+			{ from: 'join', fromPort: 'output', to: 'count', toPort: 'in1' },
 			{ from: 'count', fromPort: 'output', to: 'gate', toPort: 'input' },
 			{ from: 'gate', fromPort: 'then', to: 'view', toPort: 'input' },
 			{ from: 'gate', fromPort: 'then', to: 'file', toPort: 'input' },
-			{ from: 'topic', fromPort: 'output', to: 'sql', toPort: 'input' },
 		],
 	},
 	step('table-columns', 'Pick table columns', 'A CSV prompt feeds DataPipe. Keep columns keeps name and score.', [
@@ -330,8 +332,11 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' },
 		{ from: 'b', fromPort: 'output', to: 'c', toPort: 'input' },
 	]),
-	step('url-summary', 'Summarize a page', 'Type www.wikipedia.org with no https. URL in adds it, fetches the page, and AI text summarizes it.', [
-		{ id: 'a', type: 'url_in', x: 0, y: 0, props: { url: 'www.wikipedia.org', fetchBody: true } },
+	// Replaces the old "Summarize a page" example (the hidden/superseded `url_in` type): "Read
+	// from" takes over the same bare-domain convenience (Source: url normalizes
+	// www.example.com, no https needed) and fetches the page text.
+	step('url-summary', 'Summarize a page', 'Type www.wikipedia.org with no https. Read from fetches the page, and AI text summarizes it.', [
+		{ id: 'a', type: 'file_in', x: 0, y: 0, props: { source: 'url', url: 'www.wikipedia.org', asText: 'text' } },
 		{ id: 'b', type: 'text_ai', x: 460, y: 0, props: { operation: 'summarize' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
 	step('web-search', 'Search the web', 'A prompt feeds Web search. Add a key in AI providers → Search providers (or on the card) first.', [
@@ -369,10 +374,6 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'A watercolor fox in a forest' } },
 		{ id: 'b', type: 'image_gen', x: 460, y: 0 },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'prompt' }]),
-	step('url-in', 'A web address', 'URL in accepts www.example.com without https. Turn on Fetch to send the page text.', [
-		{ id: 'a', type: 'url_in', x: 0, y: 0, props: { url: 'www.example.com', fetchBody: true } },
-		{ id: 'b', type: 'text_ai', x: 460, y: 0, props: { operation: 'summarize' } },
-	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
 	step('raw-model', 'Raw model call', 'Every setting is on the card: URL, model id, key, system prompt, temperature, thinking, max tokens.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Say hello in one line.' } },
 		{ id: 'b', type: 'raw_model', x: 460, y: 0, props: { url: 'http://127.0.0.1:11434/v1', model: 'llama3.2' } },
@@ -438,7 +439,7 @@ export const EXAMPLES: CanvasExample[] = [
 			{ id: 'wait', type: 'sleep', x: 1500, y: 420, props: { ms: 100 } },
 			{ id: 'view', type: 'output', x: 0, y: 840 },
 			{ id: 'file', type: 'save', x: 460, y: 840, props: { fileName: 'scores.csv' } },
-			{ id: 'sql', type: 'postgres', x: 980, y: 840, props: { sql: "SELECT '$input' AS src;" } },
+			{ id: 'sql', type: 'database', x: 980, y: 840, props: { source: 'pglite', sql: "SELECT '$input' AS src;" } },
 			{ id: 'lite', type: 'database', x: 1500, y: 840 },
 		],
 		wires: [
@@ -451,20 +452,18 @@ export const EXAMPLES: CanvasExample[] = [
 			{ from: 'grep', fromPort: 'output', to: 'wait', toPort: 'input' },
 			{ from: 'wait', fromPort: 'output', to: 'view', toPort: 'input' },
 			{ from: 'join', fromPort: 'output', to: 'file', toPort: 'input' },
-			{ from: 'csv', fromPort: 'output', to: 'sql', toPort: 'input' },
 		],
 	},
 	{
 		id: 'media-desk',
 		title: 'Media and models desk',
-		blurb: 'A page address feeds video and HTTP. The body waits, then a text tool counts it. A file hash and a URL node sit beside a raw model call and a summary.',
+		blurb: 'A page address feeds video and HTTP. The body waits, then a text tool counts it. A file hash sits beside a raw model call and a summary.',
 		nodes: [
 			{ id: 'url', type: 'prompt', x: 0, y: 0, props: { text: 'https://example.com' } },
 			{ id: 'clip', type: 'video', x: 460, y: 0, props: { autoplay: false } },
 			{ id: 'fetch', type: 'http', x: 980, y: 0, props: { method: 'GET', extractText: true } },
 			{ id: 'wait', type: 'sleep', x: 1500, y: 0, props: { ms: 100 } },
 			{ id: 'lines', type: 'text_tool', x: 0, y: 420, props: { op: 'count' } },
-			{ id: 'site', type: 'url_in', x: 460, y: 420, props: { url: 'www.example.com', fetchBody: false } },
 			{ id: 'file', type: 'file_in', x: 980, y: 420, props: { source: 'url', url: 'https://www.example.com', asText: 'text' } },
 			{ id: 'task', type: 'prompt', x: 1500, y: 420, props: { text: 'Say hello in one line.' } },
 			{ id: 'sum', type: 'text_ai', x: 0, y: 840, props: { operation: 'summarize' } },
@@ -500,6 +499,170 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'list', type: 'prompt', x: 0, y: 0, props: { text: '/examples/girl-base.jpg\n/examples/girl-coat.jpg\n/examples/girl-dress.jpg' } },
 		{ id: 'grid', type: 'gallery', x: 460, y: 0, props: { columns: 3 } },
 	], [{ from: 'list', fromPort: 'output', to: 'grid', toPort: 'images' }]),
+
+	// WP38 (GAPS-19): 8 examples combining the new cards — each is one of the 10 pipelines from
+	// the 2026-10-18 gaps review (§3.2) that now works end to end.
+	step(
+		'csv-rows-ai-table',
+		'Summarize each CSV row with AI',
+		'For each row of the CSV (Split: "table rows"), AI text summarizes the review in one sentence; Collect: "table" adds it back as a new column.',
+		[
+			{ id: 'csv', type: 'prompt', x: 0, y: 0, props: { text: 'id,product,review\n1,Mug,great mug fast shipping\n2,Lamp,arrived broken very disappointed' } },
+			{ id: 'loop', type: 'for_each', x: 540, y: 0, props: { split: 'rows', collect: 'table', resultColumn: 'summary' } },
+			{ id: 'ai', type: 'text_ai', x: 1080, y: 0, props: { operation: 'summarize', option: '1 short sentence' } },
+			{ id: 'out', type: 'table_view', x: 1620, y: 0 },
+		],
+		[
+			{ from: 'csv', fromPort: 'output', to: 'loop', toPort: 'list' },
+			{ from: 'loop', fromPort: 'item', to: 'ai', toPort: 'input' },
+			{ from: 'ai', fromPort: 'output', to: 'loop', toPort: 'result' },
+			{ from: 'loop', fromPort: 'output', to: 'out', toPort: 'data' },
+		]
+	),
+	step(
+		'agent-extract-chart',
+		'Agent research to a chart',
+		'The agent answers with prose plus a Markdown table; Extract from text pulls just the table out (find: table), then Chart draws it — no detour card needed.',
+		[
+			{ id: 'agent', type: 'agent', x: 0, y: 0, props: { task: 'Research the top 3 programming languages by popularity. Answer with a short Markdown table of columns language and share (percent).' } },
+			{ id: 'ext', type: 'extract', x: 460, y: 0, props: { find: 'table' } },
+			{ id: 'chart', type: 'chart', x: 920, y: 0, props: { kind: 'bar', xCol: 'language', yCol: 'share' } },
+		],
+		[
+			{ from: 'agent', fromPort: 'output', to: 'ext', toPort: 'text' },
+			{ from: 'ext', fromPort: 'table', to: 'chart', toPort: 'data' },
+		]
+	),
+	step(
+		'form-switch-merge',
+		'Pick a style, rewrite, merge',
+		'HTML form\'s "value" (not "output") routes into Decision switch\'s choice mode; the chosen `opt:<option>` branch rewrites the text, and Merge combines whichever branch ran into one result.',
+		[
+			{ id: 'src', type: 'prompt', x: 0, y: 0, props: { text: 'Our new notes app syncs offline.' } },
+			{ id: 'form', type: 'html_form', x: 0, y: 500, props: { text: '<button data-value="short">Short</button> <button data-value="formal">Formal</button> <button data-value="funny">Funny</button>' } },
+			{ id: 'route', type: 'decision_switch', x: 580, y: 250, props: { mode: 'choice', options: 'short\nformal\nfunny' } },
+			{ id: 'short', type: 'text_ai', x: 1200, y: -500, props: { operation: 'rewrite', option: 'short and punchy' } },
+			{ id: 'formal', type: 'text_ai', x: 1200, y: 250, props: { operation: 'rewrite', option: 'formal and professional' } },
+			{ id: 'funny', type: 'text_ai', x: 1200, y: 1000, props: { operation: 'rewrite', option: 'funny and playful' } },
+			{ id: 'join', type: 'merge', x: 1820, y: 250, props: { mode: 'first' } },
+			{ id: 'out', type: 'output', x: 2360, y: 250 },
+		],
+		[
+			{ from: 'form', fromPort: 'value', to: 'route', toPort: 'decision' },
+			{ from: 'src', fromPort: 'output', to: 'route', toPort: 'value' },
+			{ from: 'route', fromPort: 'opt:short', to: 'short', toPort: 'input' },
+			{ from: 'route', fromPort: 'opt:formal', to: 'formal', toPort: 'input' },
+			{ from: 'route', fromPort: 'opt:funny', to: 'funny', toPort: 'input' },
+			{ from: 'short', fromPort: 'output', to: 'join', toPort: 'in1' },
+			{ from: 'formal', fromPort: 'output', to: 'join', toPort: 'in2' },
+			{ from: 'funny', fromPort: 'output', to: 'join', toPort: 'in3' },
+			{ from: 'join', fromPort: 'output', to: 'out', toPort: 'input' },
+		]
+	),
+	step(
+		'sql-template-report',
+		'SQL summary to an HTML report',
+		'Database groups the sales CSV by region; Template builds one HTML report from the table and the chart image ({{name|table}}, {{name}} for an image); HTML preview renders it, Save writes the file.',
+		[
+			{ id: 'csv', type: 'prompt', x: 0, y: 0, props: { text: 'region,month,revenue\nEU,Jan,100\nUS,Jan,150\nEU,Feb,120' } },
+			{
+				id: 'db',
+				type: 'database',
+				x: 540,
+				y: 0,
+				props: { source: 'pglite', targetTable: 'sales', loadMode: 'replace', sql: 'select region, sum(revenue) as total from sales group by region' },
+			},
+			{ id: 'bars', type: 'chart', x: 1080, y: 0, props: { kind: 'bar', xCol: 'region', yCol: 'total' } },
+			{ id: 'rpt', type: 'template', x: 1620, y: 0, props: { template: '<h1>Sales report</h1>{{table|table}}<img src="{{chart}}">', escape: 'none' } },
+			{ id: 'prev', type: 'html_preview', x: 2160, y: 0 },
+			{ id: 'save', type: 'save', x: 2700, y: 0, props: { fileName: 'sales-report.html', mode: 'new' } },
+		],
+		[
+			{ from: 'csv', fromPort: 'output', to: 'db', toPort: 'rows' },
+			{ from: 'db', fromPort: 'output', to: 'bars', toPort: 'data' },
+			{ from: 'db', fromPort: 'output', to: 'rpt', toPort: 'var:table' },
+			{ from: 'bars', fromPort: 'output', to: 'rpt', toPort: 'var:chart' },
+			{ from: 'rpt', fromPort: 'output', to: 'prev', toPort: 'text' },
+			{ from: 'prev', fromPort: 'output', to: 'save', toPort: 'input' },
+		]
+	),
+	step(
+		'links-foreach-summary',
+		'Links to a summary table',
+		'Text tools "Extract links" turns the page\'s links into a url/text table; For each "table rows" visits each one (wiring the row\'s own `row:text` column), AI text rewrites it, and Collect: "table" builds the summary table.',
+		[
+			{ id: 'page', type: 'prompt', x: 0, y: 0, props: { text: '<a href="https://example.com/docs">Our complete setup guide for new teams</a> <a href="/blog/post-1">Why we went local-first this year</a>' } },
+			{ id: 'base', type: 'prompt', x: 0, y: 400, props: { text: 'https://example.com' } },
+			{ id: 'links', type: 'text_tool', x: 540, y: 0, props: { op: 'extract_links', a: 'all' } },
+			{ id: 'loop', type: 'for_each', x: 1080, y: 0, props: { split: 'rows', collect: 'table', resultColumn: 'summary' } },
+			{ id: 'ai', type: 'text_ai', x: 1620, y: 0, props: { operation: 'rewrite', option: 'as a short, friendly one-line description (max 10 words)' } },
+			{ id: 'out', type: 'table_view', x: 2160, y: 0 },
+		],
+		[
+			{ from: 'page', fromPort: 'output', to: 'links', toPort: 'input' },
+			{ from: 'base', fromPort: 'output', to: 'links', toPort: 'input2' },
+			{ from: 'links', fromPort: 'output', to: 'loop', toPort: 'list' },
+			{ from: 'loop', fromPort: 'row:text', to: 'ai', toPort: 'input' },
+			{ from: 'ai', fromPort: 'output', to: 'loop', toPort: 'result' },
+			{ from: 'loop', fromPort: 'output', to: 'out', toPort: 'data' },
+		]
+	),
+	step(
+		'search-table-chart',
+		'Search results to a chart',
+		'Web search\'s `results` (a JSON array) feeds DataPipe directly — no converter needed; a formula column (`len(snippet)`) gives Chart something numeric to plot.',
+		[
+			{ id: 'q', type: 'prompt', x: 0, y: 0, props: { text: 'local-first sync engines' } },
+			{ id: 'search', type: 'web_search', x: 460, y: 0, props: { provider: 'exa', count: 4 } },
+			{ id: 'pipe', type: 'table', x: 920, y: 0, props: { op: 'newcol', expr: 'len(snippet)', name: 'snippetLen' } },
+			{ id: 'bars', type: 'chart', x: 1380, y: 0, props: { kind: 'bar', xCol: 'title', yCol: 'snippetLen' } },
+		],
+		[
+			{ from: 'q', fromPort: 'output', to: 'search', toPort: 'query' },
+			{ from: 'search', fromPort: 'results', to: 'pipe', toPort: 'data' },
+			{ from: 'pipe', fromPort: 'output', to: 'bars', toPort: 'data' },
+		]
+	),
+	step(
+		'jev-switch-merge',
+		'JEV gate to one of two replies',
+		'JEV\'s own `yes`/`no` pass-through ports (not just probs) gate the branch directly; Merge combines the apology or upsell reply, whichever ran, into one Output.',
+		[
+			{ id: 'msg', type: 'prompt', x: 0, y: 0, props: { text: 'I am furious, my order never arrived and nobody replies to my emails!' } },
+			{ id: 'judge', type: 'jev', x: 540, y: 0, props: { question: 'Is the customer angry?' } },
+			{ id: 'apology', type: 'text_ai', x: 1160, y: -500, props: { operation: 'rewrite', option: 'as an empathetic apology offering a refund' } },
+			{ id: 'upsell', type: 'text_ai', x: 1160, y: 500, props: { operation: 'rewrite', option: 'as a friendly upsell for a premium plan' } },
+			{ id: 'join', type: 'merge', x: 1780, y: 0, props: { mode: 'first' } },
+			{ id: 'out', type: 'output', x: 2320, y: 0 },
+		],
+		[
+			{ from: 'msg', fromPort: 'output', to: 'judge', toPort: 'context' },
+			{ from: 'judge', fromPort: 'yes', to: 'apology', toPort: 'input' },
+			{ from: 'judge', fromPort: 'no', to: 'upsell', toPort: 'input' },
+			{ from: 'apology', fromPort: 'output', to: 'join', toPort: 'in1' },
+			{ from: 'upsell', fromPort: 'output', to: 'join', toPort: 'in2' },
+			{ from: 'join', fromPort: 'output', to: 'out', toPort: 'input' },
+		]
+	),
+	step(
+		'batch-resize-gallery',
+		'Batch resize to a gallery',
+		'For each image URL: Load image, then Resize to 200px wide; Collect: "JSON array" hands the whole batch to Gallery as one grid.',
+		[
+			{ id: 'list', type: 'prompt', x: 0, y: 0, props: { text: '/examples/girl-base.jpg\n/examples/girl-coat.jpg\n/examples/girl-dress.jpg' } },
+			{ id: 'loop', type: 'for_each', x: 540, y: 0, props: { split: 'lines', collect: 'json' } },
+			{ id: 'load', type: 'load_image', x: 1080, y: 0 },
+			{ id: 'resize', type: 'image_resize', x: 1620, y: 0, props: { mode: 'width', value: 200 } },
+			{ id: 'grid', type: 'gallery', x: 2160, y: 0, props: { columns: 3 } },
+		],
+		[
+			{ from: 'list', fromPort: 'output', to: 'loop', toPort: 'list' },
+			{ from: 'loop', fromPort: 'item', to: 'load', toPort: 'url' },
+			{ from: 'load', fromPort: 'output', to: 'resize', toPort: 'image' },
+			{ from: 'resize', fromPort: 'output', to: 'loop', toPort: 'result' },
+			{ from: 'loop', fromPort: 'output', to: 'grid', toPort: 'images' },
+		]
+	),
 ]
 
 export function exampleCovers(): string[] {

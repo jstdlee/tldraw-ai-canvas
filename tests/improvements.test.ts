@@ -9,6 +9,7 @@ import { buildHttpRequest } from '../shared/httpBuild'
 import { applyPreset, FILTER_PRESETS, matchPreset, NO_FILTER } from '../shared/imageFilters'
 import { formatLlmUsage, normalizeLlmUsage, takeUsageTrailer } from '../shared/llmUsage'
 import { NODE_CATEGORY } from '../shared/nodeGroups'
+import { findDynamicPort, NODE_SPECS } from '../shared/nodeSpecs'
 import { pastePatch } from '../shared/pasteTarget'
 import { readPythonResult } from '../shared/pythonSource'
 import { missingRunInput } from '../shared/runIssue'
@@ -29,7 +30,7 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	model_source: { inn: [], out: ['model'] },
 	jev: { inn: ['context', 'question', 'input'], out: ['output', 'probs', 'final', 'yes', 'no'] },
 	decision_switch: { inn: ['decision', 'value'], out: ['yes', 'no', 'unsure', 'other'] },
-	load_image: { inn: [], out: ['output'] },
+	load_image: { inn: ['url'], out: ['output'] },
 	camera: { inn: [], out: ['output'] },
 	capture: { inn: [], out: ['output'] },
 	crop: { inn: ['image'], out: ['output'] },
@@ -43,14 +44,14 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	logic: { inn: ['a', 'b'], out: ['output'] },
 	for_each: { inn: ['list', 'result'], out: ['item', 'output'] },
 	router: { inn: ['input'], out: ['output', 'out_0', 'out_1', 'out_2'] },
-	code: { inn: ['a', 'b', 'c', 'd'], out: ['output', 'out2', 'out3'] },
+	code: { inn: ['in1', 'in2'], out: ['output'] },
 	subgraph: { inn: [], out: [] },
 	output: { inn: ['input'], out: ['output'] },
 	save: { inn: ['input'], out: ['output'] },
 	table: { inn: ['data', 'extra'], out: ['output'] },
 	chart: { inn: ['data'], out: ['output'] },
 	profile: { inn: ['data'], out: ['output'] },
-	database: { inn: ['sql'], out: ['output', 'schema'] },
+	database: { inn: ['sql', 'rows'], out: ['output', 'schema'] },
 	openrouter: { inn: [], out: ['output'] },
 	raw_model: { inn: ['prompt', 'model'], out: ['output'] },
 	video: { inn: ['url'], out: ['output'] },
@@ -65,8 +66,9 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	json_fields: { inn: ['json'], out: ['rest'] },
 	extract: { inn: ['text'], out: ['table', 'json', 'code', 'list'] },
 	template: { inn: [], out: ['output'] },
-	merge: { inn: ['in1', 'in2', 'in3', 'in4'], out: ['output'] },
+	merge: { inn: ['in1', 'in2'], out: ['output'] },
 	gallery: { inn: ['images'], out: ['output'] },
+	agent: { inn: ['context', 'task', 'model'], out: ['output', 'steps'] },
 }
 
 describe('llm usage', () => {
@@ -165,10 +167,27 @@ describe('find', () => {
 })
 
 describe('examples', () => {
-	it('covers every node group member', () => {
+	it('covers every visible node group member', () => {
+		// WP38 (GAPS-19): a hidden/superseded type (postgres, url_in, …) needs no example of its
+		// own — the curated gallery should only ever show the AI-addable, visible card for it.
 		const covered = new Set(exampleCovers())
-		for (const type of Object.keys(NODE_CATEGORY)) expect(covered.has(type)).toBe(true)
+		for (const type of Object.keys(NODE_CATEGORY)) {
+			if (NODE_SPECS[type]?.hidden) continue
+			expect(covered.has(type)).toBe(true)
+		}
 		expect(NODE_CATEGORY.prompt_concat).toBe('text')
+	})
+
+	// WP38 (GAPS-19): url-summary/url-in used the hidden `url_in`, net-sql used the hidden
+	// `postgres` — both normalized a legacy type into the example gallery as if it were still
+	// the normal way to do the job, even though each has a direct, no-functional-loss
+	// successor ("Read from", "Database"). Unlike adjust/number/router/subgraph (also hidden,
+	// but deliberately kept as "this is how an old canvas's card still behaves" demos), these
+	// two have no reason to appear in the curated gallery at all.
+	it('never places the superseded url_in or postgres types', () => {
+		const covered = new Set(exampleCovers())
+		expect(covered.has('url_in')).toBe(false)
+		expect(covered.has('postgres')).toBe(false)
 	})
 
 	it('uses real ports and includes two long workflows', () => {
@@ -180,10 +199,15 @@ describe('examples', () => {
 			for (const wire of example.wires) {
 				const from = byId.get(wire.from)
 				const to = byId.get(wire.to)
-				expect(from && PORTS[from.type].out).toContain(wire.fromPort)
-				// `var:<name>` ports (WP10 template variables) and `field:<key>` ports (WP17: every
-				// wirable field) are dynamic, per-type-and-per-field — not in this fixed map.
-				if (wire.toPort.startsWith('var:') || wire.toPort.startsWith('field:')) continue
+				// `var:<name>`/`opt:<slug>`/`band:<slug>`/`path:<slug>`/`row:<column>`/code's
+				// `in3..`/`out2..`/merge's `in3..` (shared/nodeSpecs.ts's DYNAMIC_PORTS) and
+				// `field:<key>` ports (WP17: every wirable field) are dynamic, per type — not in
+				// this fixed map.
+				if (!(from && findDynamicPort(from.type, wire.fromPort, 'out'))) {
+					expect(from && PORTS[from.type].out).toContain(wire.fromPort)
+				}
+				if (wire.toPort.startsWith('field:')) continue
+				if (to && findDynamicPort(to.type, wire.toPort, 'in')) continue
 				expect(to && PORTS[to.type].inn).toContain(wire.toPort)
 			}
 		}
