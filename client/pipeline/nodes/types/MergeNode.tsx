@@ -199,7 +199,12 @@ function MergeNodeComponent({ shape, node }: NodeComponentProps<MergeNode>) {
 			 * would leave its field port permanently stuck at the header, the same class of bug
 			 * as AI-07's threshold/margin on Decision switch. Disabled instead when it has no
 			 * effect, same as it being present just does nothing for "first"/"json". */}
-			<WireField shapeId={shape.id} fieldKey="separator" label="Join with">
+			<WireField
+				shapeId={shape.id}
+				fieldKey="separator"
+				label="Join with"
+				hint={node.mode !== 'all' ? 'All joined only' : undefined}
+			>
 				<NodeSelect
 					className="NodeField-select"
 					value={node.separator}
@@ -207,7 +212,13 @@ function MergeNodeComponent({ shape, node }: NodeComponentProps<MergeNode>) {
 					onPointerDown={stopEvent}
 					onChange={(e) => set({ separator: e.target.value })}
 				>
-					<option value="\n">Newline</option>
+					{/* WP39 root cause: a JSX attribute string doesn't interpret `\n` as an escape — a
+					    quoted `value="\n"` is the literal two characters "\" + "n", which never
+					    matched node.separator's real-newline default ('\n', a JS string literal in
+					    getDefault() above). No option ever matched, so the control showed its
+					    "Choose" placeholder even though a separator was always selected. `{'\n'}`
+					    is a JS expression, so it's the actual newline character. */}
+					<option value={'\n'}>Newline</option>
 					<option value=", ">Comma</option>
 					<option value=" ">Space</option>
 					<option value="">None</option>

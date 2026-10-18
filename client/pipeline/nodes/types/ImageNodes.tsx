@@ -1,7 +1,8 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { useEffect, useRef, useState } from 'react'
 import { T, TldrawUiButton, useEditor } from 'tldraw'
-import { UiButton, UiNumberInput, UiSlider, UiTextInput } from '../../../ui'
+import { UiButton, UiIconButton, UiNumberInput, UiSlider, UiTextInput } from '../../../ui'
+import { IconReset } from '../../../ui/icons'
 import { AdjustIcon } from '../../components/icons/AdjustIcon'
 import { CaptureIcon } from '../../components/icons/CaptureIcon'
 import { UpscaleIcon } from '../../components/icons/UpscaleIcon'
@@ -680,9 +681,10 @@ function ImageToolNodeComponent({ shape, node }: NodeComponentProps<ImageToolNod
 							</option>
 						))}
 					</NodeSelect>
-					<TldrawUiButton type="normal" onPointerDown={stopEvent} onClick={() => set({ tool: 'info', a: '', b: '' })}>
-						Restore default
-					</TldrawUiButton>
+					{/* WP39: was a full-text button sharing this row with the Tool select, which
+					 * squeezed the select down to "Info (size, t…" — a compact icon button with a
+					 * tooltip leaves the select its full width. */}
+					<UiIconButton icon={<IconReset />} title="Restore default" onClick={() => set({ tool: 'info', a: '', b: '' })} />
 				</>
 			</WireField>
 			<WireField shapeId={shape.id} fieldKey="a" label="Param A">

@@ -140,12 +140,14 @@ export class DecisionSwitchNodeDefinition extends NodeDefinition<DecisionSwitchN
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const mode = resolvedModeFor(node)
 		const outs = outputPortsFor(node)
-		// decision, value, mode rows, plus the options/bands header rows — always rendered
-		// (even when the other mode is active) so their field-port anchors always register.
+		// decision, value, mode rows, plus the options/bands/threshold/margin header rows —
+		// always rendered (even when the other mode is active) so their field-port anchors
+		// always register. WP39: threshold/margin's editor now lives in that same header row
+		// (WireField, not a separate NodeRow below), so FIXED_ROWS already covers them in every
+		// mode — no "+2" just for noul any more.
 		let rows = FIXED_ROWS
 		let extraPx = 0
 		if (mode === 'noul') {
-			rows += 2 // threshold, margin edit rows (their header rows are already in FIXED_ROWS)
 			rows += outs.length // yes/no/unsure display rows
 		} else if (mode === 'choice') {
 			extraPx += OPTIONS_PX
@@ -157,13 +159,14 @@ export class DecisionSwitchNodeDefinition extends NodeDefinition<DecisionSwitchN
 	}
 	getPorts(shape: NodeShape, node: DecisionSwitchNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
-		const mode = resolvedModeFor(node)
 		const ports: Record<string, ShapePort> = {
 			decision: { id: 'decision', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
 			value: { id: 'value', x: 0, y: portY(1, rowPx), terminal: 'end', dataType: 'any' },
 		}
 		const outs = outputPortsFor(node)
-		const firstOutRow = mode === 'noul' ? FIXED_ROWS + 2 : FIXED_ROWS
+		// WP39: threshold/margin no longer add 2 extra rows in noul mode (see getBodyHeightPx) —
+		// the output rows always start right after FIXED_ROWS now.
+		const firstOutRow = FIXED_ROWS
 		outs.forEach((out, i) => {
 			ports[out.id] = { id: out.id, x: W, y: portY(firstOutRow + i, rowPx), terminal: 'start', dataType: 'any' }
 		})
@@ -311,7 +314,6 @@ function DecisionSwitchNodeComponent({ shape, node }: NodeComponentProps<Decisio
 	const last = readLastDecision(node)
 	const optionsWired = useInputConnected(shape.id, 'field:options')
 	const bandsWired = useInputConnected(shape.id, 'field:bands')
-	const thresholdWired = useInputConnected(shape.id, 'field:threshold')
 	const marginWired = useInputConnected(shape.id, 'field:margin')
 
 	const modeOptions: { value: string; label: string }[] = [
@@ -320,6 +322,9 @@ function DecisionSwitchNodeComponent({ shape, node }: NodeComponentProps<Decisio
 		{ value: 'choice', label: 'Choose one option' },
 		{ value: 'score', label: 'Score on a scale' },
 	]
+	// WP39: a short name for the resolved mode, for the "not used in ... mode" hint on whichever
+	// of Options/Bands/Threshold/Margin the current mode doesn't use.
+	const modeLabel: Record<ResolvedDecisionMode, string> = { noul: 'Yes/No', choice: 'Choice', score: 'Score' }
 
 	return (
 		<>
@@ -337,8 +342,14 @@ function DecisionSwitchNodeComponent({ shape, node }: NodeComponentProps<Decisio
 
 			{/* WP17: options/bands are always wirable fields, so their field-port anchor always
 			 * renders here — even in a mode that doesn't use them — instead of only when the
-			 * matching body below is shown. */}
-			<WireFieldHeader shapeId={shape.id} fieldKey="options" label="Options" />
+			 * matching body below is shown. WP39: a mode that doesn't use a field now says so
+			 * (greyed "not used in ... mode") instead of leaving the header row blank. */}
+			<WireFieldHeader
+				shapeId={shape.id}
+				fieldKey="options"
+				label="Options"
+				hint={mode === 'choice' ? undefined : `not used in ${modeLabel[mode]} mode`}
+			/>
 			{mode === 'choice' && !optionsWired && (
 				<div className="NodeGrow" style={{ minHeight: OPTIONS_PX }}>
 					<UiTextArea
@@ -350,26 +361,41 @@ function DecisionSwitchNodeComponent({ shape, node }: NodeComponentProps<Decisio
 					/>
 				</div>
 			)}
-			<WireFieldHeader shapeId={shape.id} fieldKey="bands" label="Bands" />
-			{/* AI-07: threshold/margin are only meaningful in Yes/No mode, but their header (and
-			 * so their field-port anchor) renders unconditionally, same as options/bands above —
-			 * only the numeric editor itself is hidden by mode. */}
-			<WireFieldHeader shapeId={shape.id} fieldKey="threshold" label="Threshold" dataType="number" />
-			<WireFieldHeader shapeId={shape.id} fieldKey="margin" label="Margin" dataType="number" />
+			<WireFieldHeader
+				shapeId={shape.id}
+				fieldKey="bands"
+				label="Bands"
+				hint={mode === 'score' ? undefined : `not used in ${modeLabel[mode]} mode`}
+			/>
+			{/* AI-07: threshold/margin are only meaningful in Yes/No mode, but their field-port
+			 * anchor renders unconditionally, same as options/bands above. WP39: in Yes/No mode
+			 * the editor sits right in the labelled row (WireField, not an orphaned NodeRow
+			 * below it); otherwise the row collapses to label + "not used" hint, same as
+			 * options/bands. */}
+			{mode === 'noul' ? (
+				<>
+					<WireField shapeId={shape.id} fieldKey="threshold" label="Threshold" dataType="number">
+						<UiNumberInput value={node.threshold} step={0.05} min={0} max={1} onChange={(threshold) => set({ threshold: threshold ?? 0.5 })} />
+					</WireField>
+					<WireField
+						shapeId={shape.id}
+						fieldKey="margin"
+						label="Margin"
+						dataType="number"
+						hint={!marginWired ? '0 = off' : undefined}
+					>
+						<UiNumberInput value={node.margin} step={0.05} min={0} max={1} onChange={(margin) => set({ margin: margin ?? 0 })} />
+					</WireField>
+				</>
+			) : (
+				<>
+					<WireFieldHeader shapeId={shape.id} fieldKey="threshold" label="Threshold" dataType="number" hint={`not used in ${modeLabel[mode]} mode`} />
+					<WireFieldHeader shapeId={shape.id} fieldKey="margin" label="Margin" dataType="number" hint={`not used in ${modeLabel[mode]} mode`} />
+				</>
+			)}
 
 			{mode === 'noul' && (
 				<>
-					{!thresholdWired && (
-						<NodeRow>
-							<UiNumberInput value={node.threshold} step={0.05} min={0} max={1} onChange={(threshold) => set({ threshold: threshold ?? 0.5 })} />
-						</NodeRow>
-					)}
-					{!marginWired && (
-						<NodeRow>
-							<UiNumberInput value={node.margin} step={0.05} min={0} max={1} onChange={(margin) => set({ margin: margin ?? 0 })} />
-							<span className="UiField-hint">0 = off</span>
-						</NodeRow>
-					)}
 					<SwitchOutputRow shapeId={shape.id} portId="yes" label="yes" active={last?.chosen === 'yes'} />
 					<SwitchOutputRow shapeId={shape.id} portId="no" label="no" active={last?.chosen === 'no'} />
 					<SwitchOutputRow shapeId={shape.id} portId="unsure" label="unsure" active={last?.chosen === 'unsure'} />

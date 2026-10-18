@@ -41,8 +41,23 @@ export const JsonFieldsNode = T.object({
 })
 
 const JSON_TEXT_PX = 72
-const PATHS_PX = 72
 const WARN_PX = 44
+// WP39: the Paths box used to be a fixed 3 lines tall, so a 4th (or 5th, 6th…) path line was
+// hidden below the fold even though its output port still appeared — the box now grows with the
+// actual number of lines typed, up to a cap, same idea as Database's SQL editor sizing.
+const PATHS_MIN_LINES = 3
+const PATHS_MAX_LINES = 8
+const PATHS_LINE_PX = 19
+const PATHS_PADDING_PX = 16
+
+function pathsLineCount(paths: string): number {
+	return paths.length ? paths.split('\n').length : 1
+}
+
+function pathsBoxHeightPx(node: JsonFieldsNode): number {
+	const lines = Math.min(PATHS_MAX_LINES, Math.max(PATHS_MIN_LINES, pathsLineCount(node.paths)))
+	return lines * PATHS_LINE_PX + PATHS_PADDING_PX
+}
 
 function parseWarnings(warnings: string | null): string[] {
 	return warnings ? warnings.split('\n').filter(Boolean) : []
@@ -78,7 +93,7 @@ export class JsonFieldsNodeDefinition extends NodeDefinition<JsonFieldsNode> {
 		// json port row (+ its literal box when unwired), paths header + box, one row per
 		// path output, the "rest" output row, an error row when present, and a fixed
 		// warnings box when the last run flagged any missing path.
-		return rowPx * (2 + paths.length + errorRow) + (jsonWired ? 0 : JSON_TEXT_PX) + PATHS_PX + warnPx
+		return rowPx * (2 + paths.length + errorRow) + (jsonWired ? 0 : JSON_TEXT_PX) + pathsBoxHeightPx(node) + warnPx
 	}
 	getPorts(shape: NodeShape, node: JsonFieldsNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -160,12 +175,12 @@ function JsonFieldsNodeComponent({ shape, node }: NodeComponentProps<JsonFieldsN
 				</div>
 			)}
 			<WireFieldHeader shapeId={shape.id} fieldKey="paths" label="Paths" />
-			<div className="NodeField-block" style={{ height: PATHS_PX }}>
+			<div className="NodeField-block" style={{ height: pathsBoxHeightPx(node) }}>
 				<UiTextArea
 					className="NodeField-textarea"
 					mono
 					grow
-					rows={3}
+					rows={Math.min(PATHS_MAX_LINES, Math.max(PATHS_MIN_LINES, pathsLineCount(node.paths)))}
 					placeholder={'value\ntopic\ndata[0].name\ncustomer.country'}
 					value={node.paths}
 					onChange={(paths) => set({ paths })}

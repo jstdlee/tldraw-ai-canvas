@@ -258,12 +258,22 @@ test.describe('WP34 data and tables', () => {
 		const segBox = (await segmented.boundingBox())!
 		expect(segBox.x).toBeGreaterThanOrEqual(cardBox.x - 1)
 		expect(segBox.x + segBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1)
-		// The longest label ("Built-in Postgres") truncates instead of overflowing its own item.
-		const longLabel = segmented.locator('.UiSegmented-item', { hasText: 'Built-in Postgres' }).locator('.tlui-button__label')
-		const overflowing = await longLabel.evaluate((el) => el.scrollWidth > el.clientWidth + 1)
-		expect(typeof overflowing).toBe('boolean') // just confirming the probe itself ran
-		const itemBox = (await segmented.locator('.UiSegmented-item', { hasText: 'Built-in Postgres' }).boundingBox())!
-		expect(itemBox.x + itemBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1)
+		// WP39: all four options (SQLite, Built-in PG, Postgres, DuckDB) must fit, not just the
+		// first three — a 4-item regression previously clipped the last item ("DuckDB" -> "Duc")
+		// because only the longest-label item was ever checked here.
+		const items = segmented.locator('.UiSegmented-item')
+		const itemCount = await items.count()
+		expect(itemCount).toBe(4)
+		for (let i = 0; i < itemCount; i++) {
+			const item = items.nth(i)
+			const itemBox = (await item.boundingBox())!
+			expect(itemBox.x).toBeGreaterThanOrEqual(cardBox.x - 1)
+			expect(itemBox.x + itemBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1)
+			// None of the four labels should need to truncate at the card's default width.
+			const label = item.locator('.tlui-button__label')
+			const overflowing = await label.evaluate((el) => el.scrollWidth > el.clientWidth + 1)
+			expect(overflowing).toBe(false)
+		}
 	})
 
 	test('DATA-09: wiring data into Profile/Table view, or switching DataPipe\'s op, logs no "no port anchor" warnings', async ({ page }) => {

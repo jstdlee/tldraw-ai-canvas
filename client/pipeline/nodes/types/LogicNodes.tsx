@@ -391,14 +391,16 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 		}
 	}
 	getBodyHeightPx(shape: NodeShape, node: ForEachNode) {
-		// 8 fixed rows: list, split, separator (or its range/rows equivalent), item, result,
-		// "Join with", Collect, No result. Range mode: From / To / Step replace the one
-		// Separator row (+2). Table rows mode: one row:<column> output row per column, right
-		// after "item" (+N). Collect "table": +1 row for the "Result column" name.
+		// 9 fixed rows: list, split, separator (or its range/rows equivalent), item, result,
+		// "Join with", Collect, No result, progress. Range mode: From / To / Step replace the
+		// one Separator row (+2). Table rows mode: one row:<column> output row per column,
+		// right after "item" (+N). Collect "table": +1 row for the "Result column" name.
+		// WP39: the progress bar is now a labelled row (like the rest of the card) instead of a
+		// bare strip with its own small fixed px budget tacked on.
 		const extraSplit = isRangeMode(shape) ? 2 : 0
 		const rowCols = rowColumnsFor(node).length
 		const extraCollect = effectiveCollect(node) === 'table' ? 1 : 0
-		return getNodeRowHeightPx(shape.props.fontSize) * (8 + extraSplit + rowCols + extraCollect) + 18
+		return getNodeRowHeightPx(shape.props.fontSize) * (9 + extraSplit + rowCols + extraCollect)
 	}
 	getPorts(shape: NodeShape, node: ForEachNode): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -633,9 +635,15 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 					<option value="error">stop with an error</option>
 				</NodeSelect>
 			</WireField>
-			<div className="ProgressBar" title={node.progress ?? 'Wire item, then Result, then Play'}>
-				<span style={{ width: `${forEachPercent(node.progress)}%` }} />
-			</div>
+			{/* WP39: a bare full-width strip read as a horizontal scrollbar, not progress — now a
+			 * labelled row (same shape as every other row in the card) with a thin bar next to a
+			 * status word, so "nothing has run" / "mid-run" / "done" are each legible at a glance. */}
+			<NodeRow className="ForEachNode-progress" title={node.progress ?? 'Wire item, then Result, then Play'}>
+				<span className="NodeHint">{node.progress ?? 'Not run yet'}</span>
+				<div className="ProgressBar">
+					<span style={{ width: `${forEachPercent(node.progress)}%` }} />
+				</div>
+			</NodeRow>
 		</>
 	)
 }

@@ -717,9 +717,10 @@ function DatabaseComponent({ shape, node }: NodeComponentProps<DatabaseNode>) {
 			{!hiddenFields.has('targetTable') && (
 				<>
 					<WireFieldHeader shapeId={shape.id} fieldKey="targetTable" label="Load rows into" dataType="text" />
-					<NodeRow>
-						<PortRow shapeId={shape.id} portId="rows" label="Rows" dataType="text" hint="wire CSV rows to load" />
-					</NodeRow>
+					{/* WP39: PortRow already renders its own NodeRow — wrapping it in a second one left
+					    the row's width "shrink to fit" instead of the card's full width, so the hint
+					    ("wire CSV rows to load") wrapped into a tiny off-center fragment. */}
+					<PortRow shapeId={shape.id} portId="rows" label="Rows" dataType="text" hint="wire CSV rows to load" />
 					{rowsWired && (
 						<NodeRow>
 							{/* WP27 Part B: wraps/scrolls instead of cutting a long table name off —

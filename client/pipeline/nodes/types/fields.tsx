@@ -100,12 +100,21 @@ export function PortRow({
 	label,
 	dataType,
 	hint = 'not connected',
+	right,
 }: {
 	shapeId: TLShapeId
 	portId: string
 	label: string
 	dataType: PortDataType
 	hint?: string
+	/** WP39: trailing content for this same row (e.g. an output port's own label + dot on the
+	 * right, as JevNode pairs with several of its input rows) — rendered inside this row's own
+	 * NodeRow, not a second one. A caller used to wrap `<PortRow>` in its own extra flex row
+	 * alongside separate trailing content; since PortRow already renders a full NodeRow, that
+	 * outer wrapper just squeezed this one down to "shrink to fit" width instead of the card's
+	 * full width, which wrapped the hint into a cramped, overlapping-looking fragment (the same
+	 * class of bug as Database's "wire CSV rows to load" row). */
+	right?: ReactNode
 }) {
 	const editor = useEditor()
 	const port = useValue('port ' + portId, () => getNodeInputPortValues(editor, shapeId)[portId], [
@@ -129,6 +138,7 @@ export function PortRow({
 			) : (
 				<span className="NodeRow-disconnected">{hint}</span>
 			)}
+			{right}
 		</NodeRow>
 	)
 }
@@ -275,11 +285,17 @@ export function WireFieldHeader({
 	fieldKey,
 	label,
 	dataType = 'text',
+	hint,
 }: {
 	shapeId: TLShapeId
 	fieldKey: string
 	label: ReactNode
 	dataType?: PortDataType
+	/** WP39: shown (greyed, like WireField's own hint) in place of the usual blank space when
+	 * this field doesn't apply right now — e.g. "not used in Choice mode" — so the row reads as
+	 * collapsed-but-present instead of a header with nothing under it. Hidden once the field is
+	 * wired (the wired value takes that slot instead), same as WireField. */
+	hint?: ReactNode
 }) {
 	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, fieldKey)
 	const { portId, port, sourceName } = useWireField(shapeId, fieldKey)
@@ -287,7 +303,7 @@ export function WireFieldHeader({
 		<NodeRow ref={ref} className="WireField WireField-header">
 			<Port shapeId={shapeId} portId={portId} />
 			<NodePortLabel dataType={dataType}>{label}</NodePortLabel>
-			{port && <WiredValue port={port} sourceName={sourceName} />}
+			{port ? <WiredValue port={port} sourceName={sourceName} /> : hint != null && hint !== '' && <span className="UiField-hint">{hint}</span>}
 		</NodeRow>
 	)
 }

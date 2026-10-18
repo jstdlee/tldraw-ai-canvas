@@ -192,6 +192,17 @@ export function IconClose({ size }: IconProps) {
 	)
 }
 
+/** Counter-clockwise reset arrow — WP39: "Restore default" as an icon button, so it stops
+ * crowding the control next to it (e.g. Image tools' Tool picker). */
+export function IconReset({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M1 3v4h4" />
+			<path d="M2.5 10a6 6 0 1 0 1.5-6.5L1 7" />
+		</Svg>
+	)
+}
+
 export function IconUpload({ size }: IconProps) {
 	return (
 		<Svg size={size}>

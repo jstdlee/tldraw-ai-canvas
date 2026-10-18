@@ -349,7 +349,7 @@ function HtmlPreviewComponent({ shape, node }: NodeComponentProps<HtmlPreviewNod
 	return (
 		<>
 			<SourceRow shapeId={shape.id} portId="text" label="Text" value={node.text} onChange={(text) => set({ text })} placeholder="Full HTML, a fragment, or LLM output with fenced ```html/```css/```js blocks" rows={3} boxPx={TEXT_PX} />
-			<SourceRow shapeId={shape.id} portId="html" label="HTML" value={node.html} onChange={(html) => set({ html })} placeholder="Overrides the html fenced block (or the Text field)" boxPx={OVERRIDE_PX} />
+			<SourceRow shapeId={shape.id} portId="html" label="HTML" value={node.html} onChange={(html) => set({ html })} placeholder="Overrides the html fenced block" boxPx={OVERRIDE_PX} />
 			<SourceRow shapeId={shape.id} portId="css" label="CSS" value={node.css} onChange={(css) => set({ css })} placeholder="Overrides the css fenced block" boxPx={OVERRIDE_PX} />
 			<SourceRow shapeId={shape.id} portId="js" label="JS" value={node.js} onChange={(js) => set({ js })} placeholder="Overrides the js fenced block" boxPx={OVERRIDE_PX} />
 			<PreviewOptionsRow
@@ -579,7 +579,7 @@ function HtmlFormComponent({ shape, node }: NodeComponentProps<HtmlFormNode>) {
 	return (
 		<>
 			<SourceRow shapeId={shape.id} portId="text" label="Text" value={node.text} onChange={(text) => set({ text })} placeholder="Buttons/options or a <form> — a fragment, a full page, or LLM output with fenced ```html/```css/```js blocks" rows={3} boxPx={TEXT_PX} />
-			<SourceRow shapeId={shape.id} portId="html" label="HTML" value={node.html} onChange={(html) => set({ html })} placeholder="Overrides the html fenced block (or the Text field)" boxPx={OVERRIDE_PX} />
+			<SourceRow shapeId={shape.id} portId="html" label="HTML" value={node.html} onChange={(html) => set({ html })} placeholder="Overrides the html fenced block" boxPx={OVERRIDE_PX} />
 			<SourceRow shapeId={shape.id} portId="css" label="CSS" value={node.css} onChange={(css) => set({ css })} placeholder="Overrides the css fenced block" boxPx={OVERRIDE_PX} />
 			<SourceRow shapeId={shape.id} portId="js" label="JS" value={node.js} onChange={(js) => set({ js })} placeholder="Overrides the js fenced block" boxPx={OVERRIDE_PX} />
 			<PreviewOptionsRow

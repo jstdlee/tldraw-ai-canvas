@@ -192,13 +192,17 @@ body {
 	border: 2px dashed rgba(128, 128, 128, 0.4);
 }
 
+/* WP39: a hardcoded white backing (for text to stay readable over the camera feed/crop
+   overlay showing through the card's transparent body) looked right in light mode but left
+   near-white text on a near-white bar in dark mode — the header and footer read as blank. A
+   translucent version of the card's own panel colour reads correctly in both. */
 .NodeShape_capture .NodeShape-heading {
-	background: rgba(255, 255, 255, 0.85);
+	background: color-mix(in srgb, var(--tl-color-panel) 85%, transparent);
 	border-radius: var(--tl-radius-3) var(--tl-radius-3) 0 0;
 }
 
 .NodeShape_capture .NodeShape-footer {
-	background: rgba(255, 255, 255, 0.85);
+	background: color-mix(in srgb, var(--tl-color-panel) 85%, transparent);
 	border-radius: 0 0 var(--tl-radius-3) var(--tl-radius-3);
 }
 
@@ -2482,7 +2486,14 @@ body {
 	justify-content: flex-end;
 }
 
-.CodeNode-portName {
+/* WP39: `.CodeNode-portName` is always paired with `.CodeNode-outLabel` on an input row's name
+   span (unlike the output row, which keeps the two classes apart — see the comment below). Both
+   selectors have the same specificity (one class), so whichever rule comes LATER in the
+   stylesheet silently won; `.CodeNode-outLabel`'s `position: absolute` used to win, which pulled
+   an input's name label out of flow to the row's far right edge, away from its own input — the
+   row then read as an empty bar with a stray letter floating at each end. The compound selector
+   below has higher specificity than the plain one, so it wins regardless of order. */
+.CodeNode-outLabel.CodeNode-portName {
 	position: static;
 	transform: none;
 	flex: 0 0 auto;
@@ -2567,6 +2578,18 @@ body {
 .NodeBranch-value {
 	color: var(--tl-color-text-3);
 	font-style: italic;
+}
+
+/* WP39: For each's run-progress row — a status word ("Not run yet" / "3 / 10" / "5 done") next
+   to a thin bar, instead of a bare full-width strip that read as a horizontal scrollbar. */
+.ForEachNode-progress .NodeHint {
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
+.ForEachNode-progress .ProgressBar {
+	flex: 1 1 auto;
+	margin: 0;
 }
 
 /* WP27 Part D: the If card's "reads as a sentence" line. */
@@ -3210,7 +3233,14 @@ body {
 	gap: var(--tl-space-3);
 }
 
-.HtmlPreviewNode-heightInput {
+/* WP39: `.NodeRow input.UiInput` (ui.css) sets `flex: 1 1 auto`, which outranks this class alone
+   (fewer classes) and silently overrode the intended fixed 56px width/`margin-left: auto` below
+   — the number input then grew to absorb all the row's free space, starving the "Allow network"
+   checkbox next to it down to where its own label had to wrap ("Allow" / "net work"). The
+   selector here is deliberately 3 classes + a type so it outranks that rule on specificity
+   alone, not on stylesheet order (which is easy to invalidate by reordering imports later). */
+.NodeRow.HtmlPreviewNode-options input.HtmlPreviewNode-heightInput {
+	flex: 0 0 56px;
 	width: 56px;
 	margin-left: auto;
 }

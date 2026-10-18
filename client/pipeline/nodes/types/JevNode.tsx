@@ -225,18 +225,50 @@ function JevNodeComponent({ shape, node }: NodeComponentProps<JevNode>) {
 	const result = node.lastResult ? (JSON.parse(node.lastResult) as JevResult) : null
 	return (
 		<>
-			<div className="CodeNode-portRow">
-				<PortRow shapeId={shape.id} portId="context" label="Context" dataType="any" hint="e.g. LLM output" />
-				<OutputPortLabel shapeId={shape.id} portId="probs">probabilities →</OutputPortLabel>
-			</div>
-			<div className="CodeNode-portRow">
-				<PortRow shapeId={shape.id} portId="question" label="Question" dataType="text" hint="or type below" />
-				<OutputPortLabel shapeId={shape.id} portId="final">final text →</OutputPortLabel>
-			</div>
-			<div className="CodeNode-portRow">
-				<PortRow shapeId={shape.id} portId="input" label="Input text" dataType="any" hint="text to filter" />
-				{node.kind === 'noul' && <OutputPortLabel shapeId={shape.id} portId="yes">yes →</OutputPortLabel>}
-			</div>
+			{/* WP39: each of these used to wrap a `PortRow` (already a full NodeRow) in a second,
+			 * separate flex row alongside its paired output label — the inner row then
+			 * shrank to fit instead of spanning the card, wrapping its hint into a cramped,
+			 * overlapping-looking fragment (the same bug class as Database's "wire CSV rows to
+			 * load" row). `PortRow`'s own `right` slot puts the output label in the same row
+			 * instead, so the row is a single flat flex line, label hint included. */}
+			<PortRow
+				shapeId={shape.id}
+				portId="context"
+				label="Context"
+				dataType="any"
+				hint="e.g. LLM output"
+				right={
+					<OutputPortLabel shapeId={shape.id} portId="probs" className="CodeNode-outLabel-static">
+						probabilities →
+					</OutputPortLabel>
+				}
+			/>
+			<PortRow
+				shapeId={shape.id}
+				portId="question"
+				label="Question"
+				dataType="text"
+				hint="or type below"
+				right={
+					<OutputPortLabel shapeId={shape.id} portId="final" className="CodeNode-outLabel-static">
+						final text →
+					</OutputPortLabel>
+				}
+			/>
+			<PortRow
+				shapeId={shape.id}
+				portId="input"
+				label="Input text"
+				dataType="any"
+				hint="text to filter"
+				right={
+					node.kind === 'noul' ? (
+						<OutputPortLabel shapeId={shape.id} portId="yes" className="CodeNode-outLabel-static">
+							yes →
+						</OutputPortLabel>
+					) : undefined
+				}
+			/>
 			<NodeRow className="NodeRow-right">
 				{node.kind === 'noul' ? (
 					<OutputPortLabel shapeId={shape.id} portId="no" className="CodeNode-outLabel-static">no →</OutputPortLabel>

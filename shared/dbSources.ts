@@ -18,15 +18,17 @@ export interface DbSourceInfo {
 export const DB_SOURCES: DbSourceInfo[] = [
 	{
 		id: 'sqlite',
-		label: 'SQLite file',
+		// WP39: short enough that all four options fit the Source segmented control at the
+		// card's default width without truncating; "SQLite file" is still searchable (keywords).
+		label: 'SQLite',
 		description: 'Upload a .sqlite/.db file and run SQL against it in the browser (sql.js).',
-		keywords: ['sql.js', 'file', 'upload', 'embedded'],
+		keywords: ['sql.js', 'file', 'upload', 'embedded', 'sqlite file'],
 	},
 	{
 		id: 'pglite',
-		label: 'Built-in Postgres',
+		label: 'Built-in PG',
 		description: 'A Postgres database saved in this browser — no server, no setup.',
-		keywords: ['pglite', 'embedded', 'local'],
+		keywords: ['pglite', 'embedded', 'local', 'built-in postgres'],
 	},
 	{
 		id: 'postgres',

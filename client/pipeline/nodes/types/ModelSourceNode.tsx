@@ -103,8 +103,11 @@ export class ModelSourceNodeDefinition extends NodeDefinition<ModelSourceNode> {
 		// kind, URL, key, fetch (with the model count/fetched-at line inline), filter, model
 		// rows (WP17: filter/model split onto their own rows), plus the big chosen-model line,
 		// plus 2 rows (WP21 Part C) for the modelId/baseURL output rows at the bottom.
-		// WP27 Part B: URL and Filter wrap/grow instead of a single-line cutoff.
-		return getNodeRowHeightPx(shape.props.fontSize) * 8 + CURRENT_PX + GROW_FIELD_EXTRA_PX + GROW_FIELD_EXTRA_PX / 2
+		// WP27 Part B: Filter wraps/grows instead of a single-line cutoff.
+		// WP39: URL no longer wraps (it stays one line and scrolls horizontally instead of
+		// breaking a URL mid-word — see UiGrowingInput_nowrap in ui.css), so it no longer needs
+		// its own share of this slack, just Filter's.
+		return getNodeRowHeightPx(shape.props.fontSize) * 8 + CURRENT_PX + GROW_FIELD_EXTRA_PX / 2
 	}
 	getPorts(shape: NodeShape): Record<string, ShapePort> {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
@@ -207,6 +210,7 @@ function ModelSourceNodeComponent({ shape, node }: NodeComponentProps<ModelSourc
 			<WireField shapeId={shape.id} fieldKey="baseURL" label="URL" grow>
 				<>
 					<UiGrowingInput
+						className="UiGrowingInput_nowrap"
 						maxRows={3}
 						placeholder="https://api.openai.com/v1"
 						value={node.baseURL}

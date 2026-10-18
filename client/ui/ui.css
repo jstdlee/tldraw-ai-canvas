@@ -106,6 +106,17 @@
 	height: auto;
 }
 
+/* WP39: for a field whose value is one unbreakable token (a URL) — wrapping it with
+   `break-word` above cuts it at an arbitrary character ("https://api.openai.c" / "om/v1").
+   Stays one line and scrolls horizontally inside the field instead, like a normal single-line
+   input; the field is still a <textarea>, so paste/Shift+Enter behavior is unchanged. */
+.UiGrowingInput_nowrap {
+	white-space: pre;
+	overflow-x: auto;
+	overflow-wrap: normal;
+	word-break: normal;
+}
+
 .UiInput:focus,
 .UiTextArea:focus,
 .UiSelect-trigger.tlui-button:focus-visible {
@@ -704,7 +715,10 @@ button.UiChip {
 }
 
 .UiSegmented-item.tlui-button {
-	flex: 1 0 auto;
+	/* WP39: must stay shrinkable (not `0 auto`) or a control with several options (e.g.
+	   Database's Source picker) can't shrink to fit the card — the item's own ellipsis
+	   (above) never gets a chance to apply and the row overflows the card edge instead. */
+	flex: 1 1 auto;
 }
 
 /* Kit blocks placed straight in a node body line up with NodeRow's side padding. */

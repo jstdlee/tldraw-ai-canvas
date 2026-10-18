@@ -1107,9 +1107,15 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 	getBodyHeightPx(shape: NodeShape, node: ChartNode) {
 		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
 		const { extra, titleFields } = chartVisibleRows(node)
-		// data, text, kind, x column, y columns = 5, then the kind-dependent extra fields,
-		// the "Titles and labels" header (+ its own fields when open), then the chart area.
-		const rows = 5 + extra.length + 1 + (node.titlesOpen ? titleFields.length : 0)
+		// data, kind, x column, y columns = 4, + the "Text" header row and its placeholder
+		// textarea while "data" isn't wired (WP39: the row used to be an empty header with no
+		// editor underneath it — now matches Profile/Table view's own text field, and like
+		// theirs, is hidden entirely once "data" is wired), then the kind-dependent extra
+		// fields, the "Titles and labels" header (+ its own fields when open), then the chart
+		// area — a flexible region (`.ChartNode-viewWrap`, see shell.css) that absorbs the
+		// textarea's real height being taller than one nominal row, the same way Profile's does.
+		const dataWired = isInputWired(this.editor, shape.id, 'data')
+		const rows = 4 + (dataWired ? 0 : 1) + extra.length + 1 + (node.titlesOpen ? titleFields.length : 0)
 		return rowPx * rows + CHART_AREA_PX
 	}
 	getPorts(shape: NodeShape, node: ChartNode): Record<string, ShapePort> {
@@ -1363,7 +1369,24 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 	return (
 		<div className="ChartNode">
 			<PortRow shapeId={shape.id} portId="data" label="Table" dataType="text" />
-			<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Text" />
+			{/* WP39: this row used to be a bare "Text" header with no editor under it (nothing to
+			 * type into, no placeholder) whenever the chart had no table to plot yet. Now matches
+			 * Profile/Table view's own Text field exactly: a real textarea with the same
+			 * placeholder while "data" isn't wired, hidden entirely once it is (the wired table
+			 * is the only source then, same as Profile). */}
+			{!dataWired && (
+				<>
+					<WireFieldHeader shapeId={shape.id} fieldKey="text" label="Text" />
+					<UiTextArea
+						className="NodeField-textarea"
+						mono
+						rows={4}
+						value={node.text}
+						placeholder="Paste a table: CSV, TSV, JSON array, or Markdown"
+						onChange={(text) => set({ text })}
+					/>
+				</>
+			)}
 			<WireField shapeId={shape.id} fieldKey="kind" label="Kind">
 				<NodeSelect className="NodeField-select" value={node.kind} onPointerDown={stopEvent} onChange={(e) => set({ kind: e.target.value })}>
 					{CHART_KINDS.map((k) => (

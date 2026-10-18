@@ -126,12 +126,16 @@ function TextToolNodeComponent({ shape, node }: NodeComponentProps<TextToolNode>
 					))}
 				</NodeSelect>
 			</WireField>
+			{/* WP39: Param B used to render a totally blank row (an empty string, not even a
+			 * hint) whenever the chosen tool doesn't take a second parameter — the row looked
+			 * broken, not "not applicable". Both params now say so plainly when unused, the
+			 * same pattern as Decision switch's per-mode fields. */}
 			{(['a', 'b'] as const).map((key) => (
 				<WireField key={key} shapeId={shape.id} fieldKey={key} label={key === 'a' ? 'Param A' : 'Param B'} grow={!!op[key]}>
 					{op[key] ? (
 						<UiGrowingInput placeholder={op[key]} value={node[key]} onChange={(next) => set({ [key]: next })} />
 					) : (
-						<span className="NodeRow-disconnected">{key === 'a' ? 'no options' : ''}</span>
+						<span className="NodeRow-disconnected">not used by {op.label}</span>
 					)}
 				</WireField>
 			))}
