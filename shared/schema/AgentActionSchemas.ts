@@ -94,6 +94,24 @@ export const CreateAction = z
 
 export type CreateAction = z.infer<typeof CreateAction>
 
+// Create Table Action (WP40: canvas-native table shape)
+export const CreateTableAction = z
+	.object({
+		_type: z.literal('create-table'),
+		intent: z.string(),
+		shapeId: SimpleShapeIdSchema,
+		x: z.number(),
+		y: z.number(),
+		columns: z.array(z.string()),
+		rows: z.array(z.array(z.string())),
+	})
+	.meta({
+		title: 'Create Table',
+		description: 'The AI creates a canvas table shape with the given column names and rows of cell text.',
+	})
+
+export type CreateTableAction = z.infer<typeof CreateTableAction>
+
 // Delete Action
 export const DeleteAction = z
 	.object({

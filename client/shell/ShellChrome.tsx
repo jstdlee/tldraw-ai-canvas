@@ -5,6 +5,15 @@ import { getNodeDefinitions, NodeType } from '../pipeline/nodes/nodeTypes'
 import { diveGroup, groupPlainText, leaveGroup } from '../pipeline/groups/groupActions'
 import { $findOpen } from '../clips/FindBar'
 import { createNodeAt, wireNodes } from '../pipeline/placeNode'
+import { buildTableTemplate, createEmptyTable } from '../../shared/table/canvasTableOps'
+import { createTableShapeAt } from '../pipeline/table/TableShapeUtil'
+
+/** `doc.insertTable` -> the TableData to create — shared by CommandPalette (Ctrl+P), the "/"
+ * InsertPalette, and `insertCard`, so "Table" / "Table · Issue list" etc. in any of those three
+ * card lists create the same thing WP40's own toolbar/context-menu entries do. */
+function tableForDoc(insertTable: NonNullable<CardDoc['insertTable']>) {
+	return insertTable === 'blank' ? createEmptyTable(4, 3) : buildTableTemplate(insertTable)
+}
 import { CardDoc, getCardDocs, searchCards } from '../../shared/cardSearch'
 import { readPickerRecency, recordPick } from '../../shared/pickerRank'
 import { PickerRow } from '../pipeline/components/OnCanvasNodePicker'
@@ -211,12 +220,19 @@ function useVisibleCardDocs(editor: Editor) {
 				.filter((def) => !def.hidden)
 				.map((def) => def.type)
 		)
-		return getCardDocs().filter((d) => visible.has(d.type))
+		// WP40: a "Table" doc (insertTable set) isn't a node type, so it's never in `visible` —
+		// keep it regardless.
+		return getCardDocs().filter((d) => d.insertTable || visible.has(d.type))
 	}, [editor])
 }
 
 /** Insert `doc`'s card (preset per `doc.deep`, if any) at the viewport centre and select it. */
 function insertCard(editor: Editor, doc: CardDoc) {
+	if (doc.insertTable) {
+		recordPick(doc.id)
+		createTableShapeAt(editor, tableForDoc(doc.insertTable), editor.getViewportPageBounds().center)
+		return
+	}
 	const def = getNodeDefinitions(editor)[doc.type as keyof ReturnType<typeof getNodeDefinitions>]
 	if (!def) return
 	recordPick(doc.id)
@@ -408,6 +424,13 @@ function InsertPalette({ editor }: { editor: Editor }) {
 	const close = () => $insertPalette.set(null)
 
 	const insert = (doc: CardDoc, wireToSelection: boolean) => {
+		if (doc.insertTable) {
+			if (!at) return
+			recordPick(doc.id)
+			createTableShapeAt(editor, tableForDoc(doc.insertTable), at)
+			close()
+			return
+		}
 		const def = getNodeDefinitions(editor)[doc.type as keyof ReturnType<typeof getNodeDefinitions>]
 		if (!def || !at) return
 		recordPick(doc.id)

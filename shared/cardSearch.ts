@@ -22,6 +22,7 @@ import { TEXT_TOOL_OPS } from './textTools'
 import { TEXT_AI_OPERATIONS } from './textAiOps'
 import { DB_SOURCES } from './dbSources'
 import { recencyScore, type PickerRecency } from './recency'
+import { TABLE_TEMPLATE_LABELS, type TableTemplateId } from './table/canvasTableOps'
 
 /** One searchable, insertable card. `deep` presets a field when the card is inserted. */
 export interface CardDoc {
@@ -35,6 +36,11 @@ export interface CardDoc {
 	keywords: string[]
 	/** Preset a field on insert, e.g. `{ field: 'op', value: 'pivot' }`. */
 	deep?: { field: string; value: string }
+	/** WP40: this doc inserts a canvas `table` shape, not a node — `type` is the sentinel
+	 * `'canvas-table'` (never a real node type, so `getNodeDefinitions(editor)[type]` is
+	 * naturally undefined for it and every node-insert code path's existing `if (!def) return`
+	 * guard already skips it). `'blank'` for a default-size blank table, or a template id. */
+	insertTable?: 'blank' | TableTemplateId
 }
 
 export interface RankedCard {
@@ -351,6 +357,33 @@ function dbSourceDocs(): CardDoc[] {
 	return DB_SOURCES.map((source) => deepDoc('database', source.id, 'source', source.label, source.description, source.keywords))
 }
 
+/** WP40: "Table" (blank + the 4 list templates) as insertable entries in the same Ctrl+P /
+ * Insert palette as every node card, so a canvas table is searchable and insertable the same
+ * way. Not a node — see `CardDoc.insertTable`. */
+function tableInsertDocs(): CardDoc[] {
+	const blank: CardDoc = {
+		id: 'canvas-table:blank',
+		type: 'canvas-table',
+		title: 'Table',
+		group: 'table',
+		description: 'A blank canvas table (presentation / small lists), not DataPipe.',
+		keywords: ['table', 'grid', 'spreadsheet', 'rows', 'columns', 'list'],
+		insertTable: 'blank',
+	}
+	const templates = (Object.keys(TABLE_TEMPLATE_LABELS) as TableTemplateId[]).map(
+		(id): CardDoc => ({
+			id: `canvas-table:${id}`,
+			type: 'canvas-table',
+			title: `Table · ${TABLE_TEMPLATE_LABELS[id]}`,
+			group: 'table',
+			description: `Insert a ${TABLE_TEMPLATE_LABELS[id]} table template.`,
+			keywords: ['table', 'template', ...TABLE_TEMPLATE_LABELS[id].toLowerCase().split(' ')],
+			insertTable: id,
+		})
+	)
+	return [blank, ...templates]
+}
+
 /**
  * Every searchable, insertable card: one base document per non-superseded node type,
  * plus every deep entry built from the op/kind registries above.
@@ -365,6 +398,7 @@ export function buildCardDocs(): CardDoc[] {
 		...textToolOpDocs(),
 		...textAiOpDocs(),
 		...dbSourceDocs(),
+		...tableInsertDocs(),
 	]
 }
 

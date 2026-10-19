@@ -39,6 +39,8 @@ import { compareTargets, copyDocument, keepVariant, openCompare, openRewrite, re
 import { $imageEditorTarget } from './ImageEditor'
 import { diveGroup, groupSelection, leaveGroup, renameSelection } from '../pipeline/groups/groupActions'
 import { closeGroup, openGroup, packSelection, unpack } from '../pipeline/subgraph'
+import { insertBlankTable, insertTableTemplate, tableUseAsData } from '../pipeline/table/TableShapeUtil'
+import { TABLE_TEMPLATE_LABELS, type TableTemplateId } from '../../shared/table/canvasTableOps'
 import {
 	exportCustomNodeFile,
 	importCustomNodeFile,
@@ -141,6 +143,10 @@ export function canvasActionOverrides(
 			$imageEditorTarget.set(image.shape.id)
 		}, '?e'),
 		...a('image-to-pipeline', 'Use image in pipeline', () => sendImageToPipeline(editor, notify)),
+		...a('table-use-as-data', 'Use as data', () => {
+			const table = editor.getOnlySelectedShape()
+			if (table?.type === 'table') tableUseAsData(editor, table.id)
+		}),
 		...a('qr-code', 'QR code from text / link', () => makeQrCode(editor, notify)),
 		...a('word-count', 'Word count', () => wordCount(editor, notify), '?w'),
 		...a('insert-date', 'Insert date & time', () => insertDateTime(editor), '?d'),
@@ -276,6 +282,7 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 	const hasSelection = useValue('has selection', () => editor.getSelectedShapeIds().length > 0, [editor])
 	const isImage = useValue('is image', () => !!selectedImage(editor), [editor])
 	const hasNodes = useValue('has nodes', () => editor.getSelectedShapes().some((s) => s.type === 'node'), [editor])
+	const isOneTable = useValue('one table', () => editor.getOnlySelectedShape()?.type === 'table', [editor])
 	const hasText = useValue('has text', () => editor.getSelectedShapes().some((s) => s.type === 'text'), [editor])
 	const isPackedNode = useValue(
 		'is packed node',
@@ -309,6 +316,11 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 					)}
 					{hasNodes && <TldrawUiMenuActionItem actionId="save-custom-node" />}
 					{hasNodes && <TldrawUiMenuActionItem actionId="toggle-spill" />}
+				</TldrawUiMenuGroup>
+			)}
+			{isOneTable && (
+				<TldrawUiMenuGroup id="table-tools">
+					<TldrawUiMenuActionItem actionId="table-use-as-data" />
 				</TldrawUiMenuGroup>
 			)}
 			{/* 2. AI */}
@@ -355,6 +367,7 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 			<TldrawUiMenuGroup id="insert-tools">
 				<TldrawUiMenuActionItem actionId="insert-card-palette" />
 				<InsertCardSubmenus />
+				<InsertTableSubmenu />
 			</TldrawUiMenuGroup>
 			{/* 4. Edit (tldraw's own items, unchanged) */}
 			<TldrawUiMenuGroup id="edit-tools">
@@ -401,6 +414,26 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 				<TldrawUiMenuActionItem actionId="reset-zoom" />
 			</TldrawUiMenuGroup>
 		</DefaultContextMenu>
+	)
+}
+
+/** WP40: "Table" submenu in the Insert group — a blank table plus the four list templates. */
+function InsertTableSubmenu() {
+	const editor = useEditor()
+	return (
+		<TldrawUiMenuSubmenu id="insert-table-submenu" label="Table">
+			<TldrawUiMenuGroup id="insert-table-items">
+				<TldrawUiMenuItem id="insert-table-blank" label="Blank table" onSelect={() => void insertBlankTable(editor, 4, 3)} />
+				{(Object.keys(TABLE_TEMPLATE_LABELS) as TableTemplateId[]).map((id) => (
+					<TldrawUiMenuItem
+						key={id}
+						id={`insert-table-${id}`}
+						label={TABLE_TEMPLATE_LABELS[id]}
+						onSelect={() => void insertTableTemplate(editor, id)}
+					/>
+				))}
+			</TldrawUiMenuGroup>
+		</TldrawUiMenuSubmenu>
 	)
 }
 

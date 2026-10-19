@@ -1,0 +1,442 @@
+/* WP40: canvas-native table shape. Only tldraw CSS variables (status pill / row-tint colours
+   come from getColorValue in JS, same pattern NodeShapeUtil uses for --node-accent). */
+
+.TableShape {
+	pointer-events: all;
+	background: var(--tl-color-panel);
+	border-radius: var(--tl-radius-2);
+	box-shadow: var(--tl-shadow-1);
+	font-size: var(--tbl-font, 12.5px);
+	font-family: var(--tl-font-sans);
+	color: var(--tl-color-text-1);
+	overflow: visible;
+	user-select: none;
+}
+
+.TableShape-root {
+	position: relative;
+	display: grid;
+	outline: none;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	overflow: hidden;
+}
+
+.TableShape_selected .TableShape-root {
+	border-color: var(--tl-color-selected);
+}
+
+.TableShape-corner,
+.TableShape-colHeader,
+.TableShape-rowGutter {
+	background: var(--tl-color-muted-1);
+	border-right: 1px solid var(--tl-color-divider);
+	border-bottom: 1px solid var(--tl-color-divider);
+	position: relative;
+}
+
+.TableShape-colHeader {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 var(--tl-space-2);
+	font-weight: 600;
+	color: var(--tl-color-text-2);
+	white-space: nowrap;
+	overflow: hidden;
+	cursor: grab;
+}
+
+.TableShape-colName {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex: 1;
+}
+
+.TableShape-colNameInput {
+	flex: 1;
+	min-width: 0;
+	font: inherit;
+	font-weight: 600;
+	color: inherit;
+	background: var(--tl-color-panel);
+	border: 1px solid var(--tl-color-selected);
+	border-radius: var(--tl-radius-1);
+	padding: 0 4px;
+}
+
+.TableShape-colMenuBtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: none;
+	color: var(--tl-color-text-3);
+	cursor: pointer;
+	padding: 2px;
+	border-radius: var(--tl-radius-1);
+	opacity: 0;
+}
+.TableShape-colHeader:hover .TableShape-colMenuBtn {
+	opacity: 1;
+}
+.TableShape-colMenuBtn:hover {
+	background: var(--tl-color-muted-2);
+}
+
+.TableShape-colResize {
+	/* left/height set inline (per-column offset, totalHeightPx) — rendered as a direct
+	   .TableShape-root overlay child (not nested in its column header cell), last in DOM, so it
+	   always paints above the data cells it spans past the header row. */
+	position: absolute;
+	top: 0;
+	width: 6px;
+	cursor: col-resize;
+	z-index: 5;
+}
+.TableShape-colResize:hover {
+	background: var(--tl-color-selected);
+	opacity: 0.4;
+}
+
+.TableShape-rowGutter {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: grab;
+}
+.TableShape-rowNum {
+	font-size: 0.85em;
+	color: var(--tl-color-text-3);
+	/* Hidden by default — many tables already have their own "#" column (Issue list, PR list),
+	   so a permanent second number next to it just duplicates it. Still shown on hover, so the
+	   handle (drag to reorder, right-click for the row menu) is discoverable. The table menu's
+	   "Show row numbers" toggle (.TableShape-rowGutter_numbered) makes it permanent. */
+	opacity: 0;
+	transition: opacity 0.1s ease;
+}
+.TableShape-rowGutter:hover .TableShape-rowNum,
+.TableShape-rowGutter_numbered .TableShape-rowNum {
+	opacity: 1;
+}
+.TableShape-rowResize {
+	/* top/width set inline (per-row offset, totalWidthPx) — same reasoning as
+	   .TableShape-colResize above. */
+	position: absolute;
+	left: 0;
+	height: 6px;
+	cursor: row-resize;
+	z-index: 5;
+}
+.TableShape-rowResize:hover {
+	background: var(--tl-color-selected);
+	opacity: 0.4;
+}
+
+.TableShape-cell {
+	position: relative;
+	display: flex;
+	align-items: center;
+	padding: 0 var(--tl-space-2);
+	border-right: 1px solid var(--tl-color-divider);
+	border-bottom: 1px solid var(--tl-color-divider);
+	overflow: hidden;
+	cursor: default;
+}
+.TableShape-cell.active {
+	outline: 2px solid var(--tl-color-selected);
+	outline-offset: -1px;
+	z-index: 1;
+}
+.TableShape-cell.editing {
+	outline: 2px solid var(--tl-color-primary);
+	outline-offset: -1px;
+	z-index: 2;
+	padding: 0;
+}
+
+.TableShape-align_left { justify-content: flex-start; text-align: left; }
+.TableShape-align_center { justify-content: center; text-align: center; }
+.TableShape-align_right { justify-content: flex-end; text-align: right; }
+
+.TableShape-text {
+	white-space: pre-wrap;
+	word-break: break-word;
+	overflow: hidden;
+	line-height: 1.35;
+}
+
+.TableShape-cellInput {
+	width: 100%;
+	height: 100%;
+	border: none;
+	outline: none;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	font: inherit;
+	padding: 0 var(--tl-space-2);
+}
+
+.TableShape-placeholder {
+	display: block;
+	width: 100%;
+}
+
+.TableShape-checkbox {
+	width: 1.3em;
+	height: 1.3em;
+	border-radius: var(--tl-radius-1);
+	border: 1px solid var(--tl-color-divider);
+	background: var(--tl-color-panel);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	color: var(--tl-color-panel);
+	padding: 0;
+}
+.TableShape-checkbox.checked {
+	background: var(--tl-color-primary);
+	border-color: var(--tl-color-primary);
+}
+
+.TableShape-pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.15em 0.65em;
+	border-radius: 999px;
+	font-size: 0.92em;
+	font-weight: 500;
+	line-height: 1.4;
+	white-space: nowrap;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.TableShape-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 100%;
+	overflow: hidden;
+}
+.TableShape-linkHost {
+	color: var(--tl-color-primary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-decoration: underline;
+}
+.TableShape-linkOpen {
+	border: none;
+	background: none;
+	color: var(--tl-color-text-3);
+	cursor: pointer;
+	flex: none;
+	padding: 0 2px;
+}
+.TableShape-linkOpen:hover {
+	color: var(--tl-color-primary);
+}
+
+.TableShape-person {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	overflow: hidden;
+}
+.TableShape-avatar {
+	flex: none;
+	width: 1.6em;
+	height: 1.6em;
+	border-radius: 999px;
+	background: var(--tl-color-muted-2);
+	color: var(--tl-color-text-2);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.72em;
+	font-weight: 700;
+}
+.TableShape-personName {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.TableShape-addRow,
+.TableShape-addCol {
+	position: absolute;
+	border: 1px dashed var(--tl-color-divider);
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-3);
+	border-radius: var(--tl-radius-1);
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.1s ease;
+}
+.TableShape:hover .TableShape-addRow,
+.TableShape:hover .TableShape-addCol {
+	opacity: 1;
+}
+.TableShape-addRow {
+	left: 24px;
+	right: 0;
+	bottom: -14px;
+	height: 16px;
+}
+.TableShape-addCol {
+	top: 0;
+	bottom: 0;
+	right: -14px;
+	width: 16px;
+}
+.TableShape-addRow:hover,
+.TableShape-addCol:hover {
+	border-color: var(--tl-color-selected);
+	color: var(--tl-color-selected);
+}
+
+.TableShape-bigHint {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: -22px;
+	font-size: 11px;
+	color: var(--tl-color-text-3);
+}
+
+.TableShape-statusPicker {
+	position: relative;
+	background: var(--tl-color-panel);
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	box-shadow: var(--tl-shadow-2);
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	padding: var(--tl-space-1);
+	gap: 2px;
+	min-width: 160px;
+}
+.TableShape-statusOption {
+	background: none;
+	border: none;
+	text-align: left;
+	padding: 2px var(--tl-space-1);
+	cursor: pointer;
+	border-radius: var(--tl-radius-1);
+}
+.TableShape-statusOption:hover {
+	background: var(--tl-color-muted-1);
+}
+.TableShape-statusOption.picked {
+	outline: 1px solid var(--tl-color-selected);
+}
+.TableShape-statusAdd {
+	border-top: 1px solid var(--tl-color-divider);
+	margin-top: 2px;
+	padding-top: 4px;
+}
+.TableShape-statusAdd input {
+	width: 100%;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-1);
+	padding: 2px 6px;
+	font: inherit;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+}
+
+/* Context / column menu popup, portalled to <body> */
+.TablePopupMenu {
+	position: fixed;
+	z-index: 10000;
+	background: var(--tl-color-panel);
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	box-shadow: var(--tl-shadow-3);
+	padding: var(--tl-space-1);
+	min-width: 180px;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	font-size: 12.5px;
+	font-family: var(--tl-font-sans);
+}
+.TablePopupMenu-item {
+	text-align: left;
+	border: none;
+	background: none;
+	color: var(--tl-color-text-1);
+	padding: 5px var(--tl-space-2);
+	border-radius: var(--tl-radius-1);
+	cursor: pointer;
+}
+.TablePopupMenu-item:hover {
+	background: var(--tl-color-muted-1);
+}
+.TablePopupMenu-item.danger {
+	color: var(--tl-color-danger);
+}
+.TablePopupMenu-sep {
+	height: 1px;
+	background: var(--tl-color-divider);
+	margin: 3px 2px;
+}
+.TablePopupMenu-label {
+	font-size: 11px;
+	color: var(--tl-color-text-3);
+	padding: 3px var(--tl-space-2) 0;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+
+/* Toolbar insert popover (TableInsertMenu) */
+.TableInsertMenu-popover {
+	background: var(--tl-color-panel);
+	border-radius: var(--tl-radius-2);
+	padding: var(--tl-space-2);
+	min-width: 220px;
+	font-size: 12.5px;
+}
+.TableInsertMenu-grid {
+	display: grid;
+	grid-template-columns: repeat(10, 16px);
+	grid-template-rows: repeat(10, 16px);
+	gap: 2px;
+	margin-bottom: var(--tl-space-2);
+}
+.TableInsertMenu-cell {
+	background: var(--tl-color-muted-1);
+	border-radius: 2px;
+}
+.TableInsertMenu-cell.picked {
+	background: var(--tl-color-selected);
+}
+.TableInsertMenu-size {
+	text-align: center;
+	color: var(--tl-color-text-2);
+	margin-bottom: var(--tl-space-2);
+}
+.TableInsertMenu-templates {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	border-top: 1px solid var(--tl-color-divider);
+	padding-top: var(--tl-space-1);
+}
+.TableInsertMenu-templateBtn {
+	text-align: left;
+	border: none;
+	background: none;
+	color: var(--tl-color-text-1);
+	padding: 5px var(--tl-space-2);
+	border-radius: var(--tl-radius-1);
+	cursor: pointer;
+}
+.TableInsertMenu-templateBtn:hover {
+	background: var(--tl-color-muted-1);
+}

@@ -8,6 +8,7 @@ import { ClearActionUtil } from '../actions/ClearActionUtil'
 import { CountShapesActionUtil } from '../actions/CountShapesActionUtil'
 import { WebSearchActionUtil } from '../actions/WebSearchActionUtil'
 import { CreateActionUtil } from '../actions/CreateActionUtil'
+import { CreateTableActionUtil } from '../actions/CreateTableActionUtil'
 import { DeleteActionUtil } from '../actions/DeleteActionUtil'
 import { DistributeActionUtil } from '../actions/DistributeActionUtil'
 import { LabelActionUtil } from '../actions/LabelActionUtil'
@@ -143,6 +144,7 @@ export const AGENT_MODE_DEFINITIONS = [
 
 			// Individual shapes
 			CreateActionUtil.type,
+			CreateTableActionUtil.type,
 			DeleteActionUtil.type,
 			UpdateActionUtil.type,
 			LabelActionUtil.type,

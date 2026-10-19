@@ -54,6 +54,8 @@ import { ConnectionShapeUtil } from './pipeline/connection/ConnectionShapeUtil'
 import { keepConnectionsAtBottom } from './pipeline/connection/keepConnectionsAtBottom'
 import { disableTransparency } from './pipeline/disableTransparency'
 import { NodeShapeUtil } from './pipeline/nodes/NodeShapeUtil'
+import { insertBlankTable, TableShapeUtil } from './pipeline/table/TableShapeUtil'
+import { TableInsertMenu } from './pipeline/table/TableInsertMenu'
 import { PointingPort } from './pipeline/ports/PointingPort'
 import { isBoxOpen, isPacked, watchPackedNodes } from './pipeline/subgraph'
 import { watchFieldPortAnchors } from './pipeline/ports/fieldAnchors'
@@ -79,7 +81,7 @@ const assetUrls = getAssetUrlsByImport()
 // RatioImageShapeUtil replaces tldraw's image util (adds the keep-ratio switch).
 installKeepGroup()
 
-const shapeUtils = [NodeShapeUtil, ConnectionShapeUtil, ...clipShapeUtils, RatioImageShapeUtil]
+const shapeUtils = [NodeShapeUtil, ConnectionShapeUtil, ...clipShapeUtils, RatioImageShapeUtil, TableShapeUtil]
 const bindingUtils = [ConnectionBindingUtil]
 // Agent highlight overlay + "insert node" handle on wires
 const overlayUtils = [ConnectionCenterHandleOverlayUtil, AgentHighlightOverlayUtil]
@@ -233,6 +235,13 @@ function App() {
 						<ExamplesMenu />
 						<CanvasToolsMenuGroup />
 						<TldrawUiMenuItem
+							id="insert-table"
+							label="Insert table"
+							onSelect={() => {
+								if (editor) insertBlankTable(editor, 4, 3)
+							}}
+						/>
+						<TldrawUiMenuItem
 							id="ai-providers"
 							label="AI providers…"
 							onSelect={() => openProvidersDialog()}
@@ -270,6 +279,7 @@ function App() {
 					<DefaultToolbarContent />
 					<ToolbarItem tool="markdown" />
 					<ToolbarItem tool="mermaid" />
+					<TableInsertMenu />
 					<TemplatePicker />
 				</DefaultToolbar>
 			),
@@ -282,7 +292,7 @@ function App() {
 					</TldrawAgentAppContextProvider>
 				),
 		}),
-		[app, panels, togglePanel]
+		[app, panels, togglePanel, editor]
 	)
 
 	const rail = useValue('library rail', () => $libraryRail.get(), [])

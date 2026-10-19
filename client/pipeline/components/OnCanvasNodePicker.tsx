@@ -20,7 +20,7 @@ import { NODE_GROUP_LABELS } from '../../../shared/nodeGroups'
 import { CardDoc, getCardDocs, searchCards } from '../../../shared/cardSearch'
 import { readPickerRecency, recordPick } from '../../../shared/pickerRank'
 import { useJevRerank } from './useJevRerank'
-import { IconCheck, IconJevMark, IconSearch, UiCheckbox, UiTextInput } from '../../ui'
+import { IconCheck, IconJevMark, IconSearch, IconTable, UiCheckbox, UiTextInput } from '../../ui'
 import { EditorAtom } from '../utils'
 
 export interface OnCanvasNodePickerState {
@@ -379,7 +379,7 @@ export function PickerRow({
 			onClick={onPick}
 		>
 			<span className="NodeSearchPicker-row-icon" style={{ color: PORT_TYPE_COLORS.any }}>
-				{def?.icon}
+				{doc.insertTable ? <IconTable size={14} /> : def?.icon}
 			</span>
 			<span className="NodeSearchPicker-row-text">
 				<span className="NodeSearchPicker-row-title">
