@@ -5,6 +5,7 @@ import { buildRewritePrompt, cleanPresets, REWRITE_PRESETS, RewritePreset, split
 import type { Notify } from './canvasFeatures'
 import { linkDerived } from './derivedLink'
 import { shapeText } from './shapeText'
+import { textToRichText } from '../../shared/richTextLists'
 
 /**
  * Rewrite branches (VibeText idea) with plain text shapes:
@@ -113,7 +114,7 @@ export function splitIntoParagraphs(editor: Editor, notify: Notify) {
 		for (const part of parts) {
 			const id = createShapeId()
 			ids.push(id)
-			editor.createShape({ id, type: 'text', parentId: frameId, x: GAP, y, props: { richText: toRichText(part), autoSize: false, w: CARD_W } })
+			editor.createShape({ id, type: 'text', parentId: frameId, x: GAP, y, props: { richText: textToRichText(part), autoSize: false, w: CARD_W } })
 			y += (editor.getShapeGeometry(id).bounds.h || 40) + GAP
 		}
 		editor.updateShape({ id: frameId, type: 'frame', props: { h: y } })
@@ -147,7 +148,7 @@ function addVariant(editor: Editor, source: TLShape, text: string, instructions:
 			type: 'text',
 			x,
 			y,
-			props: { richText: toRichText(text), autoSize: false, w: CARD_W, color: 'blue' },
+			props: { richText: textToRichText(text), autoSize: false, w: CARD_W, color: 'blue' },
 			meta: { rewriteOf: source.id, rewritePrompt: instructions, rewriteLabel: label },
 		})
 		linkDerived(editor, source.id, id, label)
@@ -202,7 +203,7 @@ export function keepVariant(editor: Editor, notify: Notify) {
 	walk(root.id)
 	const arrows = doomed.flatMap((id) => editor.getBindingsToShape(id, 'arrow').map((b) => b.fromId))
 	const text = shapeText(editor, pick.variant)
-	const props = 'richText' in root.props ? { richText: toRichText(text) } : root.type === 'markdown' ? { md: text } : null
+	const props = 'richText' in root.props ? { richText: textToRichText(text) } : root.type === 'markdown' ? { md: text } : null
 	if (!props) return notify('This shape type cannot take text', 'warning')
 
 	editor.markHistoryStoppingPoint('use variant')

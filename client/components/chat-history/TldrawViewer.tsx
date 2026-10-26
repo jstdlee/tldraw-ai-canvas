@@ -6,12 +6,12 @@ import {
 	defaultShapeUtils,
 	Editor,
 	StateNode,
-	tipTapDefaultExtensions,
 	TLComponents,
 	TldrawEditor,
 	TldrawUiContextProvider,
 	TLShape,
 } from 'tldraw'
+import { canvasTipTapExtensions } from '../../text/listFormat'
 
 export function TldrawViewer({
 	shapes,
@@ -89,7 +89,7 @@ const tools = [InspectTool]
 const defaultOptions = {
 	text: {
 		tipTapConfig: {
-			extensions: tipTapDefaultExtensions,
+			extensions: canvasTipTapExtensions,
 		},
 		addFontsFromNode: defaultAddFontsFromNode,
 	},

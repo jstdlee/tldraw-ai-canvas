@@ -1,4 +1,5 @@
 import { AssetRecordType, Box, createShapeId, Editor, TLShape, toRichText } from 'tldraw'
+import { textToRichText } from '../../shared/richTextLists'
 
 /** Room between a shape and a result placed next to it: enough for a labelled link arrow. */
 export const NEXT_TO_GAP = 160
@@ -95,7 +96,7 @@ export function placeTextOnCanvas(
 				type: 'text',
 				x,
 				y,
-				props: { richText: toRichText(text), autoSize: false, w },
+				props: { richText: textToRichText(text), autoSize: false, w },
 			})
 		}
 		editor.select(id)

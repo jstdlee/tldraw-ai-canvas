@@ -10,6 +10,7 @@ import './ai/ai.css'
 import './shell/shell.css'
 import './ui/ui.css'
 import './pipeline/table/table.css'
+import './text/lists.css'
 import { migrateCanvasKey } from './pipeline/canvasKeyMigration'
 
 // Move any canvas saved under the old key before the app opens its store.

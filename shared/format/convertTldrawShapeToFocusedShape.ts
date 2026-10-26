@@ -16,6 +16,7 @@ import {
 	TLTextShape,
 	Vec,
 } from 'tldraw'
+import { listAwareText } from '../richTextLists'
 import { SimpleShapeId } from '../types/ids-schema'
 import { convertTldrawFillToFocusedFill } from './FocusedFill'
 import { convertTldrawFontSizeAndScaleToFocusedFontSize } from './FocusedFontSize'
@@ -110,7 +111,7 @@ function convertDrawShapeToFocused(editor: Editor, shape: TLDrawShape): FocusedD
 
 function convertTextShapeToFocused(editor: Editor, shape: TLTextShape): FocusedTextShape {
 	const util = editor.getShapeUtil(shape)
-	const text = util.getText(shape) ?? ''
+	const text = listAwareText(util.getText(shape) ?? '', shape.props.richText)
 	const bounds = getSimpleBounds(editor, shape)
 
 	const position = new Vec()
@@ -152,7 +153,7 @@ function convertTextShapeToFocused(editor: Editor, shape: TLTextShape): FocusedT
 
 function convertGeoShapeToFocused(editor: Editor, shape: TLGeoShape): FocusedGeoShape {
 	const util = editor.getShapeUtil(shape)
-	const text = util.getText(shape)
+	const text = listAwareText(util.getText(shape), shape.props.richText)
 	const bounds = getSimpleBounds(editor, shape)
 	const shapeTextAlign = shape.props.align
 
@@ -229,7 +230,7 @@ function convertArrowShapeToFocused(editor: Editor, shape: TLArrowShape): Focuse
 
 function convertNoteShapeToFocused(editor: Editor, shape: TLNoteShape): FocusedNoteShape {
 	const util = editor.getShapeUtil(shape)
-	const text = util.getText(shape)
+	const text = listAwareText(util.getText(shape), shape.props.richText)
 	const bounds = getSimpleBounds(editor, shape)
 	return {
 		_type: 'note',

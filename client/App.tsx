@@ -42,6 +42,7 @@ import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { ImagePipelineSidebar } from './pipeline/components/ImagePipelineSidebar'
 import { CanvasExtras } from './pipeline/components/CanvasExtras'
+import { canvasTipTapExtensions, ListsRichTextToolbar, registerChecklistClicks } from './text/listFormat'
 import { installAltScroll } from './pipeline/altScroll'
 import { registerNodeGuards } from './pipeline/nodeGuards'
 import { OnCanvasNodePicker } from './pipeline/components/OnCanvasNodePicker'
@@ -95,6 +96,8 @@ const getShapeVisibility = (shape: TLShape) =>
 
 const options: Partial<TldrawOptions> = {
 	actionShortcutsLocation: 'menu',
+	// Bullets, numbers and checklists in every rich-text shape.
+	text: { tipTapConfig: { extensions: canvasTipTapExtensions } },
 }
 
 const PANEL_KEY = 'oh-my-tldraw:panels'
@@ -220,6 +223,7 @@ function App() {
 
 	const components: TLComponents = useMemo(
 		() => ({
+			RichTextToolbar: ListsRichTextToolbar,
 			InFrontOfTheCanvas: () => (
 				<>
 					<OnCanvasNodePicker />
@@ -332,6 +336,7 @@ function App() {
 							keepConnectionsAtBottom(editor)
 							disableTransparency(editor, ['connection'])
 							registerClipHandlers(editor)
+							registerChecklistClicks(editor)
 						registerLoadImagePaste(editor)
 							watchPackedNodes(editor)
 							watchFieldPortAnchors(editor)

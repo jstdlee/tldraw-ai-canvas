@@ -56,6 +56,7 @@ import { startExecution } from '../pipeline/execution/executionState'
 import { getNodeDefinitions, shouldSpillOutput } from '../pipeline/nodes/nodeTypes'
 import { createNodeAt } from '../pipeline/placeNode'
 import { NODE_GROUP_LABELS, NODE_GROUP_ORDER } from '../../shared/nodeGroups'
+import { formatSelectionAsList, selectionHasRichText } from '../text/listFormat'
 
 /**
  * Delete the selection, skipping nodes whose "Lock delete" is on. Used by the
@@ -131,6 +132,10 @@ export function canvasActionOverrides(
 		...a('ai-translate', 'Translate text…', () => aiTextJob(editor, notify, 'translate')),
 		...a('ai-improve', 'Improve writing', () => aiTextJob(editor, notify, 'improve')),
 		...a('ai-brainstorm', 'Brainstorm ideas', () => aiTextJob(editor, notify, 'brainstorm')),
+		...a('format-bullets', 'Bulleted list', () => formatSelectionAsList(editor, 'bullet')),
+		...a('format-numbers', 'Numbered list', () => formatSelectionAsList(editor, 'ordered')),
+		...a('format-checklist', 'Checklist', () => formatSelectionAsList(editor, 'task')),
+		...a('format-plain', 'Plain paragraphs', () => formatSelectionAsList(editor, null)),
 		...a('rewrite-split', 'Split into paragraphs', () => splitIntoParagraphs(editor, notify)),
 		...a('rewrite-open', 'Rewrite…', () => openRewrite(editor, notify), '?b'),
 		...a('compare', 'Compare (diff)', () => openCompare(editor, notify), '?c'),
@@ -284,6 +289,7 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 	const hasNodes = useValue('has nodes', () => editor.getSelectedShapes().some((s) => s.type === 'node'), [editor])
 	const isOneTable = useValue('one table', () => editor.getOnlySelectedShape()?.type === 'table', [editor])
 	const hasText = useValue('has text', () => editor.getSelectedShapes().some((s) => s.type === 'text'), [editor])
+	const hasRichText = useValue('has rich text', () => selectionHasRichText(editor), [editor])
 	const isPackedNode = useValue(
 		'is packed node',
 		() => {
@@ -391,6 +397,16 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 				<ArrangeMenuSubmenu />
 				<ReorderMenuSubmenu />
 				<MoveToPageMenu />
+				{hasRichText && (
+					<TldrawUiMenuSubmenu id="list-format-submenu" label="List">
+						<TldrawUiMenuGroup id="list-format">
+							<TldrawUiMenuActionItem actionId="format-bullets" />
+							<TldrawUiMenuActionItem actionId="format-numbers" />
+							<TldrawUiMenuActionItem actionId="format-checklist" />
+							<TldrawUiMenuActionItem actionId="format-plain" />
+						</TldrawUiMenuGroup>
+					</TldrawUiMenuSubmenu>
+				)}
 				{hasText && <TldrawUiMenuActionItem actionId="toggle-text-wrap" />}
 				{isImage && <TldrawUiMenuActionItem actionId="toggle-image-ratio" />}
 				{isImage && <TldrawUiMenuActionItem actionId="edit-image" />}

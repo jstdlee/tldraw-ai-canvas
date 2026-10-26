@@ -1,0 +1,77 @@
+/* List formats in rich text (see listFormat.tsx). tldraw styles ul/ol; checklists are ours. */
+
+.tl-rich-text ul[data-type='taskList'] {
+	list-style: none;
+	padding-left: 0;
+}
+
+.tl-rich-text ul[data-type='taskList'] ul[data-type='taskList'],
+.tl-rich-text li[data-type='taskItem'] > div > ul,
+.tl-rich-text li[data-type='taskItem'] > div > ol {
+	padding-left: 0.4em;
+}
+
+.tl-rich-text li[data-type='taskItem'] {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.45em;
+}
+
+.tl-rich-text li[data-type='taskItem'] > label {
+	flex: none;
+	display: flex;
+	align-items: center;
+	height: 1lh;
+	user-select: none;
+}
+
+.tl-rich-text li[data-type='taskItem'] > div {
+	flex: 1;
+	min-width: 0;
+}
+
+.tl-rich-text li[data-type='taskItem'] input[type='checkbox'] {
+	appearance: none;
+	margin: 0;
+	width: 0.85em;
+	height: 0.85em;
+	border: max(1.5px, 0.09em) solid currentColor;
+	border-radius: 0.2em;
+	background: transparent;
+	cursor: pointer;
+	pointer-events: all;
+	display: grid;
+	place-content: center;
+	opacity: 0.8;
+}
+
+.tl-rich-text li[data-type='taskItem'] input[type='checkbox']:checked {
+	background: currentColor;
+	opacity: 1;
+}
+
+.tl-rich-text li[data-type='taskItem'] input[type='checkbox']:checked::after {
+	content: '';
+	width: 0.28em;
+	height: 0.5em;
+	margin-top: -0.08em;
+	border: solid var(--tl-color-background, #fff);
+	border-width: 0 0.12em 0.12em 0;
+	transform: rotate(45deg);
+}
+
+.tl-rich-text li[data-type='taskItem'][data-checked='true'] > div > p {
+	text-decoration: line-through;
+	opacity: 0.55;
+}
+
+.tl-rich-text li[data-type='taskItem'] input[type='checkbox']:focus-visible {
+	outline: 2px solid var(--tl-color-selected);
+	outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.tl-rich-text li[data-type='taskItem'] > div > p {
+		transition: opacity 120ms ease-out;
+	}
+}

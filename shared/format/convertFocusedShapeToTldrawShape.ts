@@ -37,6 +37,7 @@ import {
 	FocusedTextShapePartial,
 	FocusedUnknownShape,
 } from './FocusedShape'
+import { textToRichText } from '../richTextLists'
 
 /**
  * Convert a FocusedShape to a shape object to a tldraw shape using defaultShape for fallback values
@@ -174,7 +175,7 @@ function convertTextShapeToTldrawShape(
 
 	let richText
 	if (focusedShape.text !== undefined) {
-		richText = toRichText(focusedShape.text)
+		richText = textToRichText(focusedShape.text)
 	} else if (defaultTextShape.props?.richText) {
 		richText = defaultTextShape.props.richText
 	} else {
@@ -471,7 +472,7 @@ function convertGeoShapeToTldrawShape(
 	// Handle richText properly - focusedShape takes priority
 	let richText
 	if (focusedShape.text !== undefined) {
-		richText = toRichText(focusedShape.text)
+		richText = textToRichText(focusedShape.text)
 	} else if (defaultGeoShape.props?.richText) {
 		richText = defaultGeoShape.props.richText
 	} else {
@@ -538,7 +539,7 @@ function convertNoteShapeToTldrawShape(
 	// Handle richText properly - focusedShape takes priority
 	let richText
 	if (focusedShape.text !== undefined) {
-		richText = toRichText(focusedShape.text)
+		richText = textToRichText(focusedShape.text)
 	} else if (defaultNoteShape.props?.richText) {
 		richText = defaultNoteShape.props.richText
 	} else {

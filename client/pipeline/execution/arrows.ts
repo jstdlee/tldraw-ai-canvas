@@ -17,6 +17,7 @@ import { NodeShape } from '../nodes/NodeShapeUtil'
 import { getNodeHeightPx } from '../nodes/nodeTypes'
 import { PipelineValue, STOP_EXECUTION } from '../nodes/types/shared'
 import { ShapePort } from '../ports/Port'
+import { textToRichText } from '../../../shared/richTextLists'
 
 /**
  * Plain tldraw arrows work as wires between the canvas and nodes:
@@ -159,7 +160,7 @@ async function writeValueIntoShape(editor: Editor, target: TLShape, value: strin
 	} else if (target.type === 'mermaid') {
 		editor.updateShape({ id: target.id, type: 'mermaid', props: { code: value } })
 	} else if ('richText' in props) {
-		editor.updateShape({ id: target.id, type: target.type, props: { richText: toRichText(value) } } as any)
+		editor.updateShape({ id: target.id, type: target.type, props: { richText: textToRichText(value) } } as any)
 	}
 }
 
@@ -181,7 +182,7 @@ async function createShapeAtArrowEnd(editor: Editor, arrow: TLArrowShape, value:
 		const md = kind === 'json' ? '```json\n' + value + '\n```' : value
 		editor.createShape({ id, type: 'markdown', x: point.x, y: point.y - 120, props: { w: 380, h: 260, md } })
 	} else {
-		editor.createShape({ id, type: 'text', x: point.x, y: point.y - 16, props: { richText: toRichText(value) } })
+		editor.createShape({ id, type: 'text', x: point.x, y: point.y - 16, props: { richText: textToRichText(value) } })
 	}
 	// Bind the arrow so the next run updates this shape instead of making a new one.
 	editor.createBinding({

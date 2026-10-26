@@ -1,10 +1,11 @@
 import { Editor, renderPlaintextFromRichText, TLAsset, TLShape } from 'tldraw'
 import { concatMemberText } from '../../shared/groupText'
+import { listAwareText } from '../../shared/richTextLists'
 
 /** Plain text of one shape (text, note, geo label, arrow label, clips, nodes). */
 export function shapeText(editor: Editor, shape: TLShape): string {
 	const props = shape.props as Record<string, any>
-	if (props.richText) return renderPlaintextFromRichText(editor, props.richText)
+	if (props.richText) return listAwareText(renderPlaintextFromRichText(editor, props.richText), props.richText)
 	if (shape.type === 'markdown') return props.md ?? ''
 	if (shape.type === 'mermaid') return props.code ?? ''
 	if (shape.type === 'bookmark') {

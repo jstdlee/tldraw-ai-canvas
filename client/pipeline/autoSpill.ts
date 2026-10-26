@@ -5,6 +5,7 @@ import { getNodePortConnections, getNodePorts } from './nodes/nodePorts'
 import { shouldSpillOutput } from './nodes/nodeTypes'
 import { NodeShape } from './nodes/NodeShapeUtil'
 import { freeSpot, placeImageOnCanvas } from './placeOnCanvas'
+import { textToRichText } from '../../shared/richTextLists'
 
 /** Horizontal gap between the node and its output label. */
 const GAP = 48
@@ -56,7 +57,7 @@ export async function spillUnconnectedOutput(editor: Editor, shape: NodeShape, o
 		if (toDrop.length) editor.deleteShapes(toDrop)
 		if (existingText) {
 			freshId = existingText.id as TLShapeId
-			editor.updateShape({ id: freshId, type: 'text', props: { richText: toRichText(text) } })
+			editor.updateShape({ id: freshId, type: 'text', props: { richText: textToRichText(text) } })
 		} else {
 			freshId = createShapeId()
 			const bounds = editor.getShapePageBounds(shape.id)
@@ -76,7 +77,7 @@ export async function spillUnconnectedOutput(editor: Editor, shape: NodeShape, o
 				x,
 				y,
 				props: {
-					richText: toRichText(text),
+					richText: textToRichText(text),
 					autoSize: false,
 					w: TEXT_W,
 					size: 'm',
