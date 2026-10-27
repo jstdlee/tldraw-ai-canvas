@@ -1,7 +1,7 @@
 {
 	"name": "oh-my-tldraw",
 	"private": true,
-	"version": "0.3.4",
+	"version": "0.3.5",
 	"type": "module",
 	"description": "Oh My tldraw: an offline tldraw canvas with an AI agent, node pipelines and branching chat.",
 	"scripts": {
