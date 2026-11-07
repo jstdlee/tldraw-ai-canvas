@@ -3,6 +3,7 @@ import {
 	DefaultMainMenu,
 	DefaultMainMenuContent,
 	DefaultToolbar,
+	CommentToolbarItem,
 	DefaultToolbarContent,
 	ToolbarItem,
 	Editor,
@@ -42,6 +43,8 @@ import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { ImagePipelineSidebar } from './pipeline/components/ImagePipelineSidebar'
 import { CanvasExtras } from './pipeline/components/CanvasExtras'
+import { commentToolOverrides, commentTools } from '@tldraw/commenting'
+import { CommentsLayer, CommentsMenuGroup, useCanvasStore } from './comments/comments'
 import { canvasTipTapExtensions, ListsRichTextToolbar, registerChecklistClicks } from './text/listFormat'
 import { installAltScroll } from './pipeline/altScroll'
 import { registerNodeGuards } from './pipeline/nodeGuards'
@@ -87,7 +90,7 @@ const bindingUtils = [ConnectionBindingUtil]
 // Agent highlight overlay + "insert node" handle on wires
 const overlayUtils = [ConnectionCenterHandleOverlayUtil, AgentHighlightOverlayUtil]
 // Agent context pickers
-const tools = [TargetShapeTool, TargetAreaTool, ...clipTools]
+const tools = [TargetShapeTool, TargetAreaTool, ...clipTools, ...commentTools]
 
 // Shapes packed into a group node stay in the document but are hidden.
 // Must be a stable function: a new one each render would rebuild the editor.
@@ -154,7 +157,8 @@ function App() {
 					'target-area': {
 						id: 'target-area',
 						label: 'Pick Area',
-						kbd: 'c',
+						// C belongs to the comment tool.
+						kbd: '?a',
 						icon: 'tool-frame',
 						onSelect() {
 							editor.setCurrentTool('target-area')
@@ -221,6 +225,8 @@ function App() {
 		[togglePanel]
 	)
 
+	const store = useCanvasStore('oh-my-tldraw', shapeUtils, bindingUtils)
+
 	const components: TLComponents = useMemo(
 		() => ({
 			RichTextToolbar: ListsRichTextToolbar,
@@ -231,10 +237,12 @@ function App() {
 					<FindBarHost />
 					<ShellChrome />
 					<SetupBanner />
+					<CommentsLayer />
 				</>
 			),
 			MainMenu: () => (
 				<DefaultMainMenu>
+					<CommentsMenuGroup />
 					<TldrawUiMenuGroup id="ai">
 						<ExamplesMenu />
 						<CanvasToolsMenuGroup />
@@ -283,6 +291,7 @@ function App() {
 					<DefaultToolbarContent />
 					<ToolbarItem tool="markdown" />
 					<ToolbarItem tool="mermaid" />
+					<CommentToolbarItem />
 					<TableInsertMenu />
 					<TemplatePicker />
 				</DefaultToolbar>
@@ -318,11 +327,11 @@ function App() {
 				</div>
 				<div className="app-canvas">
 					<Tldraw
-						persistenceKey="oh-my-tldraw"
+						store={store}
 						getShapeVisibility={getShapeVisibility}
 						assetUrls={assetUrls}
 						options={options}
-						overrides={overrides}
+						overrides={[commentToolOverrides, overrides]}
 						shapeUtils={shapeUtils}
 						bindingUtils={bindingUtils}
 						overlayUtils={overlayUtils}

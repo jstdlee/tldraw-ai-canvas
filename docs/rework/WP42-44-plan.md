@@ -1,9 +1,10 @@
-# WP42-44 plan (not started, except the SDK upgrade)
+# WP42-44 plan (WP42 done; WP43 and WP44 not started)
 
-## WP42 Comments (tldraw 5.6.0 is installed)
-- Add `@tldraw/commenting` 5.6.0. Register `commentSchemaRecords`, `commentTools`, `commentToolOverrides`, `CanvasComments`.
-- The app uses `persistenceKey`; find how to pass the records with it. Old saved canvases must still load.
-- Licensed feature: runs in development with no key; production needs a tldraw license that includes commenting.
+## WP42 Comments (done)
+- `client/comments/comments.tsx`: store with comment records, comments layer, menu items.
+- `<Tldraw persistenceKey>` has no way to add record types, so `useCanvasStore` calls tldraw's `useLocalStore`. That hook is outside tldraw's public types; recheck it at each tldraw upgrade. `tests/e2e/comments.spec.ts` covers reload.
+- Shortcut: C is now the comment tool. Pick Area moved to Alt+A.
+- License: tldraw enables comments on any http: origin, which includes the desktop app's local server. Its terms still ask for a commenting license in production.
 
 ## WP43 Zip wires (interpretation to confirm)
 - Command for selected wires and arrows: pull them into one shared trunk that splits at the ends, with a zip animation.

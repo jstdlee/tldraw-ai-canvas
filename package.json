@@ -31,6 +31,7 @@
 		"@tiptap/extension-list": "3.31.4",
 		"@tiptap/starter-kit": "3.31.4",
 		"@tldraw/assets": "5.6.0",
+		"@tldraw/commenting": "5.6.0",
 		"@tldraw/tlschema": "5.6.0",
 		"@types/node": "^22.15.31",
 		"@types/pg": "^8.23.1",

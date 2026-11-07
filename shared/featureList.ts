@@ -10,6 +10,7 @@ export const FEATURE_ROWS: FeatureRow[] = [
 	{ name: 'Draw, geo, text, note, arrow, frame', tldraw: 'Yes', here: 'Kept' },
 	{ name: 'Image, video, embed, bookmark', tldraw: 'Yes', here: 'Kept. Video node plays YouTube links in a 16:9 frame and has an autoplay switch.' },
 	{ name: 'Pages, export, undo, dark mode, snap', tldraw: 'Yes', here: 'Kept' },
+	{ name: 'Comments', tldraw: 'Separate licensed package', here: 'Press C or right-click, then Comment. Pins follow shapes, threads have replies and reactions. Main menu shows the list. Saved with the canvas.' },
 	{ name: 'Groups', tldraw: 'Group outline hides until you focus it. One child deletes the group.', here: 'Outline and top label stay. Dive in, then Back. A group with one child stays. Group text is each member on a new line.' },
 	{ name: 'Rename', tldraw: 'Shape text only', here: 'Rename a component or a group. The label sits on the top edge.' },
 	{ name: 'Packed node', tldraw: 'No', here: 'Pack keeps the inner ports on the card. Double-click unpacks.' },

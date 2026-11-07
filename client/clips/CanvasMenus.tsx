@@ -56,6 +56,7 @@ import { startExecution } from '../pipeline/execution/executionState'
 import { getNodeDefinitions, shouldSpillOutput } from '../pipeline/nodes/nodeTypes'
 import { createNodeAt } from '../pipeline/placeNode'
 import { NODE_GROUP_LABELS, NODE_GROUP_ORDER } from '../../shared/nodeGroups'
+import { CommentMenuItem } from '../comments/comments'
 import { formatSelectionAsList, selectionHasRichText } from '../text/listFormat'
 
 /**
@@ -369,6 +370,9 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 					<TldrawUiMenuActionItem actionId="word-count" />
 				</TldrawUiMenuGroup>
 			)}
+			<TldrawUiMenuGroup id="comment-tools">
+				<CommentMenuItem />
+			</TldrawUiMenuGroup>
 			{/* 3. Insert */}
 			<TldrawUiMenuGroup id="insert-tools">
 				<TldrawUiMenuActionItem actionId="insert-card-palette" />

@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { clickEmptyCanvas, gotoApp } from './helpers'
 
-test('an area marked with "c" for the agent clears with Escape', async ({ page }) => {
+test('an area marked with Alt+A for the agent clears with Escape', async ({ page }) => {
 	await gotoApp(page)
 	await clickEmptyCanvas(page)
-	await page.keyboard.press('c')
+	await page.keyboard.press('Alt+a')
 	const box = (await page.locator('.tl-canvas').boundingBox())!
 	await page.mouse.move(box.x + 300, box.y + 200)
 	await page.mouse.down()
