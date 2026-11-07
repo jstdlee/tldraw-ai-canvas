@@ -7,6 +7,15 @@ test.describe('group box (Ctrl/Cmd+Shift+P)', () => {
 	})
 
 	test('packs two chained cards into a box, opens to a group, and closes back to the box', async ({ page }) => {
+		// The box thumbnail renders the member cards through editor.toImage, outside tldraw's UI
+		// tooltip provider. A TldrawUiTooltip in a card (UiSegmented used one) threw there, so the
+		// card came out blank in the thumbnail; the crash only showed as this console error.
+		const tooltipErrors: string[] = []
+		page.on('console', (msg) => {
+			if (msg.type() === 'error' && msg.text().includes('must be used within `TooltipProvider`')) {
+				tooltipErrors.push(msg.text())
+			}
+		})
 		// Prompt (outside) -> DataPipe (member, field:with wired) -> Group (member) -> Chart (outside).
 		const promptId = await createNode(page, { type: 'prompt', text: 'hello' }, { x: -400, y: 0 })
 		const dataPipeId = await createNode(
@@ -100,5 +109,7 @@ test.describe('group box (Ctrl/Cmd+Shift+P)', () => {
 		expect((await shapeMeta(page, groupId)).packedIn).toBe(boxId)
 		const boxMetaClosed = await shapeMeta(page, boxId)
 		expect(boxMetaClosed.boxOpen).toBeFalsy()
+
+		expect(tooltipErrors).toEqual([])
 	})
 })

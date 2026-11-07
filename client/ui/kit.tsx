@@ -1161,8 +1161,11 @@ export function UiSegmented<T extends string>({
 					onKeyDown={stopKey}
 					onClick={() => onChange(option.value)}
 					// UI-05: a label that gets truncated (ellipsis, see ui.css) is still readable on
-					// hover — most options' labels are short enough that this tooltip never shows.
-					tooltip={option.label}
+					// hover. A plain `title`, not tldraw's `tooltip`: cards also render inside
+					// editor.toImage (the group-box thumbnail), which has no tooltip provider, and
+					// TldrawUiTooltip throws there ("`Tooltip` must be used within `TooltipProvider`"),
+					// so the card came out blank in the thumbnail.
+					title={option.label}
 				>
 					<TldrawUiButtonLabel>{option.label}</TldrawUiButtonLabel>
 				</TldrawUiButton>
