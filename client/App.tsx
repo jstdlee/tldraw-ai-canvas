@@ -56,6 +56,7 @@ import { ConnectionBindingUtil } from './pipeline/connection/ConnectionBindingUt
 import { ConnectionCenterHandleOverlayUtil } from './pipeline/connection/ConnectionCenterHandleOverlayUtil'
 import { ConnectionShapeUtil } from './pipeline/connection/ConnectionShapeUtil'
 import { keepConnectionsAtBottom } from './pipeline/connection/keepConnectionsAtBottom'
+import { ZipSliderLayer } from './pipeline/connection/ZipSliderLayer'
 import { disableTransparency } from './pipeline/disableTransparency'
 import { NodeShapeUtil } from './pipeline/nodes/NodeShapeUtil'
 import { insertBlankTable, TableShapeUtil } from './pipeline/table/TableShapeUtil'
@@ -234,6 +235,7 @@ function App() {
 				<>
 					<OnCanvasNodePicker />
 					<PipelineRegions />
+					<ZipSliderLayer />
 					<FindBarHost />
 					<ShellChrome />
 					<SetupBanner />

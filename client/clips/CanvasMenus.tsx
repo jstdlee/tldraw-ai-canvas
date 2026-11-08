@@ -58,6 +58,7 @@ import { createNodeAt } from '../pipeline/placeNode'
 import { NODE_GROUP_LABELS, NODE_GROUP_ORDER } from '../../shared/nodeGroups'
 import { CommentMenuItem } from '../comments/comments'
 import { formatSelectionAsList, selectionHasRichText } from '../text/listFormat'
+import { hasZip, unzipWires, zipTargets, zipWires } from '../pipeline/connection/zipWires'
 
 /**
  * Delete the selection, skipping nodes whose "Lock delete" is on. Used by the
@@ -266,6 +267,9 @@ export function canvasActionOverrides(
 			})
 		}),
 		...a('insert-card-palette', 'Insert card…', () => openInsertPaletteAtPointer(editor)),
+		// WP43. Alt+Z is free: tldraw uses Z / Shift+Z (zoom tool) and Ctrl+Z / Ctrl+Shift+Z (undo/redo).
+		...a('zip-wires', 'Zip wires', () => zipWires(editor, notify), '?z'),
+		...a('unzip-wires', 'Unzip wires', () => unzipWires(editor, notify)),
 	}
 }
 
@@ -280,7 +284,7 @@ function selectedNodeIds(editor: Editor) {
  * 2. AI — ask AI, build with AI, explain, text jobs (incl. image AI when an image is selected)
  * 3. Insert — "Insert card…" (opens the palette at the pointer) + a submenu per card group
  * 4. Edit — tldraw's own edit items, unchanged
- * 5. Arrange — tldraw's own arrange/align items, plus Text wrap / Image ratio
+ * 5. Arrange — tldraw's own arrange/align items, plus Zip / Unzip wires, Text wrap / Image ratio
  * 6. Canvas — Find, Map view, Save canvas, Examples
  */
 export function CanvasContextMenu(props: TLUiContextMenuProps) {
@@ -303,6 +307,8 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 	const canCompare = useValue('can compare', () => !!compareTargets(editor), [editor])
 	const isFrame = useValue('one frame', () => editor.getOnlySelectedShape()?.type === 'frame', [editor])
 	const openBoxGroupId = useValue('open box group', () => findOpenBoxGroup(editor), [editor])
+	const canZip = useValue('can zip wires', () => zipTargets(editor).length >= 2, [editor])
+	const canUnzip = useValue('can unzip wires', () => zipTargets(editor).some(hasZip), [editor])
 	return (
 		<DefaultContextMenu {...props}>
 			{/* 1. Card */}
@@ -401,6 +407,8 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 				<ArrangeMenuSubmenu />
 				<ReorderMenuSubmenu />
 				<MoveToPageMenu />
+				{canZip && <TldrawUiMenuActionItem actionId="zip-wires" />}
+				{canUnzip && <TldrawUiMenuActionItem actionId="unzip-wires" />}
 				{hasRichText && (
 					<TldrawUiMenuSubmenu id="list-format-submenu" label="List">
 						<TldrawUiMenuGroup id="list-format">

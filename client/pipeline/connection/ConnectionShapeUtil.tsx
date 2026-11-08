@@ -2,6 +2,7 @@ import classNames from 'classnames'
 import {
 	CubicBezier2d,
 	Editor,
+	Group2d,
 	IndexKey,
 	Mat,
 	RecordProps,
@@ -40,6 +41,7 @@ import {
 	getConnectionBindings,
 	removeConnectionBinding,
 } from './ConnectionBindingUtil'
+import { getZippedConnectionPath } from './zipWires'
 
 const CONNECTION_TYPE = 'connection'
 
@@ -99,6 +101,21 @@ export class ConnectionShapeUtil extends ShapeUtil<ConnectionShape> {
 	}
 
 	getGeometry(connection: ConnectionShape) {
+		// WP43: a zipped wire is two cubics, start → lane point → end.
+		const zipped = getZippedConnectionPath(this.editor, connection)
+		if (zipped) {
+			return new Group2d({
+				children: zipped.segments.map(
+					(s) =>
+						new CubicBezier2d({
+							start: Vec.From(s.start),
+							cp1: Vec.From(s.cp1),
+							cp2: Vec.From(s.cp2),
+							end: Vec.From(s.end),
+						})
+				),
+			})
+		}
 		const { start, end } = getConnectionTerminals(this.editor, connection)
 		const [cp1, cp2] = getConnectionControlPoints(start, end)
 		return new CubicBezier2d({
@@ -314,6 +331,8 @@ export class ConnectionShapeUtil extends ShapeUtil<ConnectionShape> {
 	}
 
 	getIndicatorPath(connection: ConnectionShape) {
+		const zipped = getZippedConnectionPath(this.editor, connection)
+		if (zipped) return new Path2D(zipped.d)
 		const { start, end } = getConnectionTerminals(this.editor, connection)
 		return new Path2D(getConnectionPath(start, end))
 	}
@@ -322,10 +341,16 @@ export class ConnectionShapeUtil extends ShapeUtil<ConnectionShape> {
 function ConnectionShapeComponent({ connection }: { connection: ConnectionShape }) {
 	const editor = useEditor()
 
-	const { start, end } = useValue('terminals', () => getConnectionTerminals(editor, connection), [
-		editor,
-		connection,
-	])
+	const d = useValue(
+		'connection path',
+		() => {
+			const zipped = getZippedConnectionPath(editor, connection)
+			if (zipped) return zipped.d
+			const { start, end } = getConnectionTerminals(editor, connection)
+			return getConnectionPath(start, end)
+		},
+		[editor, connection]
+	)
 
 	// Get the data type color for this connection from its start binding
 	const connectionColor = useValue(
@@ -358,7 +383,7 @@ function ConnectionShapeComponent({ connection }: { connection: ConnectionShape 
 			className={classNames('ConnectionShape', isInactive && 'ConnectionShape_inactive')}
 		>
 			<path
-				d={getConnectionPath(start, end)}
+				d={d}
 				style={connectionColor ? { stroke: connectionColor } : undefined}
 			/>
 		</SVGContainer>
@@ -384,6 +409,8 @@ export function getConnectionPageCenter(editor: Editor, connection: ConnectionSh
 	const startPage = getConnectionBindingPositionInPageSpace(editor, bindings.start)
 	const endPage = getConnectionBindingPositionInPageSpace(editor, bindings.end)
 	if (!startPage || !endPage) return null
+	const zipped = getZippedConnectionPath(editor, connection)
+	if (zipped) return zipped.middlePage
 	const [cp1, cp2] = getConnectionControlPoints(startPage, endPage)
 	// Cubic bezier midpoint at t=0.5: (P0 + 3·P1 + 3·P2 + P3) / 8
 	return new Vec(

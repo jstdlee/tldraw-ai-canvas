@@ -680,6 +680,20 @@ body {
 	stroke-linecap: round;
 }
 
+/* WP43: the zip slider pill (14 px along the bundle axis, 8 px across). */
+.ZipSlider {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 14px;
+	height: 8px;
+	border-radius: 4px;
+	background: var(--tl-color-selected);
+	box-shadow: var(--tl-shadow-1);
+	pointer-events: none;
+	z-index: 1;
+}
+
 /* ---- On-canvas node picker ---- */
 
 .OnCanvasNodePicker {
