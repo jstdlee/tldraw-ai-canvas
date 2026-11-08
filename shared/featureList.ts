@@ -20,6 +20,7 @@ export const FEATURE_ROWS: FeatureRow[] = [
 	{ name: 'Minimap', tldraw: 'Not in the default UI', here: 'Map view. Drag to move. Search hits blink.' },
 	{ name: 'Find', tldraw: 'No find bar', here: 'Movable panel. Several lines, regexp, case, component type, asset type, highlight, replace preview, dry run' },
 	{ name: 'Command palette', tldraw: 'No Ctrl-P insert', here: 'Ctrl-P searches features and inserts a node' },
+	{ name: 'Zip wires', tldraw: 'No', here: 'Alt-Z or right-click pulls the middles of the selected wires and arrows into close, parallel lanes with no crossings, with a zip animation. Wires stay zipped when cards move. Unzip puts them back.' },
 	{ name: 'Node pipelines', tldraw: 'No', here: 'Text, net, LLM, image, logic, data, media' },
 	{ name: 'Unconnected output', tldraw: 'No', here: 'Spills onto a text or image shape. The card does not keep the result body.' },
 	{ name: 'Large view', tldraw: 'No', here: 'Max button opens a small editor. Markdown and Mermaid open a full view with edit, and Mermaid can zoom and scroll.' },
