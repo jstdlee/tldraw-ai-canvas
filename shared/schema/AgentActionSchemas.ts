@@ -94,6 +94,20 @@ export const CreateAction = z
 
 export type CreateAction = z.infer<typeof CreateAction>
 
+// Build Workflow Action (WP44)
+export const BuildWorkflowAction = z
+	.object({
+		_type: z.literal('build-workflow'),
+		goal: z.string(),
+	})
+	.meta({
+		title: 'Build Workflow',
+		description:
+			'The AI plans a workflow of pipeline cards (nodes wired together: load a file, transform data, call AI, chart, save…) for the goal, and shows the plan to the user to apply. Use this instead of drawing shapes whenever the user asks for a pipeline, workflow, automation or cards that do work (e.g. "load sales.xlsx and chart it"). Put the whole request in "goal".',
+	})
+
+export type BuildWorkflowAction = z.infer<typeof BuildWorkflowAction>
+
 // Create Table Action (WP40: canvas-native table shape)
 export const CreateTableAction = z
 	.object({

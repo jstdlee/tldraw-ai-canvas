@@ -398,7 +398,7 @@
 	}
 }
 
-/* Layout: node library | canvas | agent chat */
+/* Layout: node library | canvas | agent dock (WP44) */
 
 .app-layout {
 	position: fixed;
@@ -408,7 +408,7 @@
 }
 
 .app-layout .image-pipeline-sidebar {
-	grid-area: auto;
+	grid-area: 1 / 1;
 	width: 248px;
 	max-width: 248px;
 	min-width: 0;
@@ -423,22 +423,70 @@
 	}
 }
 
-.app-layout .chat-panel {
-	width: 350px;
-}
-
-@media (max-width: 1100px) {
-	.app-layout .chat-panel {
-		width: 300px;
-	}
-}
-
-.app-layout.is-library-hidden .image-pipeline-sidebar,
-.app-layout.is-chat-hidden .chat-panel-wrapper {
+.app-layout.is-library-hidden .image-pipeline-sidebar {
 	display: none;
 }
 
-.chat-float-button {
+/* WP44: the agent panel is the layout's third column (a real element outside <Tldraw>), so the
+   canvas column gets narrower when it opens. Closed, it is 0 px wide. */
+.agent-dock {
+	/* Always the third column, also when the node library is hidden. */
+	grid-area: 1 / 3;
+	position: relative;
+	height: 100%;
+	min-width: 0;
+	overflow: hidden;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	transition: width 160ms ease;
+}
+
+.agent-dock.is-open {
+	border-left: 1px solid var(--tl-color-divider);
+}
+
+.agent-dock.is-resizing {
+	transition: none;
+	user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.agent-dock {
+		transition: none;
+	}
+}
+
+.agent-dock-inner {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-width: 0;
+}
+
+.agent-dock-resize {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: -3px;
+	width: 7px;
+	z-index: 2;
+	cursor: col-resize;
+	touch-action: none;
+}
+
+.agent-dock-resize:hover,
+.agent-dock.is-resizing .agent-dock-resize {
+	background: color-mix(in srgb, var(--tl-color-selected) 35%, transparent);
+}
+
+.agent-dock-inner .chat-panel {
+	flex: 1 1 auto;
+	min-height: 0;
+	width: 100%;
+	border-left: none;
+}
+
+.agent-dock-button {
 	position: fixed;
 	right: 20px;
 	/* 56px further up than the corner, so it does not sit on tldraw's "Get a license" note. */
@@ -459,34 +507,66 @@
 	pointer-events: all;
 }
 
-/* WP23 Part E: the agent chat lives in a FloatingPanel (WP22's draggable/resizable chrome)
-   instead of a fixed, unmovable corner modal. .FloatingPanel/-header/-body own position, size,
-   drag and resize; this just styles the header bar and lets .chat-panel fill the panel body. */
-.chat-float-panel {
-	border-radius: 16px;
-}
-
-.chat-float-bar {
+/* WP44: the dock's header row: title, model chip, menu, history, new chat, close. */
+.agent-dock-header {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	/* WP32 Problem 2: this only resolved once the FloatingPanel root itself carried the
-	 * tl-theme__* class (see App.tsx) — before that it fell through to the page's default
-	 * text color, reading as near-invisible dark-on-dark in dark mode. text-0 (not text-1)
-	 * for the strongest, most legible title color. */
+	padding: 8px 8px 8px 12px;
+	border-bottom: 1px solid var(--tl-color-divider);
 	color: var(--tl-color-text-0);
-	width: 100%;
 	min-width: 0;
+	flex: 0 0 auto;
 }
 
-.chat-float-bar-title {
+.agent-dock-title {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 0.95em;
+	font-size: 13px;
 	font-weight: 600;
 	white-space: nowrap;
 	flex-shrink: 0;
+}
+
+.agent-dock-header-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex-shrink: 0;
+}
+
+.agent-dock-menu {
+	max-width: 340px;
+	max-height: min(70vh, 520px);
+}
+
+.agent-build-options {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 4px;
+	font-size: 12px;
+}
+
+.agent-build-options-title {
+	font-weight: 600;
+	color: var(--tl-color-text-1);
+}
+
+.agent-build-options-group {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.agent-build-options-types {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding-left: 8px;
+	width: 100%;
 }
 
 /* WP28 Part C: click opens AI providers — this replaces the per-message model dropdown
@@ -509,13 +589,6 @@
 .chat-model-chip:hover {
 	background: var(--tl-color-muted-2);
 	color: var(--tl-color-text-1);
-}
-
-.chat-float-bar-actions {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	flex-shrink: 0;
 }
 
 .chat-history-menu {
@@ -568,18 +641,8 @@
 	color: var(--tl-color-text-3);
 }
 
-.chat-float-panel .FloatingPanel-body {
-	padding: 0;
-	overflow: hidden;
-}
-
-.chat-float-panel .chat-panel {
-	width: 100%;
-	height: 100%;
-	border-left: none;
-}
-
 .app-canvas {
+	grid-area: 1 / 2;
 	position: relative;
 	min-width: 0;
 	height: 100%;
@@ -617,8 +680,23 @@
 	.app-layout .image-pipeline-sidebar {
 		display: none;
 	}
-	.app-layout .chat-panel {
-		width: 100vw;
+	.app-canvas {
+		grid-area: 1 / 1;
+	}
+	.agent-dock {
+		grid-area: 2 / 1;
+	}
+	.agent-dock.is-open {
+		width: 100vw !important;
+		height: 50vh;
+		border-left: none;
+		border-top: 1px solid var(--tl-color-divider);
+	}
+	.agent-dock-inner {
+		width: 100% !important;
+	}
+	.agent-dock-resize {
+		display: none;
 	}
 }
 

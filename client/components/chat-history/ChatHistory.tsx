@@ -1,17 +1,8 @@
-import { ReactNode, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useValue } from 'tldraw'
 import { IconSparkle } from '../../ui'
 import { TldrawAgent } from '../../agent/TldrawAgent'
 import { ChatHistorySection, getAgentHistorySections } from './ChatHistorySection'
-
-/** WP28 Part C: shown when a new chat has no messages yet. Each chip sends a ready-made
- * request so a user can get going without having to think of a first prompt. */
-const SUGGESTIONS = [
-	{ label: 'Draw a flowchart', message: 'Draw a simple flowchart with 3 steps' },
-	{ label: 'Sketch an idea', message: 'Sketch a rough idea for a mobile app home screen' },
-	{ label: 'Build with my cards', message: 'Wire up the cards I have on the canvas' },
-	{ label: 'What can you do?', message: 'What can you help me with here?' },
-]
 
 /*
 Chat history is stored as a list of history items.
@@ -40,15 +31,7 @@ Here's an example of how the UI might look:
 
 */
 
-export function ChatHistory({
-	agent,
-	trailing,
-}: {
-	agent: TldrawAgent
-	/** WP23 Part F: Build-with-AI plan messages, rendered after the agent's own history so
-	 * they scroll with it, inside the same chat thread. */
-	trailing?: ReactNode
-}) {
+export function ChatHistory({ agent }: { agent: TldrawAgent }) {
 	const historyItems = useValue('chatHistory', () => agent.chat.getHistory(), [agent])
 	const sections = getAgentHistorySections(historyItems)
 	const historyRef = useRef<HTMLDivElement>(null)
@@ -92,35 +75,16 @@ export function ChatHistory({
 
 	const isGenerating = useValue('isGenerating', () => agent.requests.isGenerating(), [agent])
 
-	const sendSuggestion = (message: string) => {
-		agent.interrupt({
-			input: {
-				agentMessages: [message],
-				bounds: agent.editor.getViewportPageBounds(),
-				source: 'user',
-				contextItems: agent.context.getItems(),
-			},
-		})
-	}
-
-	const hasTrailing = Array.isArray(trailing) ? trailing.length > 0 : !!trailing
-
-	if (sections.length === 0 && !hasTrailing) {
+	if (sections.length === 0) {
+		// WP28 Part C / WP44: the quick action chips above the thread are the "what to try" list.
 		return (
 			<div className="chat-history chat-history-empty">
 				<div className="chat-empty-state">
 					<IconSparkle size={22} />
-					<p className="chat-empty-state-title">Ask, learn, or start drawing</p>
+					<p className="chat-empty-state-title">Ask, draw, or build</p>
 					<p className="chat-empty-state-subtitle">
-						Chat about the canvas, or pick something to try:
+						Select something on the canvas, then pick an action above or type below.
 					</p>
-					<div className="chat-empty-state-suggestions">
-						{SUGGESTIONS.map((s) => (
-							<button key={s.label} type="button" className="chat-suggestion-chip" onClick={() => sendSuggestion(s.message)}>
-								{s.label}
-							</button>
-						))}
-					</div>
 				</div>
 			</div>
 		)
@@ -138,7 +102,6 @@ export function ChatHistory({
 					/>
 				)
 			})}
-			{trailing}
 		</div>
 	)
 }

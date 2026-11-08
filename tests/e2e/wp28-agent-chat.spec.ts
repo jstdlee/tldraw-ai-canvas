@@ -22,9 +22,10 @@ async function mockStream(page: import('@playwright/test').Page, actions: Record
 	)
 }
 
+/** WP44: the agent chat is the docked agent panel (a right-hand layout column). */
 async function openChat(page: import('@playwright/test').Page) {
-	await page.locator('.chat-float-button').click()
-	const panel = page.locator('[role="dialog"][aria-label="Agent chat"]')
+	await page.locator('.agent-dock-button').click()
+	const panel = page.locator('aside.agent-dock.is-open')
 	await expect(panel).toBeVisible()
 	return panel
 }

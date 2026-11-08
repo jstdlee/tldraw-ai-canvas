@@ -90,7 +90,7 @@ test.describe('WP23: agent chat builds with selected cards', () => {
 		await gotoApp(page)
 	})
 
-	test('sending the chat with a card selected shows a plan message instead of drawing', async ({ page }) => {
+	test('sending the chat with cards selected shows a plan message instead of drawing', async ({ page }) => {
 		const planJson = {
 			summary: 'Add a note card',
 			add: [{ ref: 'n1', type: 'prompt', props: { text: 'hello from the plan' } }],
@@ -107,26 +107,30 @@ test.describe('WP23: agent chat builds with selected cards', () => {
 		const cardId = await createNode(page, { type: 'prompt', text: 'existing card' }, { x: 0, y: 0 })
 		await selectShapes(page, [cardId])
 
-		await page.locator('.chat-float-button').click()
-		const panel = page.locator('[role="dialog"][aria-label="Agent chat"]')
+		// WP44: the docked agent panel; there is no Draw/Build mode chip any more — the scope
+		// chip shows the selected card, and free text with cards selected routes to Build.
+		await page.locator('.agent-dock-button').click()
+		const panel = page.locator('aside.agent-dock.is-open')
 		await expect(panel).toBeVisible()
+		await expect(panel.locator('.agent-scope-label')).toHaveText(/^Card: /)
+		await expect(panel.locator('.chat-mode-chip')).toHaveCount(0)
 
-		// WP32 Problem 2: the mode chip is now a "Draw | Build" segmented control instead of a
-		// single text label — the active side shows the card count and is the checked radio.
-		const chip = panel.locator('.chat-mode-chip')
-		const buildOption = chip.getByRole('radio', { name: /^Build/ })
-		await expect(buildOption).toHaveText('Build (1)')
-		await expect(buildOption).toHaveAttribute('aria-checked', 'true')
+		// One card selected routes free text to the card's own AI; "Wire these up" is the
+		// card-scope way into Build, so select a second card for the free-text build route.
+		const second = await createNode(page, { type: 'prompt', text: 'second card' }, { x: 400, y: 0 })
+		await selectShapes(page, [cardId, second])
+		await expect(panel.locator('.agent-scope-label')).toHaveText('2 cards')
 
 		const input = panel.locator('textarea[name="input"]')
 		await input.fill('wire these up')
 		await input.press('Enter')
 
-		const message = panel.locator('.ChatPlanMessage')
+		const message = panel.locator('.chat-task[data-task-route="build"]')
 		await expect(message).toBeVisible()
 		await expect(message).toContainText('Add a note card')
 		await expect(message.getByText('Apply', { exact: true })).toBeVisible()
-		await expect(message.getByText('Open in Build panel', { exact: true })).toBeVisible()
-		await expect(message.getByText('Revise', { exact: true })).toBeVisible()
+		await expect(message.getByText('Discard', { exact: true })).toBeVisible()
+		// Revise: typing again revises the plan (shown as a hint, not a button).
+		await expect(message.getByText('Type below to revise the plan.')).toBeVisible()
 	})
 })

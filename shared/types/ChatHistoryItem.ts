@@ -10,6 +10,7 @@ export type ChatHistoryItem =
 	| ChatHistoryPromptItem
 	| ChatHistoryContinuationItem
 	| ChatHistoryErrorItem
+	| ChatHistoryTaskItem
 
 /**
  * A prompt from a user, another agent, or the agent itself.
@@ -51,4 +52,29 @@ export interface ChatHistoryContinuationItem {
 export interface ChatHistoryErrorItem {
 	type: 'error'
 	message: string
+}
+
+/**
+ * WP44: a task the agent panel ran outside the drawing agent (a text job, a build plan, a card
+ * assist, a rewrite…). Pushed after a `prompt` item and updated by `id` as it runs; it persists
+ * with the chat. The drawing agent sees it as one short text line (`taskHistoryLine`).
+ */
+export interface ChatHistoryTaskItem {
+	type: 'task'
+	id: string
+	route: string // 'text-job' | 'build' | 'node-assist' | …
+	label: string // "Summarize", "Build: Load sales.xlsx…"
+	scopeLabel: string // frozen from the scope at send time
+	scopeIds: string[]
+	status: 'running' | 'done' | 'error' | 'applied' | 'discarded'
+	text?: string // reply text or the result text placed on the canvas
+	placedIds?: string[] // shapes the task added to the canvas
+	plan?: unknown // AiPlan for build
+	warnings?: string[]
+	assist?: unknown // NodeAssistResult for node-assist
+	error?: string
+	/** build: the goal the plan was made for (a revision builds on it). */
+	goal?: string
+	/** The request that started the task, so Retry can run it again. */
+	request?: unknown
 }

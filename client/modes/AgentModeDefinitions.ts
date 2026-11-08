@@ -4,6 +4,7 @@ import type { PromptPart } from '../../shared/types/PromptPart'
 import { AddDetailActionUtil } from '../actions/AddDetailActionUtil'
 import { AlignActionUtil } from '../actions/AlignActionUtil'
 import { BringToFrontActionUtil } from '../actions/BringToFrontActionUtil'
+import { BuildWorkflowActionUtil } from '../actions/BuildWorkflowActionUtil'
 import { ClearActionUtil } from '../actions/ClearActionUtil'
 import { CountShapesActionUtil } from '../actions/CountShapesActionUtil'
 import { WebSearchActionUtil } from '../actions/WebSearchActionUtil'
@@ -163,6 +164,9 @@ export const AGENT_MODE_DEFINITIONS = [
 
 			// Drawing
 			PenActionUtil.type,
+
+			// Pipeline cards (WP44: a plan for the user to apply, in the thread)
+			BuildWorkflowActionUtil.type,
 
 			// External APIs
 			CountShapesActionUtil.type,

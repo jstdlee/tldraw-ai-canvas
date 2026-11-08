@@ -10,8 +10,6 @@ import {
 	TLShapeId,
 	toRichText,
 } from 'tldraw'
-import { $aiNote } from '../pipeline/assist'
-import { openBuildPanel } from '../pipeline/aiBuild'
 import { apiGenerateText, apiHttp, apiImportImage, apiProbeImage } from '../pipeline/api/pipelineApi'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../pipeline/placeOnCanvas'
 import { isMermaid, looksLikeMarkdown } from '../../shared/clipText'
@@ -28,8 +26,14 @@ export { shapeText }
 
 /** Text of the selection, top-to-bottom then left-to-right; includes children of frames/groups. */
 export function selectionText(editor: Editor): string {
+	return textOfShapes(editor, editor.getSelectedShapeIds())
+}
+
+/** Text of these shapes (and their children), top-to-bottom then left-to-right. */
+export function textOfShapes(editor: Editor, shapeIds: TLShapeId[]): string {
 	const ids = new Set<TLShapeId>()
-	for (const id of editor.getSelectedShapeIds()) {
+	for (const id of shapeIds) {
+		if (!editor.getShape(id)) continue
 		ids.add(id)
 		for (const child of editor.getShapeAndDescendantIds([id])) ids.add(child)
 	}
@@ -55,18 +59,15 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
 	})
 }
 
-/** A PNG snapshot of the selection (what you see), as a data URL. */
-export async function selectionSnapshot(editor: Editor): Promise<string | null> {
-	const ids = editor.getSelectedShapeIds()
+/** A PNG snapshot of these shapes (what you see), as a data URL. */
+export async function snapshotOf(editor: Editor, shapeIds: TLShapeId[]): Promise<string | null> {
+	const ids = shapeIds.filter((id) => editor.getShape(id))
 	if (!ids.length) return null
 	const { blob } = await editor.toImage(ids, { format: 'png', background: true, scale: 1, padding: 16 })
 	return blobToDataUrl(blob)
 }
 
-export function selectedImage(
-	editor: Editor
-): { shape: TLShape; src: string; assetId: TLAsset['id'] } | null {
-	const shape = editor.getOnlySelectedShape()
+function imageOf(editor: Editor, shape: TLShape | undefined): { shape: TLShape; src: string; assetId: TLAsset['id'] } | null {
 	if (!shape || shape.type !== 'image') return null
 	const assetId = (shape.props as { assetId?: TLAsset['id'] }).assetId
 	const asset = assetId ? editor.getAsset(assetId) : undefined
@@ -74,9 +75,21 @@ export function selectedImage(
 	return src && assetId ? { shape, src, assetId } : null
 }
 
+export function selectedImage(
+	editor: Editor
+): { shape: TLShape; src: string; assetId: TLAsset['id'] } | null {
+	return imageOf(editor, editor.getOnlySelectedShape() ?? undefined)
+}
+
 /** A URL or data URL for the selected image that the server and models can read. */
 export async function selectedImageForAI(editor: Editor): Promise<string | null> {
-	const image = selectedImage(editor)
+	const shape = editor.getOnlySelectedShape()
+	return shape ? imageForAI(editor, shape.id) : null
+}
+
+/** A URL or data URL for one image shape that the server and models can read. */
+export async function imageForAI(editor: Editor, shapeId: TLShapeId): Promise<string | null> {
+	const image = imageOf(editor, editor.getShape(shapeId))
 	if (!image) return null
 	if (image.src.startsWith('data:') || image.src.startsWith('/api/images/') || /^https?:/.test(image.src)) {
 		return image.src
@@ -95,69 +108,130 @@ export type Notify = (title: string, severity?: 'info' | 'success' | 'error' | '
 
 const anchor = (editor: Editor) => editor.getOnlySelectedShape() ?? editor.getSelectedShapes()[0] ?? null
 
-async function runAI(
-	editor: Editor,
-	notify: Notify,
-	label: string,
-	input: string,
-	prompt: string,
-	placeAs: 'text' | 'markdown' = 'markdown'
-) {
-	const near = anchor(editor)
-	const sources = derivedSources(editor)
-	notify(`${label}…`)
-	try {
-		const { text } = await apiGenerateText({ input, prompt })
-		const id = placeTextOnCanvas(editor, near, text, placeAs)
-		linkAllDerived(editor, sources, id, label)
-		notify(`${label}: done`, 'success')
-	} catch (e) {
-		notify(`${label} failed: ${(e as Error).message}`, 'error')
-	}
-}
-
-export async function aiDescribeImage(editor: Editor, notify: Notify) {
-	const input = (await selectedImageForAI(editor)) ?? (await selectionSnapshot(editor))
-	if (!input) return notify('Select an image first', 'warning')
-	return runAI(editor, notify, 'Describe image', input, 'Describe this image in detail: subject, setting, style, colours and any text.')
-}
-
-export async function aiExtractText(editor: Editor, notify: Notify) {
-	const input = (await selectedImageForAI(editor)) ?? (await selectionSnapshot(editor))
-	if (!input) return notify('Select an image first', 'warning')
-	return runAI(editor, notify, 'Extract text', input, 'Extract all text in this image exactly as written (OCR). Keep line breaks. Return only the text.', 'text')
-}
-
-export async function aiExplainSelection(editor: Editor, notify: Notify) {
-	const snapshot = await selectionSnapshot(editor)
-	if (!snapshot) return notify('Select something first', 'warning')
-	return runAI(editor, notify, 'Explain', snapshot, 'Explain what this part of a whiteboard shows (drawings, diagrams, notes). Then suggest 3 next steps. Use Markdown.')
+export interface AiJobResult {
+	text: string
+	/** The text or Markdown shape the result was placed in. */
+	placedId: TLShapeId
 }
 
 /**
- * WP22 B5: any card (node) in the selection always opens Build with AI — it can wire, arrange
- * and configure, which the per-node specialist (openFillAssist, still reachable from the ✦
- * button on a card) cannot. Anything else (0 nodes, or non-node shapes as notes) also opens it.
+ * WP44: one AI job on some shapes: ask the model, place the answer next to `near`, and link
+ * every source to it with a derived arrow. Returns the answer; throws on failure (the agent
+ * panel shows it as a task message, not a toast).
  */
-export function aiAskSelection(editor: Editor, _notify: Notify) {
-	openBuildPanel()
+export async function runAI(
+	editor: Editor,
+	job: {
+		label: string
+		input: string
+		prompt: string
+		placeAs?: 'text' | 'markdown'
+		near: TLShape | null
+		sources: TLShapeId[]
+		signal?: AbortSignal
+	}
+): Promise<AiJobResult> {
+	const { text } = await apiGenerateText({ input: job.input, prompt: job.prompt }, job.signal)
+	if (!text.trim()) throw new Error('The model sent an empty answer. Try again or pick another model.')
+	const placedId = placeTextOnCanvas(editor, job.near, text, job.placeAs ?? 'markdown')
+	linkAllDerived(editor, job.sources, placedId, job.label)
+	return { text, placedId }
 }
 
-export async function aiTextJob(editor: Editor, notify: Notify, job: 'summarize' | 'translate' | 'improve' | 'brainstorm') {
-	const text = selectionText(editor)
-	if (!text) return notify('Select shapes with text first', 'warning')
+const TEXT_JOB_PROMPTS = {
+	summarize: 'Summarize the input as a short title line and 3-6 bullet points. Use Markdown.',
+	improve: 'Rewrite the input to be clear and concise. Fix grammar. Keep the meaning and formatting.',
+	brainstorm: 'Brainstorm 8 new, varied ideas that build on the input. Markdown checklist (- [ ] …).',
+}
+
+const TEXT_JOB_LABELS = { summarize: 'Summarize', improve: 'Improve writing', brainstorm: 'Brainstorm' }
+
+/** The shapes a job reads, minus arrows (they are links, not sources). */
+function jobSources(editor: Editor, ids: TLShapeId[]): TLShapeId[] {
+	return ids.filter((id) => {
+		const shape = editor.getShape(id)
+		return shape && shape.type !== 'arrow'
+	})
+}
+
+function jobAnchor(editor: Editor, ids: TLShapeId[]): TLShape | null {
+	for (const id of ids) {
+		const shape = editor.getShape(id)
+		if (shape) return shape
+	}
+	return null
+}
+
+/** Summarize / translate / improve / brainstorm the text of these shapes. */
+export async function runTextJob(
+	editor: Editor,
+	ids: TLShapeId[],
+	job: 'summarize' | 'translate' | 'improve' | 'brainstorm',
+	opts: { language?: string; signal?: AbortSignal } = {}
+): Promise<AiJobResult> {
+	const input = textOfShapes(editor, ids)
+	if (!input) throw new Error('Select shapes with text first.')
+	const near = jobAnchor(editor, ids)
+	const sources = jobSources(editor, ids)
 	if (job === 'translate') {
-		const language = window.prompt('Translate into which language?', 'English')
-		if (!language) return
-		return runAI(editor, notify, `Translate → ${language}`, text, `Translate the input into ${language}. Keep the formatting. Return only the translation.`)
+		const language = opts.language?.trim() || 'English'
+		return runAI(editor, {
+			label: `Translate → ${language}`,
+			input,
+			prompt: `Translate the input into ${language}. Keep the formatting. Return only the translation.`,
+			near,
+			sources,
+			signal: opts.signal,
+		})
 	}
-	const prompts = {
-		summarize: 'Summarize the input as a short title line and 3-6 bullet points. Use Markdown.',
-		improve: 'Rewrite the input to be clear and concise. Fix grammar. Keep the meaning and formatting.',
-		brainstorm: 'Brainstorm 8 new, varied ideas that build on the input. Markdown checklist (- [ ] …).',
+	return runAI(editor, { label: TEXT_JOB_LABELS[job], input, prompt: TEXT_JOB_PROMPTS[job], near, sources, signal: opts.signal })
+}
+
+/** Describe an image, or read its text (OCR). Falls back to a snapshot of the shapes. */
+export async function runImageJob(
+	editor: Editor,
+	ids: TLShapeId[],
+	job: 'describe' | 'ocr',
+	opts: { signal?: AbortSignal } = {}
+): Promise<AiJobResult> {
+	const imageId = ids.find((id) => editor.getShape(id)?.type === 'image')
+	const input = (imageId ? await imageForAI(editor, imageId) : null) ?? (await snapshotOf(editor, ids))
+	if (!input) throw new Error('Select an image first.')
+	const near = jobAnchor(editor, ids)
+	const sources = jobSources(editor, ids)
+	if (job === 'describe') {
+		return runAI(editor, {
+			label: 'Describe image',
+			input,
+			prompt: 'Describe this image in detail: subject, setting, style, colours and any text.',
+			near,
+			sources,
+			signal: opts.signal,
+		})
 	}
-	const labels = { summarize: 'Summarize', improve: 'Improve writing', brainstorm: 'Brainstorm' }
-	return runAI(editor, notify, labels[job], text, prompts[job])
+	return runAI(editor, {
+		label: 'Extract text',
+		input,
+		prompt: 'Extract all text in this image exactly as written (OCR). Keep line breaks. Return only the text.',
+		placeAs: 'text',
+		near,
+		sources,
+		signal: opts.signal,
+	})
+}
+
+/** Explain what these shapes show (from a snapshot), with 3 next steps. */
+export async function runExplain(editor: Editor, ids: TLShapeId[], opts: { signal?: AbortSignal } = {}): Promise<AiJobResult> {
+	const snapshot = await snapshotOf(editor, ids)
+	if (!snapshot) throw new Error('Select something first.')
+	return runAI(editor, {
+		label: 'Explain',
+		input: snapshot,
+		prompt: 'Explain what this part of a whiteboard shows (drawings, diagrams, notes, workflow cards). Then suggest 3 next steps. Use Markdown.',
+		near: jobAnchor(editor, ids),
+		sources: jobSources(editor, ids),
+		signal: opts.signal,
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -214,11 +288,14 @@ export function createClipAtCenter(editor: Editor, type: 'markdown' | 'mermaid')
 	editor.setEditingShape(id)
 }
 
-/** Send the selected image into a new "Load image" pipeline node. */
-export async function sendImageToPipeline(editor: Editor, notify: Notify) {
+/** Send the selected image into a new "Load image" pipeline node. Returns the new card's id. */
+export async function sendImageToPipeline(editor: Editor, notify?: Notify): Promise<TLShapeId | null> {
 	const image = selectedImage(editor)
 	const src = await selectedImageForAI(editor)
-	if (!image || !src) return notify('Select an image first', 'warning')
+	if (!image || !src) {
+		notify?.('Select an image first', 'warning')
+		return null
+	}
 	const bounds = editor.getShapePageBounds(image.shape)!
 	const id = createShapeId()
 	editor.createShape({
@@ -229,6 +306,7 @@ export async function sendImageToPipeline(editor: Editor, notify: Notify) {
 		props: { node: { type: 'load_image', imageUrl: src }, isOutOfDate: false },
 	})
 	editor.select(id)
+	return id
 }
 
 // ---------------------------------------------------------------------------

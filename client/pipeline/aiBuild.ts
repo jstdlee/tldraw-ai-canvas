@@ -1,9 +1,10 @@
 /**
  * "Build with AI": gather the selection (or nothing) as scope, ask the model
  * for a plan over the whole node catalogue, validate it, and apply it on request.
+ * WP44: runs as a `build` task in the agent panel (client/agent/agentTasks.ts).
  */
 
-import { atom, createBindingId, createShapeId, Editor, TLShapeId } from 'tldraw'
+import { createBindingId, createShapeId, Editor, TLShapeId } from 'tldraw'
 import { AiPlan, CanvasNodeInfo, parseAiPlan, validatePlan } from '../../shared/aiPlan'
 import { NODE_SPECS, specPrompt } from '../../shared/nodeSpecs'
 import { LayoutBox, layoutPlan } from '../../shared/planLayout'
@@ -15,18 +16,6 @@ import { startExecution } from './execution/executionState'
 import { createNodeAt } from './placeNode'
 import { getNodeDefinition, NodeType } from './nodes/nodeTypes'
 import { NodeShape } from './nodes/NodeShapeUtil'
-
-export const $buildOpen = atom<boolean>('build panel open', false)
-export const $buildGoalDraft = atom<string>('build goal draft', '')
-
-export function openBuildPanel(goal?: string) {
-	if (goal) $buildGoalDraft.set(goal)
-	$buildOpen.set(true)
-}
-
-export function closeBuildPanel() {
-	$buildOpen.set(false)
-}
 
 const ALLOWED_TYPES_KEY = 'oh-my-tldraw:ai-types'
 
@@ -151,7 +140,7 @@ export interface BuildWithAiResult {
 export async function buildWithAI(
 	editor: Editor,
 	goal: string,
-	opts: { allowedTypes?: string[]; model?: string } = {}
+	opts: { allowedTypes?: string[]; model?: string; signal?: AbortSignal } = {}
 ): Promise<BuildWithAiResult> {
 	if (!goal.trim()) throw new Error('Describe what you want to build')
 	const scope = gatherBuildScope(editor)
@@ -164,7 +153,7 @@ export async function buildWithAI(
 	const system = `${BUILD_SYSTEM_INTRO}\n\n${specPrompt(opts.allowedTypes)}`
 	const userBase = buildUserPrompt(goal, scope, selectedInfos)
 	const call = (prompt: string) =>
-		apiGenerateText({ system, prompt, model: opts.model, capability: 'agent', temperature: 0.2, maxTokens: 6000 })
+		apiGenerateText({ system, prompt, model: opts.model, capability: 'agent', temperature: 0.2, maxTokens: 6000 }, opts.signal)
 
 	const first = await call(userBase)
 	let plan = parseAiPlan(first.text)

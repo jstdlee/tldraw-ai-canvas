@@ -69,16 +69,23 @@ test.describe('WP37 UI polish', () => {
 		expect(inputBox!.width).toBeGreaterThan(80)
 	})
 
-	test('UI-08/AI-09: Build panel "Plan" button reads in full', async ({ page }) => {
+	test('UI-08/AI-09: the build action button reads in full', async ({ page }) => {
+		// WP44: Build with AI runs in the docked agent panel; its button is the plan's Apply.
+		const plan = { summary: 'Add a card', add: [{ ref: 'n1', type: 'prompt', props: { text: 'x' } }], update: [], wires: [], unwire: [], notes: [], arrange: 'tidy' }
+		await page.route('**/api/generate-text', (route) => route.fulfill({ json: { text: JSON.stringify(plan) } }))
 		await page.keyboard.press('Control+Shift+K')
-		const panel = page.locator('.BuildPanel-row')
-		await expect(panel).toBeVisible()
-		const button = panel.locator('.UiButton', { hasText: 'Plan' })
+		const dock = page.locator('aside.agent-dock.is-open')
+		await expect(dock).toBeVisible()
+		await dock.locator('.agent-quick-action', { hasText: 'Build a workflow' }).click()
+		const input = dock.locator('textarea[name="input"]')
+		await input.fill('make a card')
+		await input.press('Enter')
+		const button = dock.locator('.chat-task .UiButton', { hasText: 'Apply' })
 		await expect(button).toBeVisible()
 		const label = button.locator('.tlui-button__label')
 		const [scrollWidth, clientWidth] = await label.evaluate((el) => [el.scrollWidth, el.clientWidth])
-		expect(scrollWidth, '"Plan" label must not be clipped').toBeLessThanOrEqual(clientWidth + 1)
-		await expect(label).toHaveText('Plan')
+		expect(scrollWidth, '"Apply" label must not be clipped').toBeLessThanOrEqual(clientWidth + 1)
+		await expect(label).toHaveText('Apply')
 	})
 
 	test('UI-10: Camera card uses the house UiButton, not a bare tldraw button', async ({ page }) => {
@@ -115,7 +122,7 @@ test.describe('WP37 UI polish', () => {
 		await runButton.click({ timeout: 3000 })
 
 		// The toast now sits in the top-right corner (CSS, index.css `.tlui-toast__viewport`),
-		// not over the bottom toolbar or this app's own bottom-right chat-float button.
+		// not over the bottom toolbar or this app's own bottom-right agent panel button.
 		const toastBox = await page.locator('.tlui-toast__container').boundingBox()
 		const viewport = page.viewportSize()!
 		expect(toastBox!.y, 'toast should sit near the top, not the bottom toolbar').toBeLessThan(viewport.height / 2)

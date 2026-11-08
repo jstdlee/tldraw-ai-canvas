@@ -1,45 +1,10 @@
-import { atom, Editor, TLShapeId } from 'tldraw'
+import { Editor, TLShapeId } from 'tldraw'
 import { validateProps } from '../../shared/aiPlan'
 import { extractJsonObject } from '../../shared/nodeAssist'
 import { NodeSpec, NODE_SPECS, nodeSpecText } from '../../shared/nodeSpecs'
 import { describeCanvasNode, nodeAssistContext } from './aiContext'
 import { apiGenerateText } from './api/pipelineApi'
 import { NodeShape } from './nodes/NodeShapeUtil'
-
-/** Per-node AI card: which node it is open for. */
-export const $assist = atom<{ shapeId: TLShapeId } | null>('node assist', null)
-
-/** Answer text for a selection that is not a node (kept for other Ask/Explain dialogs). */
-export const $aiNote = atom<string | null>('ai note', null)
-
-/**
- * Draft text per node, so closing the AI-star card and reopening it brings back
- * what you were typing. Keyed by shape id.
- */
-export const $assistDrafts = atom<Record<string, string>>('assist drafts', {})
-
-export function assistDraft(shapeId: TLShapeId): string {
-	return $assistDrafts.get()[shapeId] ?? ''
-}
-
-export function setAssistDraft(shapeId: TLShapeId, text: string) {
-	$assistDrafts.update((drafts) => {
-		const next = { ...drafts }
-		if (text) next[shapeId] = text
-		else delete next[shapeId]
-		return next
-	})
-}
-
-export function openFillAssist(shapeId: TLShapeId, options?: { error?: string }) {
-	const error = options?.error?.trim()
-	if (error) setAssistDraft(shapeId, `Fix this error: ${error}`)
-	$assist.set({ shapeId })
-}
-
-export function closeFillAssist() {
-	$assist.set(null)
-}
 
 export interface NodeAssistChange {
 	key: string
@@ -113,7 +78,7 @@ export async function runNodeAssist(
 	editor: Editor,
 	shapeId: TLShapeId,
 	request: string,
-	opts: { model?: string } = {}
+	opts: { model?: string; signal?: AbortSignal } = {}
 ): Promise<NodeAssistResult> {
 	const shape = editor.getShape(shapeId)
 	if (!shape || shape.type !== 'node') throw new Error('Select a node')
@@ -136,7 +101,7 @@ export async function runNodeAssist(
 		.join('\n')
 
 	const call = (prompt: string) =>
-		apiGenerateText({ system, prompt, model: opts.model, capability: 'chat', temperature: 0.2 })
+		apiGenerateText({ system, prompt, model: opts.model, capability: 'chat', temperature: 0.2 }, opts.signal)
 
 	const first = await call(userBase)
 	let reply = parseNodeAssistReply(first.text)

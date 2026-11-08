@@ -5,15 +5,17 @@ import {
 	ChatHistoryErrorItem,
 	ChatHistoryItem,
 	ChatHistoryPromptItem,
+	ChatHistoryTaskItem,
 } from '../../../shared/types/ChatHistoryItem'
 import { useAgent } from '../../agent/TldrawAgentAppProvider'
 import { ChatHistoryError } from './ChatHistoryError'
 import { ChatHistoryGroup, getActionHistoryGroups } from './ChatHistoryGroup'
 import { ChatHistoryPrompt } from './ChatHistoryPrompt'
+import { ChatTaskMessage } from './ChatTaskMessage'
 
 export interface ChatHistorySection {
 	prompt: ChatHistoryPromptItem
-	items: (ChatHistoryActionItem | ChatHistoryContinuationItem | ChatHistoryErrorItem)[]
+	items: (ChatHistoryActionItem | ChatHistoryContinuationItem | ChatHistoryErrorItem | ChatHistoryTaskItem)[]
 }
 
 export function ChatHistorySection({
@@ -29,6 +31,8 @@ export function ChatHistorySection({
 	const agent = useAgent()
 	const actions = section.items.filter((item) => item.type === 'action')
 	const errors = section.items.filter((item) => item.type === 'error')
+	// WP44: agent-panel tasks (text jobs, build plans, card assists…) in the same thread.
+	const tasks = section.items.filter((item) => item.type === 'task')
 	const groups = getActionHistoryGroups(actions, agent)
 	return (
 		<div className="chat-history-section" id={id}>
@@ -36,10 +40,13 @@ export function ChatHistorySection({
 			{groups.map((group, i) => {
 				return <ChatHistoryGroup key={'chat-history-group-' + i} group={group} />
 			})}
+			{tasks.map((item) => (
+				<ChatTaskMessage key={item.id} item={item} />
+			))}
 			{errors.map((item, i) => (
 				<ChatHistoryError key={'chat-history-error-' + i} item={item} />
 			))}
-			{loading && (
+			{loading && tasks.length === 0 && (
 				<div className="chat-history-thinking">
 					<SmallSpinner />
 					<span>Thinking…</span>

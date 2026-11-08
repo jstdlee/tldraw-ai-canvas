@@ -19,11 +19,6 @@ import {
 	useValue,
 } from 'tldraw'
 import {
-	aiAskSelection,
-	aiDescribeImage,
-	aiExplainSelection,
-	aiExtractText,
-	aiTextJob,
 	createClipAtCenter,
 	fetchPageAsMarkdown,
 	insertDateTime,
@@ -33,9 +28,9 @@ import {
 	sendImageToPipeline,
 	wordCount,
 } from './canvasFeatures'
-import { openBuildPanel } from '../pipeline/aiBuild'
+import { openAgentPanel } from '../agent/agentPanelState'
 import { $findOpen } from './FindBar'
-import { compareTargets, copyDocument, keepVariant, openCompare, openRewrite, retryVariant, selectedVariant, splitIntoParagraphs } from './rewrite'
+import { compareTargets, copyDocument, keepVariant, openCompare, retryVariantRequest, selectedVariant, splitIntoParagraphs } from './rewrite'
 import { $imageEditorTarget } from './ImageEditor'
 import { diveGroup, groupSelection, leaveGroup, renameSelection } from '../pipeline/groups/groupActions'
 import { closeGroup, openGroup, packSelection, unpack } from '../pipeline/subgraph'
@@ -124,31 +119,38 @@ export function canvasActionOverrides(
 		[id]: { id, label, kbd, readonlyOk: false, onSelect: () => void onSelect() },
 	})
 	return {
-		...a('ai-describe-image', 'Describe image', () => aiDescribeImage(editor, notify)),
-		...a('ai-extract-text', 'Extract text (OCR)', () => aiExtractText(editor, notify)),
-		...a('ai-explain', 'Explain selection', () => aiExplainSelection(editor, notify)),
-		...a('ai-ask', 'Ask about selection…', () => aiAskSelection(editor, notify), '$!k'),
-		...a('build-with-ai', 'Build with AI…', () => openBuildPanel()),
-		...a('ai-summarize', 'Summarize text', () => aiTextJob(editor, notify, 'summarize')),
-		...a('ai-translate', 'Translate text…', () => aiTextJob(editor, notify, 'translate')),
-		...a('ai-improve', 'Improve writing', () => aiTextJob(editor, notify, 'improve')),
-		...a('ai-brainstorm', 'Brainstorm ideas', () => aiTextJob(editor, notify, 'brainstorm')),
+		// WP44: every AI action opens the docked agent panel and runs there as a task.
+		...a('ai-describe-image', 'Describe image', () => openAgentPanel({ run: { action: 'describe' } })),
+		...a('ai-extract-text', 'Extract text (OCR)', () => openAgentPanel({ run: { action: 'ocr' } })),
+		...a('ai-explain', 'Explain selection', () => openAgentPanel({ run: { action: 'explain' } })),
+		...a('ai-ask', 'Ask about selection…', () => openAgentPanel({ focus: true }), '$!k'),
+		...a('build-with-ai', 'Build with AI…', () => openAgentPanel({ run: { action: 'build-workflow' } })),
+		...a('ai-summarize', 'Summarize text', () => openAgentPanel({ run: { action: 'summarize' } })),
+		...a('ai-translate', 'Translate text…', () => openAgentPanel({ run: { action: 'translate' } })),
+		...a('ai-improve', 'Improve writing', () => openAgentPanel({ run: { action: 'improve' } })),
+		...a('ai-brainstorm', 'Brainstorm ideas', () => openAgentPanel({ run: { action: 'brainstorm' } })),
 		...a('format-bullets', 'Bulleted list', () => formatSelectionAsList(editor, 'bullet')),
 		...a('format-numbers', 'Numbered list', () => formatSelectionAsList(editor, 'ordered')),
 		...a('format-checklist', 'Checklist', () => formatSelectionAsList(editor, 'task')),
 		...a('format-plain', 'Plain paragraphs', () => formatSelectionAsList(editor, null)),
 		...a('rewrite-split', 'Split into paragraphs', () => splitIntoParagraphs(editor, notify)),
-		...a('rewrite-open', 'Rewrite…', () => openRewrite(editor, notify), '?b'),
+		...a('rewrite-open', 'Rewrite…', () => openAgentPanel({ sheet: 'rewrite' }), '?b'),
 		...a('compare', 'Compare (diff)', () => openCompare(editor, notify), '?c'),
 		...a('rewrite-use', 'Use this version', () => keepVariant(editor, notify)),
-		...a('rewrite-retry', 'Rewrite again (same instruction)', () => retryVariant(editor, notify)),
+		...a('rewrite-retry', 'Rewrite again (same instruction)', () => {
+			const retry = retryVariantRequest(editor)
+			if (!retry) return notify('Select a variant first', 'warning')
+			// The task's scope is the variant's source: select it, then rewrite it again.
+			editor.select(retry.sourceId)
+			openAgentPanel({ run: { action: 'rewrite', text: retry.instructions, label: retry.label } })
+		}),
 		...a('rewrite-copy', 'Copy document as Markdown', () => copyDocument(editor, notify)),
 		...a('edit-image', 'Edit image…', () => {
 			const image = selectedImage(editor)
 			if (!image) return notify('Select one image first', 'warning')
 			$imageEditorTarget.set(image.shape.id)
 		}, '?e'),
-		...a('image-to-pipeline', 'Use image in pipeline', () => sendImageToPipeline(editor, notify)),
+		...a('image-to-pipeline', 'Use image in pipeline', () => void sendImageToPipeline(editor, notify)),
 		...a('table-use-as-data', 'Use as data', () => {
 			const table = editor.getOnlySelectedShape()
 			if (table?.type === 'table') tableUseAsData(editor, table.id)

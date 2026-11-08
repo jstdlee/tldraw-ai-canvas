@@ -7,7 +7,6 @@ import {
 	DefaultToolbarContent,
 	ToolbarItem,
 	Editor,
-	ErrorBoundary,
 	TLComponents,
 	TLShape,
 	Tldraw,
@@ -37,8 +36,8 @@ import {
 	TldrawAgentAppContextProvider,
 	TldrawAgentAppProvider,
 } from './agent/TldrawAgentAppProvider'
-import { ChatPanel, ChatPanelHeader } from './components/ChatPanel'
-import { ChatPanelFallback } from './components/ChatPanelFallback'
+import { $agentPanelRequest, openAgentPanel } from './agent/agentPanelState'
+import { AgentDock } from './components/AgentDock'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { ImagePipelineSidebar } from './pipeline/components/ImagePipelineSidebar'
@@ -72,10 +71,9 @@ import { FindBar } from './clips/FindBar'
 import { installKeepGroup } from './pipeline/groups/KeepGroupShapeUtil'
 import { ShellChrome } from './shell/ShellChrome'
 import { $featuresOpen, $libraryRail, $mapOpen, saveBackup, writeLibraryRail } from './shell/shellState'
-import { FloatingPanel, IconSparkle } from './ui'
+import { IconSparkle } from './ui'
 import { ImageEditorModal } from './clips/ImageEditor'
 import { RewriteDialogs } from './clips/RewriteDialogs'
-import { $presetsEditorOpen } from './clips/rewrite'
 import { RatioImageShapeUtil } from './clips/shapeOptions'
 
 // Every tldraw asset (fonts, icons, translations) is bundled, so the app works offline.
@@ -139,6 +137,13 @@ function App() {
 	)
 
 	const handleUnmount = useCallback(() => setApp(null), [])
+	const closeChat = useCallback(() => setPanels((p) => ({ ...p, chat: false })), [])
+
+	// WP44: every AI entry point (menus, shortcuts, the ✦ on a card) opens the docked panel.
+	const panelRequest = useValue('agent panel request', () => $agentPanelRequest.get(), [])
+	useEffect(() => {
+		if (panelRequest) setPanels((p) => (p.chat ? p : { ...p, chat: true }))
+	}, [panelRequest])
 
 	// Dev only: lets scripts and tests drive the agent and the node library.
 	useEffect(() => {
@@ -214,7 +219,7 @@ function App() {
 				},
 				'toggle-agent-chat': {
 					id: 'toggle-agent-chat',
-					label: 'Agent chat',
+					label: 'Agent panel',
 					kbd: 'shift+a',
 					onSelect() {
 						togglePanel('chat')
@@ -261,9 +266,7 @@ function App() {
 						<TldrawUiMenuItem
 							id="rewrite-presets"
 							label="Rewrite presets…"
-							onSelect={() => {
-								$presetsEditorOpen.set(true)
-							}}
+							onSelect={() => openAgentPanel({ sheet: 'presets' })}
 						/>
 						<TldrawUiMenuItem
 							id="toggle-node-library"
@@ -273,7 +276,7 @@ function App() {
 						/>
 						<TldrawUiMenuItem
 							id="toggle-agent-chat"
-							label="Show/hide agent chat"
+							label="Show/hide agent panel"
 							kbd="shift+a"
 							onSelect={() => togglePanel('chat')}
 						/>
@@ -317,7 +320,7 @@ function App() {
 		<TldrawUiToastsProvider>
 			<div
 				className={
-					'app-layout is-chat-hidden' +
+					'app-layout' +
 					(panels.library ? '' : ' is-library-hidden') +
 					(rail ? ' is-library-rail' : '')
 				}
@@ -361,49 +364,12 @@ function App() {
 				<ProvidersModal editor={editor} />
 				<ImageEditorModal editor={editor} />
 				<ModelHealthToasts />
-				{panels.chat && app && (
-					<FloatingPanel
-						storageKey="chat"
-						ariaLabel="Agent chat"
-						// WP32 Problem 2: the tldraw CSS variables (--tl-color-panel, --tl-shadow-3, …)
-						// only resolve inside a `tl-theme__*`-classed element. Only the inner
-						// ChatPanel div carried that class, so the FloatingPanel's own
-						// background/header/shadow — everything outside ChatPanel — fell back to
-						// `transparent`/`none`, which is why the panel had no solid surface and
-						// tldraw's own top-right style panel showed straight through it.
-						className={`chat-float-panel ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}
-						defaultRect={{
-							// WP32 Problem 2: tldraw's own top-right style panel is a persistent
-							// 148px-wide column (shown even with nothing selected). Right-aligning
-							// flush to the viewport edge (the old default) put the chat panel's
-							// right ~150px directly under it. Reserve that column by default so
-							// the two never fight for the same space; dragging the chat panel over
-							// it afterwards is fine (the panel is opaque and on top).
-							x: (typeof window !== 'undefined' ? window.innerWidth : 1200) - 380 - 12 - 160,
-							w: 380,
-							h: Math.min(640, (typeof window !== 'undefined' ? window.innerHeight : 800) - 32),
-						}}
-						minWidth={300}
-						minHeight={260}
-						onClose={() => togglePanel('chat')}
-						header={
-							<TldrawAgentAppContextProvider app={app}>
-								<ChatPanelHeader onClose={() => togglePanel('chat')} />
-							</TldrawAgentAppContextProvider>
-						}
-					>
-						<ErrorBoundary fallback={ChatPanelFallback}>
-							<TldrawAgentAppContextProvider app={app}>
-								<ChatPanel />
-							</TldrawAgentAppContextProvider>
-						</ErrorBoundary>
-					</FloatingPanel>
-				)}
+				<AgentDock app={app} open={panels.chat} isDark={isDark} onClose={closeChat} />
 				{!panels.chat && (
 					<button
-						className={`chat-float-button ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}
+						className={`agent-dock-button ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}
 						type="button"
-						title="Agent chat"
+						title="Agent panel (Shift+A)"
 						onClick={() => togglePanel('chat')}
 					>
 						<IconSparkle size={22} />
@@ -526,7 +492,7 @@ function PanelToggles({
 			<TldrawUiButton
 				type="normal"
 				isActive={panels.chat}
-				title="Show/hide agent chat (Shift+A)"
+				title="Show/hide agent panel (Shift+A)"
 				onClick={() => toggle('chat')}
 			>
 				<TldrawUiButtonLabel>Agent</TldrawUiButtonLabel>

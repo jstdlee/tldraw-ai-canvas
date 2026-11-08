@@ -29,8 +29,6 @@ function readPresets(): RewritePreset[] {
 
 /** The Rewrite presets: the user's own list (main menu → Rewrite presets…) or the defaults. */
 export const $rewritePresets = atom<RewritePreset[]>('rewrite presets', readPresets())
-/** True while the presets editor is open. */
-export const $presetsEditorOpen = atom('rewrite presets editor', false)
 
 export function saveRewritePresets(list: RewritePreset[] | null) {
 	try {
@@ -42,8 +40,6 @@ export function saveRewritePresets(list: RewritePreset[] | null) {
 	$rewritePresets.set(list ? cleanPresets(list) : REWRITE_PRESETS)
 }
 
-/** Text shapes waiting for the Rewrite dialog, or null. */
-export const $rewriteTargets = atom<TLShapeId[] | null>('rewrite targets', null)
 /** The two shapes in the Compare dialog (left = older), or null. `variant`: right is a variant of left. */
 export const $compare = atom<{ left: TLShapeId; right: TLShapeId; variant: boolean } | null>('compare', null)
 
@@ -94,8 +90,12 @@ export function openCompare(editor: Editor, notify: Notify) {
 	$compare.set(target)
 }
 
-function textShapes(editor: Editor) {
-	return editor.getSelectedShapes().filter((s) => shapeText(editor, s).trim())
+/** The shapes among `ids` that have text (the ones Rewrite can make variants of). */
+export function rewriteTargetsOf(editor: Editor, ids: TLShapeId[]): TLShapeId[] {
+	return ids.filter((id) => {
+		const shape = editor.getShape(id)
+		return shape && shapeText(editor, shape).trim()
+	})
 }
 
 /** Split one selected text into a column of paragraph cards inside a frame. */
@@ -124,13 +124,6 @@ export function splitIntoParagraphs(editor: Editor, notify: Notify) {
 	notify(`${parts.length} paragraphs. Select one and choose Rewrite…`, 'success')
 }
 
-/** Open the Rewrite dialog for the selected text shapes. */
-export function openRewrite(editor: Editor, notify: Notify) {
-	const shapes = textShapes(editor)
-	if (!shapes.length) return notify('Select shapes with text first', 'warning')
-	$rewriteTargets.set(shapes.map((s) => s.id))
-}
-
 /** Where the next variant of `source` goes: right of it (and of its frame), in the first free spot. */
 function nextVariantSpot(editor: Editor, source: TLShape) {
 	const b = editor.getShapePageBounds(source.id)!
@@ -156,34 +149,35 @@ function addVariant(editor: Editor, source: TLShape, text: string, instructions:
 	return id
 }
 
-/** Make one new variant for each source shape, one request at a time. */
-export async function runRewrite(editor: Editor, notify: Notify, sourceIds: TLShapeId[], instructions: string, label: string) {
+/**
+ * Make one new variant for each source shape, one request at a time. Returns the new
+ * variants; throws on the first failure (WP44: the agent panel shows it in the thread).
+ */
+export async function runRewrite(
+	editor: Editor,
+	sourceIds: TLShapeId[],
+	instructions: string,
+	label: string,
+	signal?: AbortSignal
+): Promise<TLShapeId[]> {
 	const made: TLShapeId[] = []
-	for (const [i, sourceId] of sourceIds.entries()) {
+	for (const sourceId of sourceIds) {
 		const source = editor.getShape(sourceId)
 		if (!source) continue
-		notify(sourceIds.length > 1 ? `Rewriting ${i + 1}/${sourceIds.length}…` : 'Rewriting…')
-		try {
-			const { text } = await apiGenerateText({ input: shapeText(editor, source), prompt: buildRewritePrompt(instructions) })
-			if (!text.trim()) throw new Error('empty answer')
-			made.push(addVariant(editor, source, text.trim(), instructions, label))
-		} catch (e) {
-			notify(`Rewrite failed: ${(e as Error).message}`, 'error')
-			break
-		}
+		const { text } = await apiGenerateText({ input: shapeText(editor, source), prompt: buildRewritePrompt(instructions) }, signal)
+		if (!text.trim()) throw new Error('The model sent an empty answer. Try again or pick another model.')
+		made.push(addVariant(editor, source, text.trim(), instructions, label))
 	}
-	if (made.length) {
-		editor.select(...made)
-		notify(`${made.length} variant${made.length === 1 ? '' : 's'} added`, 'success')
-	}
+	if (made.length) editor.select(...made)
+	return made
 }
 
-/** Same instructions again on the same source: one more sibling variant. */
-export function retryVariant(editor: Editor, notify: Notify) {
+/** What "Rewrite again" runs: the selected variant's source, with the same instructions. */
+export function retryVariantRequest(editor: Editor): { sourceId: TLShapeId; instructions: string; label: string } | null {
 	const pick = selectedVariant(editor)
-	if (!pick) return notify('Select a variant first', 'warning')
+	if (!pick) return null
 	const { rewritePrompt, rewriteLabel } = pick.variant.meta
-	return runRewrite(editor, notify, [pick.source.id], String(rewritePrompt ?? ''), String(rewriteLabel ?? 'Rewrite'))
+	return { sourceId: pick.source.id, instructions: String(rewritePrompt ?? ''), label: String(rewriteLabel ?? 'Rewrite') }
 }
 
 /** Copy the variant text into its root paragraph, then delete every variant of that root. */

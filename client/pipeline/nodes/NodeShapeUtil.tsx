@@ -60,7 +60,7 @@ import { openGroup } from '../subgraph'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../placeOnCanvas'
 import { formatRunMs } from '../../../shared/llmUsage'
 import { pastePatch } from '../../../shared/pasteTarget'
-import { openFillAssist } from '../assist'
+import { openAgentPanel } from '../../agent/agentPanelState'
 import { readClipboard } from '../clipboard'
 import { apiImportImage } from '../api/pipelineApi'
 import { clearNodeRun, getNodeRun } from '../execution/nodeRunState'
@@ -573,7 +573,11 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 						className="NodeAiButton"
 						icon={<IconSparkle />}
 						title="Ask AI about this node"
-						onClick={() => openFillAssist(shape.id)}
+						onClick={() => {
+							// WP44: the card's AI runs in the docked agent panel, scoped to this card.
+							editor.select(shape.id)
+							openAgentPanel({ focus: true })
+						}}
 					/>
 					<CopyOutputButton shape={shape} />
 					<UiIconButton
@@ -706,13 +710,17 @@ function NodeErrorBanner({
 	message: string
 	onDismiss: () => void
 }) {
+	const editor = useEditor()
 	return (
 		<div className="NodeErrorBanner" onPointerDown={(event) => event.stopPropagation()}>
 			<UiErrorBanner
 				title={title}
 				message={message}
 				onCopy={() => void navigator.clipboard.writeText(message)}
-				onFix={() => openFillAssist(shape.id, { error: message })}
+				onFix={() => {
+					editor.select(shape.id)
+					openAgentPanel({ run: { action: 'fix-error', text: message } })
+				}}
 				onDismiss={onDismiss}
 			/>
 		</div>

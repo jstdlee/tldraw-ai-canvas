@@ -7,6 +7,7 @@ import type { AgentAction } from '../types/AgentAction'
 import { AgentCanvasLint } from '../types/AgentCanvasLint'
 import { AgentMessage, AgentMessageContent } from '../types/AgentMessage'
 import { AgentRequest } from '../types/AgentRequest'
+import { taskHistoryLine } from '../agentRouting'
 import { ChatHistoryItem } from '../types/ChatHistoryItem'
 import { ContextItem } from '../types/ContextItem'
 import { SimpleShapeId } from '../types/ids-schema'
@@ -307,6 +308,15 @@ function buildHistoryItemMessage(item: ChatHistoryItem, priority: number): Agent
 			return {
 				role: 'assistant',
 				content: [{ type: 'text', text: `[ERROR]: ${item.message}` }],
+				priority,
+			}
+		}
+		case 'task': {
+			// WP44: a panel task (summary, build plan, card assist…) is one short line, never
+			// its plan/assist objects — the drawing agent only needs to know it happened.
+			return {
+				role: 'assistant',
+				content: [{ type: 'text', text: taskHistoryLine(item) }],
 				priority,
 			}
 		}

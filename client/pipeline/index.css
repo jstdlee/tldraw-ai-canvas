@@ -2108,51 +2108,9 @@ body {
 	pointer-events: all;
 }
 
-.AssistDialog-backdrop {
-	position: fixed;
-	inset: 0;
-	z-index: 700;
-	background: rgba(0, 0, 0, 0.35);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	pointer-events: all;
-}
-
-.AssistDialog {
-	width: min(480px, calc(100vw - 32px));
-	background: var(--tl-color-panel);
-	border-radius: var(--tl-radius-4);
-	box-shadow: var(--tl-shadow-3);
-	padding: 14px;
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-.AssistDialog-bar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	color: var(--tl-color-text-1);
-}
-
-.AssistDialog-bar strong {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.AssistDialog-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
-}
-
 /*
  * WP22 B1: FloatingPanel is the generic draggable/resizable chrome (position, background,
- * radius, shadow); BuildPanel and FillChatCard style their own header/body content inside it.
+ * radius, shadow); panels style their own header/body content inside it.
  */
 .FloatingPanel {
 	z-index: 650;
@@ -2202,80 +2160,7 @@ body {
 	border-bottom-right-radius: 3px;
 }
 
-/* Build with AI: body content inside a FloatingPanel. */
-.BuildPanel {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-.BuildPanel-bar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	color: var(--tl-color-text-1);
-}
-
-.BuildPanel-bar strong {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.BuildPanel-using {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-}
-
-.BuildPanel-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.BuildPanel-groups {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.BuildPanel-group {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	flex-wrap: wrap;
-}
-
-.BuildPanel-types {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	padding-left: 8px;
-	width: 100%;
-}
-
-.BuildPanel-error {
-	margin: 0;
-	color: var(--tl-color-danger);
-	font-size: 0.85em;
-}
-
-.BuildPanel-plan {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	border-top: 1px solid var(--tl-color-divider);
-	padding-top: 8px;
-}
-
-.BuildPanel-divider {
-	font-weight: 600;
-	color: var(--tl-color-text-1);
-	font-size: 0.85em;
-}
-
+/* WP44: a Build-with-AI plan's rows, in the agent panel's build task message (AiPlanRows). */
 .BuildPanel-summary {
 	margin: 0;
 	color: var(--tl-color-text-1);
@@ -2296,117 +2181,6 @@ body {
 
 .BuildPanel-warning {
 	color: var(--tl-color-warning);
-}
-
-.BuildPanel-revise {
-	display: flex;
-	gap: 8px;
-	margin-top: 4px;
-}
-
-.BuildPanel-revise > :first-child {
-	flex: 1;
-}
-
-.BuildPanel-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
-	margin-top: auto;
-	padding-top: 8px;
-}
-
-/* AI-star chat card: anchored under the node, not a centered modal. */
-/* AI-star chat card: body content inside a FloatingPanel, above BuildPanel's z-index. */
-.FillChatCard {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-.FillChatCard-floating {
-	z-index: 700;
-}
-
-.FillChatCard-bar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	color: var(--tl-color-text-1);
-}
-
-.FillChatCard-bar strong {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	font-size: 0.95em;
-}
-
-.FillChatCard-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.FillChatCard-chips {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-}
-
-.FillChatCard-error {
-	margin: 0;
-	color: var(--tl-color-danger);
-	font-size: 0.8em;
-}
-
-.FillChatCard-answer {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	border-top: 1px solid var(--tl-color-divider);
-	padding-top: 8px;
-}
-
-.FillChatCard-say {
-	margin: 0;
-	color: var(--tl-color-text-1);
-	font-size: 0.9em;
-}
-
-.FillChatCard-diff {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.FillChatCard-diffRow {
-	display: flex;
-	gap: 8px;
-	font-size: 0.82em;
-	color: var(--tl-color-text-2);
-}
-
-.FillChatCard-diffLabel {
-	min-width: 90px;
-	color: var(--tl-color-text-1);
-	font-weight: 500;
-}
-
-.FillChatCard-need {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	font-size: 0.85em;
-	color: var(--tl-color-text-2);
-}
-
-.FillChatCard-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
 }
 
 /* Dashed outline that blinks around the shape a search just jumped to. */
@@ -3270,15 +3044,6 @@ body {
 }
 
 /* ---- WP37 UI polish ---- */
-
-/* UI-08/AI-09: the "Plan"/"Working…" button shared a row with the model <select>, which had no
-   explicit flex-basis of its own but renders at `width:100%` (`.UiSelect`) — its flex-basis
-   resolves to that, so it claimed the row and squeezed the button below its own label's width
-   ("Plan" -> "Pl…"). `flex: 0 0 auto` keeps the button at its natural size; the select (already
-   `min-width:0`-friendly) shrinks instead. */
-.BuildPanel-row > .UiButton {
-	flex: 0 0 auto;
-}
 
 /* UI-06 (same family as UI-04/UI-08): "Load" next to the source URL field shared `flex: 1 1
    auto` with the text input, so it could shrink below its own label's width ("Load" -> "L…").
