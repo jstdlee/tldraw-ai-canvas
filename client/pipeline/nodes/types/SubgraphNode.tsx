@@ -56,6 +56,8 @@ export const SubgraphNode = T.object({
 	error: T.string.nullable(),
 	/** Connection shapes fully inside the box (both ends members); hidden and restored with them. */
 	connectionIds: T.arrayOf(T.string).optional(),
+	/** WP47: non-card shapes (text, notes, images, arrows, nested groups) collapsed with the cards. */
+	extraIds: T.arrayOf(T.string).optional(),
 })
 
 const BOX_WIDTH_PX = 360
@@ -65,7 +67,7 @@ const BASE_Y = NODE_HEADER_HEIGHT_PX + NODE_ROW_HEADER_GAP_PX
 /**
  * A group shown as a box: port rows (inputs left, outputs right, same row index so the
  * dots line up with their labels), a thumbnail of its members, and an Open button.
- * Double-click (or "Open group") opens it in place; "Ungroup box" dissolves it.
+ * Double-click (or "Expand") turns it back into its group in place.
  */
 export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 	static type = 'subgraph'
@@ -87,6 +89,7 @@ export class SubgraphNodeDefinition extends NodeDefinition<SubgraphNode> {
 			lastOutputs: null,
 			error: null,
 			connectionIds: [],
+			extraIds: [],
 		}
 	}
 	override getWidthPx() {
@@ -224,7 +227,7 @@ function SubgraphNodeComponent({ shape, node }: NodeComponentProps<SubgraphNode>
 				style={{ height: THUMB_PX }}
 				onPointerDown={stopEvent}
 				onDoubleClick={() => openGroup(editor, shape.id)}
-				title="Double-click to open"
+				title="Double-click to expand"
 			>
 				{node.thumbnail ? (
 					<img src={node.thumbnail} alt="group members" draggable={false} />
@@ -236,7 +239,7 @@ function SubgraphNodeComponent({ shape, node }: NodeComponentProps<SubgraphNode>
 				<span className="Subgraph-count">
 					{node.innerIds.length} card{node.innerIds.length === 1 ? '' : 's'} inside
 				</span>
-				<UiButton size="sm" label="Open" onClick={() => openGroup(editor, shape.id)} />
+				<UiButton size="sm" label="Expand" title="Expand to a group" onClick={() => openGroup(editor, shape.id)} />
 			</NodeRow>
 		</>
 	)

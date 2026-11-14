@@ -91,8 +91,8 @@ test.describe('group box (Ctrl/Cmd+Shift+P)', () => {
 		expect(await shapeMeta(page, dataPipeId)).toMatchObject({ packedIn: boxId })
 		expect(await shapeMeta(page, groupId)).toMatchObject({ packedIn: boxId })
 
-		// Open: members become visible inside a native tldraw group.
-		await page.locator(`[data-shape-id="${boxId}"] button`, { hasText: 'Open' }).click()
+		// Expand: members become visible inside a native tldraw group.
+		await page.locator(`[data-shape-id="${boxId}"] button`, { hasText: 'Expand' }).click()
 		await expect
 			.poll(async () => (await shapeMeta(page, dataPipeId)).packedIn)
 			.toBe(null)
@@ -100,10 +100,10 @@ test.describe('group box (Ctrl/Cmd+Shift+P)', () => {
 		const boxMetaOpen = await shapeMeta(page, boxId)
 		expect(typeof boxMetaOpen.boxOpen).toBe('string')
 
-		// Close to box: right-click a member (findOpenBoxGroup walks up to its group parent),
-		// then the context menu's "Close to box" item.
+		// Collapse to card: right-click a member (findOpenBoxGroup walks up to its group parent),
+		// then the context menu's "Collapse to card" item (was "Close to box").
 		await page.locator(`[data-shape-id="${dataPipeId}"]`).click({ button: 'right' })
-		await page.getByRole('menuitem', { name: 'Close to box' }).click()
+		await page.getByRole('menuitem', { name: 'Collapse to card' }).click()
 
 		await expect.poll(async () => (await shapeMeta(page, dataPipeId)).packedIn).toBe(boxId)
 		expect((await shapeMeta(page, groupId)).packedIn).toBe(boxId)

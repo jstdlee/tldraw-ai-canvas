@@ -145,6 +145,21 @@
 	box-shadow: var(--tl-shadow-2);
 }
 
+.GroupEdgeLabel_tools {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 1px 2px 1px 6px;
+}
+
+/* The label lets clicks through to the canvas; only its Collapse button takes them. */
+.GroupEdgeLabel-collapse.tlui-button {
+	pointer-events: all;
+	width: 1.6em;
+	height: 1.6em;
+	min-width: 1.6em;
+}
+
 .GroupEdgeLabel-text {
 	font-weight: 500;
 	white-space: nowrap;

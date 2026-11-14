@@ -226,10 +226,16 @@ interface PreparedCollapse {
 	thumbnail: string | null
 	/** Connection shapes fully inside the group: hidden with the members. */
 	connectionIds: TLShapeId[]
+	/** Non-card shapes collapsed with the cards (no ports): hidden with the members. */
+	extraIds: TLShapeId[]
 }
 
 /** Compute the new port model and a fresh thumbnail. Does not mutate the document. */
-async function prepareCollapse(editor: Editor, memberIds: TLShapeId[]): Promise<PreparedCollapse> {
+async function prepareCollapse(
+	editor: Editor,
+	memberIds: TLShapeId[],
+	extraIds: TLShapeId[] = []
+): Promise<PreparedCollapse> {
 	const members = sortedMembers(editor, memberIds)
 	const ports = members.flatMap((id) => toInnerPorts(editor, id))
 	const wires = collectInnerWires(editor, members)
@@ -240,7 +246,7 @@ async function prepareCollapse(editor: Editor, memberIds: TLShapeId[]): Promise<
 	const connectionIds = internalConnectionIds(editor, members)
 	let thumbnail: string | null = null
 	try {
-		const { blob } = await editor.toImage([...members, ...connectionIds], {
+		const { blob } = await editor.toImage([...topLevelIds(editor, [...members, ...extraIds]), ...connectionIds], {
 			format: 'png',
 			background: true,
 			scale: 0.5,
@@ -251,7 +257,7 @@ async function prepareCollapse(editor: Editor, memberIds: TLShapeId[]): Promise<
 		// A box without a picture still works.
 	}
 
-	return { members, inputs, outputs, thumbnail, connectionIds }
+	return { members, inputs, outputs, thumbnail, connectionIds, extraIds }
 }
 
 /**
@@ -260,11 +266,11 @@ async function prepareCollapse(editor: Editor, memberIds: TLShapeId[]): Promise<
  * in a free spot so it never lands on top of a shape that stayed outside it. Synchronous.
  */
 function applyCollapse(editor: Editor, boxId: TLShapeId, prepared: PreparedCollapse): number {
-	const { members, inputs, outputs, thumbnail, connectionIds } = prepared
+	const { members, inputs, outputs, thumbnail, connectionIds, extraIds } = prepared
 	const removedWires = rewireBoundary(editor, boxId, members, inputs, outputs)
 
 	editor.updateShapes(
-		[...members, ...connectionIds].map((id) => {
+		[...members, ...connectionIds, ...extraIds].map((id) => {
 			const shape = editor.getShape(id)!
 			return { id, type: shape.type, meta: { ...shape.meta, packedIn: boxId } }
 		})
@@ -272,7 +278,7 @@ function applyCollapse(editor: Editor, boxId: TLShapeId, prepared: PreparedColla
 
 	const box = editor.getShape<NodeShape>(boxId)!
 	const node = box.props.node as SubgraphNode
-	const bounds = unionPageBounds(editor, members)
+	const bounds = unionPageBounds(editor, [...members, ...extraIds])
 	const want = bounds ? { x: bounds.x, y: bounds.y } : { x: box.x, y: box.y }
 	editor.updateShape<NodeShape>({
 		id: boxId,
@@ -281,12 +287,83 @@ function applyCollapse(editor: Editor, boxId: TLShapeId, prepared: PreparedColla
 		y: want.y,
 		meta: { ...box.meta, boxOpen: null },
 		props: {
-			node: { ...node, innerIds: members, inputs, outputs, thumbnail, connectionIds, lastOutputs: null, error: null },
+			node: {
+				...node,
+				innerIds: members,
+				inputs,
+				outputs,
+				thumbnail,
+				connectionIds,
+				extraIds,
+				lastOutputs: null,
+				error: null,
+			},
 			isOutOfDate: true,
 		},
 	})
-	placeBoxFreely(editor, boxId, members, want)
+	placeBoxFreely(editor, boxId, [...members, ...extraIds], want)
+	// Remember where the box landed: Expand puts the members back at the same offset from it,
+	// so Collapse → Expand restores every position exactly, and moving the box moves them too.
+	const placed = editor.getShape<NodeShape>(boxId)!
+	editor.updateShape<NodeShape>({ id: boxId, type: 'node', meta: { ...placed.meta, boxAt: { x: placed.x, y: placed.y } } })
 	return removedWires
+}
+
+/** Of `ids`, the ones not inside another shape of `ids` (e.g. a card inside a collapsed nested group). */
+function topLevelIds(editor: Editor, ids: TLShapeId[]): TLShapeId[] {
+	const set = new Set(ids)
+	return ids.filter((id) => {
+		let parent = editor.getShape(id)?.parentId
+		while (parent) {
+			if (set.has(parent as TLShapeId)) return false
+			parent = editor.getShape(parent as TLShapeId)?.parentId
+		}
+		return true
+	})
+}
+
+/** Group `ids` (one shape is fine too: tldraw's groupShapes needs two). */
+function groupAll(editor: Editor, ids: TLShapeId[], groupId: TLShapeId) {
+	if (ids.length >= 2) {
+		editor.groupShapes(ids, { groupId, select: false })
+		return
+	}
+	const bounds = unionPageBounds(editor, ids)
+	if (!bounds) return
+	editor.createShape<TLGroupShape>({ id: groupId, type: 'group', parentId: editor.getCurrentPageId(), x: bounds.x, y: bounds.y })
+	editor.reparentShapes(ids, groupId)
+}
+
+/** Leave the group you dived into when it (or a group around it) is about to go away. */
+function leaveFocusOf(editor: Editor, groupId: TLShapeId) {
+	const focused = editor.getFocusedGroupId()
+	if (focused === groupId || editor.hasAncestor(focused as TLShapeId, groupId)) {
+		const group = editor.getShape(groupId)
+		editor.setFocusedGroup(group && editor.getShape(group.parentId)?.type === 'group' ? (group.parentId as TLShapeId) : null)
+	}
+}
+
+/**
+ * What a selection collapses into: cards (members: they get ports and run) and other
+ * shapes (extras: hidden and restored with them, no ports). Cards inside a selected
+ * nested group or frame are members too; wires are never picked, they follow their cards.
+ */
+function splitMembers(editor: Editor, ids: TLShapeId[]) {
+	const members: TLShapeId[] = []
+	const extras: TLShapeId[] = []
+	for (const id of ids) {
+		const shape = editor.getShape(id)
+		if (!shape || isPacked(shape) || shape.type === 'connection') continue
+		if (shape.type === 'node') {
+			members.push(id)
+			continue
+		}
+		extras.push(id)
+		for (const d of editor.getShapeAndDescendantIds([id])) {
+			if (d !== id && editor.getShape(d)?.type === 'node') members.push(d)
+		}
+	}
+	return { members, extras }
 }
 
 // ---------------------------------------------------------------------------
@@ -295,12 +372,11 @@ function applyCollapse(editor: Editor, boxId: TLShapeId, prepared: PreparedColla
 
 /** Turn a selection of nodes into one box. */
 export async function packSelection(editor: Editor): Promise<TLShapeId | null> {
-	const selected = editor.getSelectedShapes().filter((s) => !isPacked(s))
-	const memberIds = selected.filter((s) => s.type === 'node').map((s) => s.id) as TLShapeId[]
+	const { members: memberIds, extras } = splitMembers(editor, editor.getSelectedShapeIds())
 	if (memberIds.length < 1) return null
 
 	const bounds = editor.getSelectionPageBounds()!
-	const prepared = await prepareCollapse(editor, memberIds)
+	const prepared = await prepareCollapse(editor, memberIds, extras)
 
 	const proxyId = createShapeId()
 	editor.run(() => {
@@ -315,7 +391,14 @@ export async function packSelection(editor: Editor): Promise<TLShapeId | null> {
 			lastOutputs: null,
 			error: null,
 		}
-		editor.createShape({ id: proxyId, type: 'node', x: bounds.minX, y: bounds.minY, props: { node, isOutOfDate: true } })
+		editor.createShape({
+			id: proxyId,
+			type: 'node',
+			parentId: editor.getCurrentPageId(),
+			x: bounds.minX,
+			y: bounds.minY,
+			props: { node, isOutOfDate: true },
+		})
 		applyCollapse(editor, proxyId, prepared)
 		editor.select(proxyId)
 	})
@@ -338,8 +421,9 @@ export function unpack(editor: Editor, proxyId: TLShapeId) {
 		// Unhide first so wires can bind to the inner nodes again.
 		const ids = node.innerIds.filter((id) => editor.getShape(id as TLShapeId)) as TLShapeId[]
 		const connectionIds = (node.connectionIds ?? []).filter((id) => editor.getShape(id as TLShapeId)) as TLShapeId[]
+		const extraIds = (node.extraIds ?? []).filter((id) => editor.getShape(id as TLShapeId)) as TLShapeId[]
 		editor.updateShapes(
-			[...ids, ...connectionIds].map((id) => {
+			[...ids, ...connectionIds, ...extraIds].map((id) => {
 				const shape = editor.getShape(id)!
 				// meta updates merge, so the key must be set to null (not left out).
 				return { id, type: shape.type, meta: { ...shape.meta, packedIn: null } }
@@ -360,32 +444,50 @@ export function unpack(editor: Editor, proxyId: TLShapeId) {
 	})
 }
 
-/** Open a box in place: members appear inside a dashed group where the box was. */
+/**
+ * Expand a box in place: its cards (and the other shapes collapsed with them) come back
+ * inside a group with the box's label, at the same offset from the box as when it was
+ * collapsed. The box stays hidden, remembered by the group (`meta.boxOf`), so Collapse
+ * puts the cards back into the same box.
+ */
 export function openGroup(editor: Editor, boxId: TLShapeId): TLShapeId | null {
 	const box = editor.getShape<NodeShape>(boxId)
 	if (!box || box.props.node.type !== 'subgraph') return null
 	const node = box.props.node as SubgraphNode
-	const members = node.innerIds.filter((id) => editor.getShape(id as TLShapeId)) as TLShapeId[]
-	if (!members.length) return null
-	const connectionIds = (node.connectionIds ?? []).filter((id) => editor.getShape(id as TLShapeId)) as TLShapeId[]
+	const exists = (id: string) => !!editor.getShape(id as TLShapeId)
+	const members = node.innerIds.filter(exists) as TLShapeId[]
+	const extraIds = (node.extraIds ?? []).filter(exists) as TLShapeId[]
+	if (!members.length && !extraIds.length) return null
+	const connectionIds = (node.connectionIds ?? []).filter(exists) as TLShapeId[]
 	const byPort = new Map([...node.inputs, ...node.outputs].map((p) => [p.id, p]))
+	// Shapes that sit directly on the page (cards inside a collapsed nested group move with it).
+	const top = topLevelIds(editor, [...members, ...extraIds])
 
 	let groupId: TLShapeId | null = null
 	editor.run(() => {
 		editor.markHistoryStoppingPoint('open group')
 
-		// 1-2: place the members as one block in a free spot near the box (never on top of a
-		// shape that stayed outside it), then translate them all there together (keep relative layout).
-		const oldBounds = unionPageBounds(editor, members)
+		// 1-2: put the shapes back as one block (keep their relative layout). Same offset from the
+		// box as when it was collapsed; if the box was moved, never on top of a shape outside it.
+		const oldBounds = unionPageBounds(editor, top)
 		if (oldBounds) {
-			const exclude = new Set<TLShapeId>([boxId, ...members, ...connectionIds])
-			const taken = takenBoxesExcluding(editor, exclude)
-			const spot = findFreeSpot({ x: box.x, y: box.y }, { w: oldBounds.width, h: oldBounds.height }, taken)
+			const at = box.meta?.boxAt as { x?: unknown; y?: unknown } | undefined
+			const hasAt = typeof at?.x === 'number' && typeof at?.y === 'number'
+			const boxMoved = !hasAt || at!.x !== box.x || at!.y !== box.y
+			const want = hasAt
+				? { x: oldBounds.x + box.x - (at!.x as number), y: oldBounds.y + box.y - (at!.y as number) }
+				: { x: box.x, y: box.y }
+			let spot = want
+			if (boxMoved) {
+				const exclude = new Set<TLShapeId>([boxId, ...members, ...extraIds, ...connectionIds])
+				const taken = takenBoxesExcluding(editor, exclude)
+				spot = findFreeSpot(want, { w: oldBounds.width, h: oldBounds.height }, taken)
+			}
 			const dx = spot.x - oldBounds.x
 			const dy = spot.y - oldBounds.y
 			if (dx || dy) {
 				editor.updateShapes(
-					members.map((id) => {
+					top.map((id) => {
 						const s = editor.getShape(id)!
 						return { id, type: s.type, x: s.x + dx, y: s.y + dy }
 					})
@@ -393,10 +495,10 @@ export function openGroup(editor: Editor, boxId: TLShapeId): TLShapeId | null {
 			}
 		}
 
-		// 3: unhide members and the wires between them (connections aren't moved: their
+		// 3: unhide members, extras and the wires between them (connections aren't moved: their
 		// bound endpoints already follow the members we just translated).
 		editor.updateShapes(
-			[...members, ...connectionIds].map((id) => {
+			[...members, ...extraIds, ...connectionIds].map((id) => {
 				const s = editor.getShape(id)!
 				return { id, type: s.type, meta: { ...s.meta, packedIn: null } }
 			})
@@ -414,9 +516,10 @@ export function openGroup(editor: Editor, boxId: TLShapeId): TLShapeId | null {
 			})
 		}
 
-		// 5: group the members (never the connections) and remember the box.
+		// 5: group them and remember the box. Wires with both ends inside follow into the
+		// group on their own (ConnectionBindingUtil); wires to outside cards stay on the page.
 		const newGroupId = createShapeId()
-		editor.groupShapes(members, { groupId: newGroupId, select: false })
+		groupAll(editor, top, newGroupId)
 		const label = box.props.label || node.title
 		editor.updateShape<TLGroupShape>({ id: newGroupId, type: 'group', meta: { label, boxOf: boxId } })
 		groupId = newGroupId
@@ -439,37 +542,78 @@ export function openGroup(editor: Editor, boxId: TLShapeId): TLShapeId | null {
 }
 
 /**
- * Close an open group back into its box. Returns the number of wires that had
- * to be removed (bound to a port the new port model no longer exposes), or
- * null when there was nothing to close (not an open-box group, or its box is gone).
+ * Collapse a group to one card (WP47). Its cards become the card's members (ports, run),
+ * its other shapes are hidden with them, and the group's label becomes the card's title.
+ * An expanded box's group goes back into that same box; any other group gets a new box.
+ * Returns the box and the number of wires that had to be removed (bound to a port the
+ * new port model no longer exposes), or null when there was nothing to collapse.
  */
-export async function closeGroup(editor: Editor, groupId: TLShapeId): Promise<number | null> {
+export async function collapseGroup(
+	editor: Editor,
+	groupId: TLShapeId
+): Promise<{ boxId: TLShapeId; removedWires: number } | null> {
 	const group = editor.getShape<TLGroupShape>(groupId)
 	if (!group || group.type !== 'group') return null
-	const boxId = typeof group.meta?.boxOf === 'string' ? (group.meta.boxOf as TLShapeId) : null
-	const box = boxId ? editor.getShape<NodeShape>(boxId) : null
+	const label = typeof group.meta?.label === 'string' && group.meta.label.trim() ? group.meta.label.trim() : null
+	const oldBoxId = typeof group.meta?.boxOf === 'string' ? (group.meta.boxOf as TLShapeId) : null
+	const oldBox = oldBoxId ? editor.getShape<NodeShape>(oldBoxId) : null
+	const reuseBox = !!oldBox && oldBox.props.node.type === 'subgraph'
 
-	if (!boxId || !box || box.props.node.type !== 'subgraph') {
-		// The box is gone: this is now just a plain group.
-		editor.updateShape<TLGroupShape>({ id: groupId, type: 'group', meta: { ...group.meta, boxOf: null } })
-		return null
-	}
+	// Members = the group's current cards (the user may have added or removed some while it
+	// was open), extras = its other direct children. Wires are never members: they follow.
+	const { members, extras } = splitMembers(editor, editor.getSortedChildIdsForParent(groupId))
+	if (!members.length && !extras.length) return null
 
-	editor.markHistoryStoppingPoint('close to box')
-	// Members = current descendants of the group (the user may have added or removed shapes
-	// while it was open); connections are never grouped, so only 'node' children count.
-	const memberIds = editor
-		.getSortedChildIdsForParent(groupId)
-		.filter((id) => editor.getShape(id)?.type === 'node') as TLShapeId[]
-
+	editor.markHistoryStoppingPoint('collapse group')
+	leaveFocusOf(editor, groupId)
 	editor.ungroupShapes([groupId], { select: false })
 
-	const prepared = await prepareCollapse(editor, memberIds)
-	const removedWires = applyCollapse(editor, boxId, prepared)
-	editor.select(boxId)
+	const prepared = await prepareCollapse(editor, members, extras)
+	let boxId: TLShapeId
+	let removedWires = 0
+	editor.run(() => {
+		if (reuseBox) {
+			boxId = oldBoxId!
+			const box = editor.getShape<NodeShape>(boxId)!
+			const node = box.props.node as SubgraphNode
+			// A renamed group renames its card (the default label is the card's own title).
+			if (label && label !== node.title && label !== box.props.label) {
+				editor.updateShape<NodeShape>({ id: boxId, type: 'node', props: { label } })
+			}
+		} else {
+			boxId = createShapeId()
+			const count = members.length
+			const node: SubgraphNode = {
+				type: 'subgraph',
+				title: `Group (${count} card${count === 1 ? '' : 's'})`,
+				innerIds: [],
+				inputs: [],
+				outputs: [],
+				thumbnail: null,
+				lastOutputs: null,
+				error: null,
+			}
+			editor.createShape<NodeShape>({
+				id: boxId,
+				type: 'node',
+				parentId: editor.getCurrentPageId(),
+				x: 0,
+				y: 0,
+				props: { node, isOutOfDate: true, ...(label && label !== 'Group' ? { label } : {}) },
+			})
+		}
+		removedWires = applyCollapse(editor, boxId, prepared)
+		editor.select(boxId)
+	})
 	// Re-assert one frame later, same reason as packSelection.
 	editor.timers.requestAnimationFrame(() => {
 		if (editor.getShape(boxId)) editor.select(boxId)
 	})
-	return removedWires
+	return { boxId: boxId!, removedWires }
+}
+
+/** Close an expanded box's group back into its box. Returns the removed-wire count, or null. */
+export async function closeGroup(editor: Editor, groupId: TLShapeId): Promise<number | null> {
+	const result = await collapseGroup(editor, groupId)
+	return result ? result.removedWires : null
 }

@@ -2,6 +2,7 @@ import {
 	BindingOnChangeOptions,
 	BindingOnCreateOptions,
 	BindingOnDeleteOptions,
+	BindingOnShapeChangeOptions,
 	BindingOnShapeDeleteOptions,
 	BindingOnShapeIsolateOptions,
 	BindingUtil,
@@ -9,6 +10,7 @@ import {
 	Editor,
 	T,
 	TLBinding,
+	TLParentId,
 	TLShapeId,
 } from 'tldraw'
 import { getNodePorts } from '../nodes/nodePorts'
@@ -52,12 +54,26 @@ export class ConnectionBindingUtil extends BindingUtil<ConnectionBinding> {
 	}
 
 	onAfterCreate({ binding }: BindingOnCreateOptions<ConnectionBinding>): void {
+		reparentConnection(this.editor, binding.fromId)
 		const node = this.editor.getShape(binding.toId)
 		if (!node || !this.editor.isShapeOfType(node, 'node')) return
 		onNodePortConnect(this.editor, node, binding.props.portId)
 	}
 
+	// WP47: a card moved into or out of a group (group, ungroup, reparent) takes its wires along.
+	onAfterChangeToShape({ binding, shapeBefore, shapeAfter, reason }: BindingOnShapeChangeOptions<ConnectionBinding>): void {
+		if (reason !== 'ancestry' && shapeBefore.parentId === shapeAfter.parentId) return
+		reparentConnection(this.editor, binding.fromId)
+	}
+
+	// Something moved the wire itself (e.g. grouped with a selection): put it back where its ends say.
+	onAfterChangeFromShape({ binding, shapeBefore, shapeAfter }: BindingOnShapeChangeOptions<ConnectionBinding>): void {
+		if (shapeBefore.parentId === shapeAfter.parentId) return
+		reparentConnection(this.editor, binding.fromId)
+	}
+
 	onAfterChange({ bindingBefore, bindingAfter }: BindingOnChangeOptions<ConnectionBinding>): void {
+		if (bindingBefore.toId !== bindingAfter.toId) reparentConnection(this.editor, bindingAfter.fromId)
 		if (
 			bindingBefore.props.portId !== bindingAfter.props.portId ||
 			bindingBefore.toId !== bindingAfter.toId
@@ -82,6 +98,34 @@ export class ConnectionBindingUtil extends BindingUtil<ConnectionBinding> {
 		if (!node || !this.editor.isShapeOfType(node, 'node')) return
 		onNodePortDisconnect(this.editor, node, binding.props.portId)
 	}
+}
+
+/**
+ * Where a wire belongs (WP47): with both ends bound, the closest group that holds both
+ * cards (so a group owns its inner wires), otherwise the page. A wire with one bound end
+ * keeps its parent only when that card is its sibling, like tldraw's own arrows.
+ */
+export function getConnectionParentId(editor: Editor, connectionId: TLShapeId): TLParentId | null {
+	const connection = editor.getShape(connectionId)
+	if (!connection) return null
+	const pageId = editor.getAncestorPageId(connection)
+	if (!pageId) return null
+	const { start, end } = getConnectionBindings(editor, connectionId)
+	const startShape = start ? editor.getShape(start.toId) : undefined
+	const endShape = end ? editor.getShape(end.toId) : undefined
+	if (startShape && endShape) {
+		return editor.findCommonAncestor([startShape, endShape], (s) => s.type === 'group') ?? pageId
+	}
+	const one = startShape ?? endShape
+	if (one && one.parentId === connection.parentId) return connection.parentId
+	return pageId
+}
+
+export function reparentConnection(editor: Editor, connectionId: TLShapeId) {
+	const connection = editor.getShape(connectionId)
+	if (!connection || connection.type !== CONNECTION_TYPE) return
+	const parentId = getConnectionParentId(editor, connectionId)
+	if (parentId && parentId !== connection.parentId) editor.reparentShapes([connectionId], parentId)
 }
 
 export interface ConnectionBindings {
