@@ -617,16 +617,20 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 		title: title('if'),
 		group: groupOf('if'),
 		purpose: purpose('if'),
-		useWhen: 'Use to route a value down one of two branches based on a condition.',
-		inputs: [port('input', 'any', 'The value to test and pass through.'), port('test', 'any', 'Overrides the operand field when wired.')],
+		useWhen: 'Use to route a value down one of two branches based on a condition. For else-if, wire another If into "else" (a chain of Ifs).',
+		inputs: [port('input', 'any', 'The value to test and pass through.'), port('test', 'any', 'When wired, the condition tests this value instead of the input; the input is still what is passed on.')],
 		outputs: [port('then', 'any', 'Emits the input when the condition is true.'), port('else', 'any', 'Emits the input when the condition is false.')],
 		fields: [
-			field('condition', 'enum', 'Condition', 'How the input is compared to the operand.', ['truthy', 'empty', 'equals', 'not_equals', 'contains', 'starts', 'ends', 'regex', 'gt', 'gte', 'lt', 'lte', 'is_image', 'is_json']),
-			field('operand', 'text', 'Operand', 'The value to compare the input against.'),
+			field('condition', 'enum', 'Condition', 'How the input is compared to the operand. Number tests (gt, gte, lt, lte, between) read "1,200" as 1200; equals compares numbers as numbers ("5" equals "5.0").', ['truthy', 'empty', 'equals', 'not_equals', 'contains', 'starts', 'ends', 'regex', 'gt', 'gte', 'lt', 'lte', 'between', 'is_image', 'is_json']),
+			field('operand', 'text', 'Operand', 'The value to compare the input against; for "between", "min,max".'),
 		],
 		assistant: {
 			role: 'You pick the condition and operand for this branch.',
 			chips: ['If it contains…', 'If it equals…', 'If empty'],
+			rules: [
+				'Else-if: there is no separate card. Wire the "else" output into the "input" of a second If with the next condition, and so on.',
+				'The untaken branch stops: cards after it do not run. To continue with whichever branch ran, join both branches in a Merge card.',
+			],
 		},
 	},
 	logic: {
@@ -671,13 +675,41 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			],
 		},
 	},
+	while: {
+		type: 'while',
+		title: title('while'),
+		group: groupOf('while'),
+		purpose: purpose('while'),
+		useWhen: 'Use to repeat the loop body while a condition on the current value holds (e.g. keep doubling while below 1000), when the number of passes is not known up front. For a known list or number range, use for_each.',
+		inputs: [port('initial', 'any', 'The start value; tested before the first pass.'), port('result', 'any', 'Wire the end of the loop body back in here: it becomes the next value.')],
+		outputs: [
+			port('value', 'text', 'The current value, fed into the loop body on each pass.'),
+			port('iteration', 'number', 'The pass number (1, 2, …), fed into the loop body on each pass.'),
+			port('output', 'text', 'The value when the loop ended.'),
+			port('count', 'number', 'How many passes ran.'),
+		],
+		fields: [
+			field('condition', 'enum', 'Condition', 'The loop runs while the current value meets this condition (same conditions as If).', ['truthy', 'empty', 'equals', 'not_equals', 'contains', 'starts', 'ends', 'regex', 'gt', 'gte', 'lt', 'lte', 'between', 'is_image', 'is_json'], 'lt'),
+			field('operand', 'text', 'Operand', 'The value the condition compares against.', undefined, '10'),
+			field('maxIterations', 'number', 'Max iterations', 'Safety limit: the loop ends after this many passes even if the condition still holds (default 100, at most 10000).', undefined, 100),
+			field('noResult', 'enum', 'No result', 'What a pass whose body reaches no result does: "stop" ends the loop (like break), "error" fails.', ['stop', 'error'], 'stop'),
+		],
+		assistant: {
+			role: 'You set the loop condition and its safety limit.',
+			chips: ['While below 100', 'Until it contains "done"', 'At most 10 passes'],
+			rules: [
+				'Wire value → (body cards) → result. The condition is tested on the start value first, then on each body result.',
+				'To end the loop early from inside the body, route through an If and leave one branch unwired (No result: "stop").',
+			],
+		},
+	},
 	router: {
 		type: 'router',
 		title: title('router'),
 		group: groupOf('router'),
 		purpose: purpose('router'),
-		useWhen: 'Legacy node: sends one input to one of several numbered outputs.',
-		inputs: [port('input', 'any', 'The value to route.')],
+		useWhen: 'Legacy node: copies one input to each of several numbered outputs. To pick one branch, use if or decision_switch.',
+		inputs: [port('input', 'any', 'The value to copy.')],
 		outputs: [port('out_0', 'any', 'Output slot 0.'), port('out_1', 'any', 'Output slot 1.'), port('out_2', 'any', 'Output slot 2.')],
 		fields: [field('outputCount', 'number', 'Outputs', 'How many output slots this node has.')],
 		assistant: {
@@ -704,6 +736,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			field('code', 'code', 'Code', 'The function body: read the named inputs, return the named outputs.'),
 			field('inputCount', 'number', 'Input count', 'How many input ports this node has (1-20): in1, in2, …'),
 			field('outputCount', 'number', 'Output count', 'How many output ports this node has (1-20): output, out2, …'),
+			field('timeoutSec', 'number', 'Timeout (s)', 'The run stops with an error after this many seconds (default 10; Python\'s one-time runtime download does not count).', undefined, 10),
 			// wire: false — the card stores these as a `string[]` (one name per port), not the
 			// comma-separated string this spec describes for the AI; wiring a plain text value in
 			// would corrupt that array. Revisit if/when the AI-facing shape and the stored shape
@@ -717,6 +750,7 @@ export const NODE_SPECS: Record<string, NodeSpec> = {
 			rules: [
 				'The code must only use its declared inputs and return its declared outputs; no network or file access.',
 				'Wire ports are `in1`, `in2`, … and `output`, `out2`, … (never `a`/`b`/`c`/`d`), sized by Input count/Output count; the code itself reads/returns the variable names from Input names/Output names (default a, b, c… / output, out2…).',
+				'The code must return (TS/JS) or assign (Python) a value: a run that produces no output at all is an error.',
 			],
 		},
 	},

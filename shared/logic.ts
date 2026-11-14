@@ -2,17 +2,35 @@
 
 type Value = string | number | null | undefined
 
-/** "false", "no", "0", "off", empty and null are false; everything else is true. */
+/** "false", "no", "0", "off", empty and null are false; everything else is true. WP45: a number
+ * written as text is false when it is zero ("0.0", "-0", "0e3"), and an empty JSON list or
+ * object ("[]", "{}") counts as empty, so a Code card's empty result tests as false. */
 export function isTruthy(value: Value): boolean {
 	if (value == null) return false
 	if (typeof value === 'number') return value !== 0 && !Number.isNaN(value)
 	const v = value.trim().toLowerCase()
-	return !(v === '' || v === 'false' || v === 'no' || v === '0' || v === 'off' || v === 'null' || v === 'undefined')
+	if (v === '' || v === 'false' || v === 'no' || v === '0' || v === 'off' || v === 'null' || v === 'undefined') return false
+	if (v === '[]' || v === '{}') return false
+	const n = asNumber(v)
+	if (!Number.isNaN(n) && n === 0) return false
+	return true
 }
 
+/** A number from text ("1,200" reads as 1200); NaN for empty or non-numeric text. WP45: empty
+ * text used to read as 0 (Number('') is 0), so an empty value passed "is less than 5". */
 function asNumber(v: string) {
-	const n = Number(String(v).trim().replace(/,/g, ''))
+	const text = String(v ?? '').trim().replace(/,/g, '')
+	if (text === '') return NaN
+	const n = Number(text)
 	return Number.isFinite(n) ? n : NaN
+}
+
+/** Equal as numbers when both sides are numbers ("5" equals "5.0"), else as text (any case). */
+function sameValue(a: string, b: string): boolean {
+	const x = asNumber(a)
+	const y = asNumber(b)
+	if (!Number.isNaN(x) && !Number.isNaN(y)) return x === y
+	return a.trim().toLowerCase() === b.trim().toLowerCase()
 }
 
 export function evaluateCondition(subject: string, condition: string, operand: string): boolean {
@@ -24,9 +42,9 @@ export function evaluateCondition(subject: string, condition: string, operand: s
 		case 'empty':
 			return !isTruthy(s)
 		case 'equals':
-			return s.trim().toLowerCase() === o.trim().toLowerCase()
+			return sameValue(s, o)
 		case 'not_equals':
-			return s.trim().toLowerCase() !== o.trim().toLowerCase()
+			return !sameValue(s, o)
 		case 'contains':
 			return s.toLowerCase().includes(o.toLowerCase())
 		case 'starts':
@@ -226,4 +244,60 @@ export function rowColumnPorts(headers: string[]): RowColumnPort[] {
 		seen.add(id)
 		return { id, label }
 	})
+}
+
+// ---------------------------------------------------------------------------
+// WP45: While — run the loop body again while a condition holds.
+// ---------------------------------------------------------------------------
+
+export const WHILE_DEFAULT_MAX = 100
+/** Hard cap on While's "Max iterations", the same limit as a For each number range. */
+export const WHILE_HARD_MAX = MAX_RANGE_ITEMS
+
+/** "Max iterations" as a whole number from 1 to WHILE_HARD_MAX (default 100). */
+export function clampMaxIterations(value: unknown): number {
+	const n = Math.floor(Number(value))
+	if (!Number.isFinite(n) || n < 1) return value == null || value === '' ? WHILE_DEFAULT_MAX : 1
+	return Math.min(WHILE_HARD_MAX, n)
+}
+
+/** Why a While loop ended. */
+export type WhileEnd = 'condition' | 'max' | 'no_result'
+
+export interface WhileOutcome {
+	/** The value when the loop ended: the start value, or the last body result. */
+	value: string
+	/** How many times the body ran. */
+	count: number
+	end: WhileEnd
+}
+
+export interface WhileLoopOptions {
+	initial: string
+	/** True while the loop should go on; tested before each pass, on the current value. */
+	test: (value: string) => boolean
+	max: number
+	/** Runs the body once. Returns what reached "result", or null when nothing did. Throws to
+	 * stop the loop with an error (a failed body card, or Stop). */
+	body: (value: string, iteration: number) => Promise<string | null>
+	/** What a pass with no result does: end the loop ("stop", like `break`) or fail. */
+	noResult?: 'stop' | 'error'
+}
+
+/** The While loop itself, with the body injected (the card passes the shared loop-body runner),
+ * so the rules are testable in Node. */
+export async function runWhileLoop(options: WhileLoopOptions): Promise<WhileOutcome> {
+	let value = options.initial
+	let count = 0
+	for (;;) {
+		if (!options.test(value)) return { value, count, end: 'condition' }
+		if (count >= options.max) return { value, count, end: 'max' }
+		const result = await options.body(value, count + 1)
+		count++
+		if (result == null) {
+			if (options.noResult === 'error') throw new Error(`Iteration ${count} reached no result`)
+			return { value, count, end: 'no_result' }
+		}
+		value = result
+	}
 }

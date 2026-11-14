@@ -287,8 +287,8 @@ export function validatePlan(
 	}
 
 	// Cycle checking only matters when nothing in the graph can legitimately
-	// loop (a for_each node provides its own loop semantics).
-	const hasLoopNode = [...resolved.values()].some((n) => n.type === 'for_each')
+	// loop (a for_each or while node provides its own loop semantics).
+	const hasLoopNode = [...resolved.values()].some((n) => n.type === 'for_each' || n.type === 'while')
 	const graph = new Map<string, Set<string>>()
 	const addEdge = (from: string, to: string) => {
 		if (!graph.has(from)) graph.set(from, new Set())

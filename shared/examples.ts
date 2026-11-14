@@ -198,6 +198,31 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'loop', fromPort: 'item', to: 'g', toPort: 'input' },
 		{ from: 'g', fromPort: 'then', to: 'loop', toPort: 'result' },
 	]),
+	step('if-else-if-chain', 'Else-if: a chain of Ifs', 'There is no separate else-if card: the first If\'s "else" feeds a second If with the next test.', [
+		{ id: 'n', type: 'number', x: 0, y: 0, props: { value: 50 } },
+		{ id: 'big', type: 'if', x: 460, y: 0, props: { condition: 'gt', operand: '100' } },
+		{ id: 'mid', type: 'if', x: 920, y: 200, props: { condition: 'gt', operand: '10' } },
+		{ id: 'outBig', type: 'output', x: 1380, y: -80 },
+		{ id: 'outMid', type: 'output', x: 1380, y: 160 },
+		{ id: 'outSmall', type: 'output', x: 1380, y: 400 },
+	], [
+		{ from: 'n', fromPort: 'output', to: 'big', toPort: 'input' },
+		{ from: 'big', fromPort: 'then', to: 'outBig', toPort: 'input' },
+		{ from: 'big', fromPort: 'else', to: 'mid', toPort: 'input' },
+		{ from: 'mid', fromPort: 'then', to: 'outMid', toPort: 'input' },
+		{ from: 'mid', fromPort: 'else', to: 'outSmall', toPort: 'input' },
+	]),
+	step('while-double', 'While: double until 1000', 'Code doubles the value; While runs it again while the value is below 1000.', [
+		{ id: 'start', type: 'number', x: 0, y: 0, props: { value: 3 } },
+		{ id: 'loop', type: 'while', x: 460, y: 0, props: { condition: 'lt', operand: '1000', maxIterations: 100 } },
+		{ id: 'double', type: 'code', x: 920, y: 0, props: { lang: 'js', inputCount: 1, code: 'export default function run({ a }) {\n  return Number(a) * 2\n}\n' } },
+		{ id: 'out', type: 'output', x: 920, y: 420 },
+	], [
+		{ from: 'start', fromPort: 'output', to: 'loop', toPort: 'initial' },
+		{ from: 'loop', fromPort: 'value', to: 'double', toPort: 'in1' },
+		{ from: 'double', fromPort: 'output', to: 'loop', toPort: 'result' },
+		{ from: 'loop', fromPort: 'output', to: 'out', toPort: 'input' },
+	]),
 	step('if-regex-check', 'Regex check', 'If the text matches the pattern, "then" carries it; otherwise "else" does.', [
 		{ id: 'p', type: 'prompt', x: 0, y: 0, props: { text: 'order-2024-0193' } },
 		{ id: 'g', type: 'if', x: 460, y: 0, props: { condition: 'regex', operand: '^order-\\d{4}-\\d+$' } },

@@ -2,6 +2,7 @@ import { categoryOf } from '../../../../shared/nodeGroups'
 import {
 	bandForScore,
 	choiceOutputs,
+	decisionProblem,
 	DEFAULT_BANDS_TEXT,
 	parseBands,
 	ParsedDecision,
@@ -185,12 +186,16 @@ export class DecisionSwitchNodeDefinition extends NodeDefinition<DecisionSwitchN
 			bandsText: node.bands,
 			lastOptions: node.lastOptions,
 		})
+		// WP45: an empty or unreadable decision used to send STOP down every output, which showed
+		// as a red "failed" badge with no message at all. Now the card says why and fails.
+		const problem = decisionProblem(decisionRaw, route)
 		updateNode<DecisionSwitchNode>(this.editor, shape, (n) => ({
 			...n,
 			lastDecisionJson: JSON.stringify({ resolvedMode: route.resolvedMode, chosen: route.chosenPortId, parsed: route.parsed, value: route.value }),
 			lastOptions: route.options.length ? route.options : n.lastOptions,
-			error: null,
+			error: problem,
 		}))
+		if (problem) throw new Error(problem)
 		return Object.fromEntries(Object.entries(route.outputs).map(([k, v]) => [k, v == null ? STOP_EXECUTION : v]))
 	}
 	getOutputInfo(shape: NodeShape, node: DecisionSwitchNode, inputs: InfoValues): InfoValues {

@@ -68,15 +68,40 @@ export function parseDecision(raw: string | null | undefined): ParsedDecision {
 
 const YES_NO_KEYS = new Set(['yes', 'no'])
 
+/** WP45: plain-text answers read as yes / no: "true"/"false" (a Logic card's output, a form
+ * checkbox) and "y"/"n" route the same as "yes"/"no". */
+const YES_WORDS = new Set(['yes', 'y', 'true'])
+const NO_WORDS = new Set(['no', 'n', 'false'])
+
+/** P(yes) from a plain-text answer: 1 for a yes word, 0 for a no word, a number 0..1 as is (or
+ * 0..100 as a percent); null when the text is none of these. */
+export function yesProbabilityFromText(answer: string | null | undefined): number | null {
+	const text = (answer ?? '').trim().toLowerCase()
+	if (!text) return null
+	if (YES_WORDS.has(text)) return 1
+	if (NO_WORDS.has(text)) return 0
+	const n = Number(text)
+	if (Number.isFinite(n) && n >= 0 && n <= 100) return n > 1 ? n / 100 : n
+	return null
+}
+
+function isPlainNumber(text: string | null | undefined): boolean {
+	const t = (text ?? '').trim()
+	return t !== '' && Number.isFinite(Number(t))
+}
+
 /** Guess the mode from the decision's own shape: a tagged `kind` wins outright; otherwise
- * exactly {yes, no} keys means yes/no. */
+ * exactly {yes, no} keys (or a yes/no/true/false answer) means yes/no, and a plain number
+ * means a score (WP45: it used to become a choice option named after the number). */
 export function detectMode(parsed: ParsedDecision): ResolvedDecisionMode {
 	if (parsed.kind) return parsed.kind
 	if (parsed.probabilities) {
 		const keys = Object.keys(parsed.probabilities).map((k) => k.toLowerCase())
 		if (keys.length === 2 && keys.every((k) => YES_NO_KEYS.has(k))) return 'noul'
 	}
-	if (parsed.answer && YES_NO_KEYS.has(parsed.answer.trim().toLowerCase())) return 'noul'
+	const answer = parsed.answer?.trim().toLowerCase() ?? ''
+	if (YES_WORDS.has(answer) || NO_WORDS.has(answer)) return 'noul'
+	if (!parsed.probabilities && isPlainNumber(answer)) return 'score'
 	return 'choice'
 }
 
@@ -252,11 +277,7 @@ export function routeDecision(input: DecisionRouteInput): DecisionRouteResult {
 		const pYesRaw =
 			(parsed.probabilities &&
 				(parsed.probabilities.yes ?? parsed.probabilities.Yes ?? parsed.probabilities.YES)) ??
-			(parsed.answer?.trim().toLowerCase() === 'yes'
-				? 1
-				: parsed.answer?.trim().toLowerCase() === 'no'
-					? 0
-					: null)
+			(parsed.probabilities ? null : yesProbabilityFromText(parsed.answer))
 		const outputs: Record<string, string | null> = { yes: null, no: null, unsure: null }
 		if (pYesRaw == null) {
 			return { resolvedMode, parsed, chosenPortId: null, outputs, value, unsure: false, options: [] }
@@ -307,4 +328,20 @@ export function routeDecision(input: DecisionRouteInput): DecisionRouteResult {
 	const chosenId = bandName ? `band:${slugOption(bandName)}` : null
 	if (chosenId && chosenId in outputs) outputs[chosenId] = value
 	return { resolvedMode, parsed, chosenPortId: chosenId, outputs, value, unsure: false, options: [] }
+}
+
+/** WP45: a short, human reason why a route chose no output, or null when it did choose one.
+ * The card throws this, so the error banner explains the run instead of a bare red badge. */
+export function decisionProblem(decisionRaw: string | null | undefined, route: DecisionRouteResult): string | null {
+	const raw = (decisionRaw ?? '').trim()
+	if (!raw) return 'The decision is empty. Wire a decision into "Decision": yes/no, a choice, a score, or JEV probabilities.'
+	if (route.chosenPortId) return null
+	const shown = raw.length > 40 ? raw.slice(0, 40) + '…' : raw
+	if (route.resolvedMode === 'noul') {
+		return `Yes/no mode cannot read "${shown}" as yes or no. Use yes/no, true/false, a probability from 0 to 1, or {"yes": p, "no": q}.`
+	}
+	if (route.resolvedMode === 'score') {
+		return `Score mode needs a number from 0 to 1 (or 0 to 100), or probabilities; got "${shown}".`
+	}
+	return `No output matches "${shown}".`
 }

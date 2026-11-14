@@ -8,6 +8,11 @@ describe('isRunCacheable', () => {
 		}
 	})
 
+	it('never caches a loop card: its body is not part of its own settings or inputs (WP45)', () => {
+		expect(isRunCacheable({ type: 'for_each' })).toBe(false)
+		expect(isRunCacheable({ type: 'while' })).toBe(false)
+	})
+
 	it('caches an ordinary card', () => {
 		expect(isRunCacheable({ type: 'prompt', text: 'hi' })).toBe(true)
 	})

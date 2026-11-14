@@ -1,7 +1,9 @@
 import { categoryOf } from '../../../../shared/nodeGroups'
 import { T, useEditor } from 'tldraw'
+import { isAbortError } from '../../../../shared/abort'
 import {
 	addResultColumn,
+	clampMaxIterations,
 	CollectMode,
 	collectResults,
 	evaluateCondition,
@@ -11,14 +13,16 @@ import {
 	resolveJoiner,
 	resolveLoopItemResult,
 	rowColumnPorts,
+	runWhileLoop,
 	splitItems,
+	WHILE_DEFAULT_MAX,
+	WHILE_HARD_MAX,
 } from '../../../../shared/logic'
 import { parseTableText, toCsv } from '../../../../shared/tableText'
 import { IteratorIcon } from '../../components/icons/IteratorIcon'
 import { RouterIcon } from '../../components/icons/RouterIcon'
 import { getNodeRowHeightPx, NODE_HEADER_HEIGHT_PX, NODE_ROW_HEADER_GAP_PX, NODE_WIDTH_PX } from '../../constants'
-import { executionGeneration } from '../../execution/executionState'
-import { loopBodyNodes, runLoopBodyPorts } from '../../execution/loop'
+import { LoopPacer, loopBodyNodes, runLoopBodyPorts } from '../../execution/loop'
 import { clearNodeRun } from '../../execution/nodeRunState'
 import { Port, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
@@ -175,7 +179,8 @@ function IfNodeComponent({ shape, node }: NodeComponentProps<IfNode>) {
 				</NodeRow>
 			)}
 			{/* WP27 Part D: the card reads as a sentence, e.g. "If input contains yes". */}
-			<NodeRow className="NodeHint IfNode-sentence">
+			{/* WP45: else-if is a chain of If cards — said here, where the user reads the logic. */}
+			<NodeRow className="NodeHint IfNode-sentence" title='For "else if", wire another If card into "else". To continue after both branches, join them in a Merge card.'>
 				If <strong>input</strong> {conditionSentence(node.condition, node.operand)} → then / else
 			</NodeRow>
 			<IfBranchRow shapeId={shape.id} portId="then" active={node.lastResult === true} label="then (yes)" value={node.lastValue} />
@@ -422,7 +427,9 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 	async execute(shape: NodeShape, node: ForEachNode, inputs: InputValues): Promise<ExecutionResult> {
 		const set = (patch: Partial<ForEachNode>, outOfDate = true) =>
 			updateNode<ForEachNode>(this.editor, this.editor.getShape<NodeShape>(shape.id) ?? shape, (n) => ({ ...n, ...patch }), outOfDate)
-		const generation = executionGeneration(this.editor)
+		// WP45: yields to the browser between items (no frozen window, Stop clickable), checks
+		// Stop before and after every item, and writes progress ~10x a second, not per item.
+		const pacer = new LoopPacer(this.editor)
 		const bodyNodes = loopBodyNodes(this.editor, shape.id, 'item')
 		const collect = effectiveCollect(node)
 		const joiner = resolveJoiner(node.joiner)
@@ -461,13 +468,17 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 			const hasAny = (aligned: (string | null)[]) => aligned.some((v) => v != null)
 
 			const aligned: (string | null)[] = []
+			const stoppedAt = (done: number): ExecutionResult => {
+				set({ progress: `stopped at ${done} / ${items.length}`, lastResults: finalize(aligned) })
+				return { item: STOP_EXECUTION, output: hasAny(aligned) ? finalize(aligned) : STOP_EXECUTION }
+			}
+			set({ error: null }, false)
 			for (let i = 0; i < items.length; i++) {
 				// Stop pressed (or a new Play started): keep what finished and end cleanly.
-				if (executionGeneration(this.editor) !== generation) {
-					set({ progress: `stopped at ${i} / ${items.length}`, lastResults: finalize(aligned) })
-					return { item: STOP_EXECUTION, output: hasAny(aligned) ? finalize(aligned) : STOP_EXECUTION }
-				}
-				set({ progress: `${i + 1} / ${items.length}`, error: null })
+				if (pacer.stopped()) return stoppedAt(i)
+				await pacer.tick()
+				if (pacer.stopped()) return stoppedAt(i)
+				if (pacer.shouldReport(i + 1, items.length)) set({ progress: `${i + 1} / ${items.length}` }, false)
 				// Clear last item's body-node run state so only this item's failure counts.
 				for (const id of bodyNodes) clearNodeRun(this.editor, id)
 				const itemPorts: Record<string, PipelineValue> = { item: items[i] }
@@ -477,6 +488,9 @@ export class ForEachNodeDefinition extends NodeDefinition<ForEachNode> {
 					})
 				}
 				const result = await runLoopBodyPorts(this.editor, shape.id, itemPorts, 'result')
+				// Stopped mid-item: the body's own cards ended early, so this item has no real
+				// result — leave it out rather than count it as "no result".
+				if (pacer.stopped()) return stoppedAt(i)
 				if (result.error) {
 					// Surface the failure instead of passing the item through as if it worked.
 					set({ error: `Item ${i + 1} (${previewItem(items[i])}): ${result.error}`, progress: `failed at ${i + 1} / ${items.length}` }, false)
@@ -642,6 +656,183 @@ function ForEachNodeComponent({ shape, node }: NodeComponentProps<ForEachNode>) 
 				<span className="NodeHint">{node.progress ?? 'Not run yet'}</span>
 				<div className="ProgressBar">
 					<span style={{ width: `${forEachPercent(node.progress)}%` }} />
+				</div>
+			</NodeRow>
+		</>
+	)
+}
+
+// ---------------------------------------------------------------------------
+// While (WP45): run the loop body again while a condition on the value holds
+// ---------------------------------------------------------------------------
+
+export type WhileNode = T.TypeOf<typeof WhileNode>
+export const WhileNode = T.object({
+	type: T.literal('while'),
+	condition: T.string,
+	operand: T.string,
+	maxIterations: T.number,
+	noResult: T.string.optional(),
+	progress: T.string.nullable(),
+	lastValue: T.string.nullable(),
+	lastCount: T.number.nullable(),
+	error: T.string.nullable(),
+})
+
+// Rows: start value, condition, operand, max, value →, iteration →, ← result, count →,
+// no result, progress.
+const WHILE_ROWS = 10
+
+export class WhileNodeDefinition extends NodeDefinition<WhileNode> {
+	static type = 'while'
+	static validator = WhileNode
+	title = 'While'
+	heading = 'While'
+	icon = <IteratorIcon />
+	category = categoryOf('while')
+	override defaultWidthPx = 360
+	resultKeys = ['progress', 'lastValue', 'lastCount', 'error'] as const
+	getDefault(): WhileNode {
+		return {
+			type: 'while',
+			condition: 'lt',
+			operand: '10',
+			maxIterations: WHILE_DEFAULT_MAX,
+			noResult: 'stop',
+			progress: null,
+			lastValue: null,
+			lastCount: null,
+			error: null,
+		}
+	}
+	getBodyHeightPx(shape: NodeShape) {
+		return getNodeRowHeightPx(shape.props.fontSize) * WHILE_ROWS
+	}
+	getPorts(shape: NodeShape, node: WhileNode): Record<string, ShapePort> {
+		const rowPx = getNodeRowHeightPx(shape.props.fontSize)
+		const width = this.getWidthPx(shape, node)
+		return {
+			initial: { id: 'initial', x: 0, y: portY(0, rowPx), terminal: 'end', dataType: 'any' },
+			// Loop body: "value" (and "iteration") → … → back into "result".
+			value: { id: 'value', x: width, y: portY(4, rowPx), terminal: 'start', dataType: 'text' },
+			iteration: { id: 'iteration', x: width, y: portY(5, rowPx), terminal: 'start', dataType: 'number' },
+			result: { id: 'result', x: 0, y: portY(6, rowPx), terminal: 'end', dataType: 'any', feedback: true },
+			count: { id: 'count', x: width, y: portY(7, rowPx), terminal: 'start', dataType: 'number' },
+			output: { id: 'output', x: width, y: NODE_HEADER_HEIGHT_PX / 2, terminal: 'start', dataType: 'text' },
+		}
+	}
+	async execute(shape: NodeShape, node: WhileNode, inputs: InputValues): Promise<ExecutionResult> {
+		const set = (patch: Partial<WhileNode>, outOfDate = true) =>
+			updateNode<WhileNode>(this.editor, this.editor.getShape<NodeShape>(shape.id) ?? shape, (n) => ({ ...n, ...patch }), outOfDate)
+		const pacer = new LoopPacer(this.editor)
+		const bodyNodes = new Set([...loopBodyNodes(this.editor, shape.id, 'value'), ...loopBodyNodes(this.editor, shape.id, 'iteration')])
+		const max = clampMaxIterations(node.maxIterations)
+		const sentence = conditionSentence(node.condition, node.operand)
+		set({ progress: 'starting', error: null }, false)
+		try {
+			const outcome = await runWhileLoop({
+				initial: coerceToText(getInput(inputs, 'initial')),
+				test: (value) => evaluateCondition(value, node.condition, node.operand),
+				max,
+				noResult: node.noResult === 'error' ? 'error' : 'stop',
+				body: async (value, iteration) => {
+					if (pacer.stopped()) throw new DOMException('Stopped', 'AbortError')
+					await pacer.tick()
+					if (pacer.stopped()) throw new DOMException('Stopped', 'AbortError')
+					if (pacer.shouldReport(iteration)) set({ progress: `iteration ${iteration} / max ${max}` }, false)
+					for (const id of bodyNodes) clearNodeRun(this.editor, id)
+					const result = await runLoopBodyPorts(this.editor, shape.id, { value, iteration }, 'result')
+					if (pacer.stopped()) throw new DOMException('Stopped', 'AbortError')
+					if (result.error) throw new Error(`Iteration ${iteration}: ${result.error}`)
+					return result.value
+				},
+			})
+			const progress =
+				outcome.end === 'max'
+					? `hit Max iterations (${max}), value still ${sentence}`
+					: outcome.end === 'no_result'
+						? `${outcome.count} done (no result: loop ended)`
+						: `${outcome.count} done`
+			set({ progress, lastValue: outcome.value, lastCount: outcome.count, error: null })
+			return { value: STOP_EXECUTION, iteration: STOP_EXECUTION, output: outcome.value, count: outcome.count }
+		} catch (e) {
+			if (isAbortError(e)) {
+				set({ progress: 'stopped' }, false)
+				throw e
+			}
+			const message = (e as Error).message
+			set({ error: message, progress: 'failed' }, false)
+			throw new Error(message)
+		}
+	}
+	getOutputInfo(shape: NodeShape, node: WhileNode, inputs: InfoValues): InfoValues {
+		const isOutOfDate = areAnyInputsOutOfDate(inputs) || shape.props.isOutOfDate
+		return {
+			// Outside a loop run, the body ports carry nothing (they only flow during the loop).
+			value: { value: STOP_EXECUTION, isOutOfDate, dataType: 'text' },
+			iteration: { value: STOP_EXECUTION, isOutOfDate, dataType: 'number' },
+			output: { value: node.lastValue, isOutOfDate, dataType: 'text' },
+			count: { value: node.lastCount, isOutOfDate, dataType: 'number' },
+		}
+	}
+	Component = WhileNodeComponent
+}
+
+/** A right-aligned output row with its own port dot (loop body feeds and the count). */
+function LoopOutputRow({ shapeId, portId, label, active }: { shapeId: NodeShape['id']; portId: string; label: string; active?: boolean }) {
+	const ref = useFieldPortAnchor<HTMLDivElement>(shapeId, portId)
+	return (
+		<NodeRow ref={ref} className="NodeRow-right">
+			<span className={'NodeBranch' + (active ? ' is-active' : '')}>{label}</span>
+			<Port shapeId={shapeId} portId={portId} />
+		</NodeRow>
+	)
+}
+
+function WhileNodeComponent({ shape, node }: NodeComponentProps<WhileNode>) {
+	const editor = useEditor()
+	const set = (patch: Partial<WhileNode>) => updateNode<WhileNode>(editor, shape, (n) => ({ ...n, ...patch }))
+	const cond = CONDITIONS.find((c) => c.id === node.condition) ?? CONDITIONS[0]
+	const conditionOptions = CONDITIONS.map((c) => ({ value: c.id, label: c.label, hint: c.hint, group: c.group }))
+	const max = clampMaxIterations(node.maxIterations)
+	const percent = /^iteration (\d+)/.test(node.progress ?? '')
+		? Math.round((Number(/^iteration (\d+)/.exec(node.progress!)![1]) / max) * 100)
+		: node.progress && /done|Max/.test(node.progress)
+			? 100
+			: 0
+	return (
+		<>
+			<PortRow shapeId={shape.id} portId="initial" label="Start value" dataType="any" />
+			<WireField shapeId={shape.id} fieldKey="condition" label="While value">
+				<UiSelect value={node.condition} options={conditionOptions} onChange={(condition) => set({ condition })} />
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="operand" label="Value">
+				{cond.operand ? (
+					<UiTextInput placeholder={cond.id === 'between' ? 'e.g. 5,10' : 'compare with…'} value={node.operand} onChange={(operand) => set({ operand })} />
+				) : (
+					<span className="NodeRow-disconnected">no value needed</span>
+				)}
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="maxIterations" label="Max iterations" dataType="number" hint={`1 – ${WHILE_HARD_MAX}`}>
+				<UiNumberInput min={1} max={WHILE_HARD_MAX} step={1} value={node.maxIterations} onChange={(v) => set({ maxIterations: clampMaxIterations(v) })} />
+			</WireField>
+			<LoopOutputRow shapeId={shape.id} portId="value" label="each value →" active />
+			<LoopOutputRow shapeId={shape.id} portId="iteration" label="iteration # →" />
+			<PortRow shapeId={shape.id} portId="result" label="← Result" dataType="any" hint="next value (end of the body)" />
+			<LoopOutputRow shapeId={shape.id} portId="count" label={node.lastCount != null ? `count: ${node.lastCount} →` : 'count →'} />
+			<WireField shapeId={shape.id} fieldKey="noResult" label="No result">
+				<NodeSelect className="NodeField-select" value={node.noResult ?? 'stop'} onPointerDown={stopEvent} onChange={(e) => set({ noResult: e.target.value })}>
+					<option value="stop">end the loop</option>
+					<option value="error">stop with an error</option>
+				</NodeSelect>
+			</WireField>
+			<NodeRow
+				className="ForEachNode-progress WhileNode-progress"
+				title={node.progress ?? 'Wire each value through the body back into Result, then Play. The loop runs while the value ' + conditionSentence(node.condition, node.operand) + '.'}
+			>
+				<span className={'NodeHint' + (node.progress?.includes('Max') ? ' WhileNode-warning' : '')}>{node.progress ?? 'Not run yet'}</span>
+				<div className="ProgressBar">
+					<span style={{ width: `${percent}%` }} />
 				</div>
 			</NodeRow>
 		</>

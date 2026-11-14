@@ -2,7 +2,8 @@ import { Editor, TLShapeId } from 'tldraw'
 import { getNodePortConnections } from '../nodes/nodePorts'
 import { PipelineValue, STOP_EXECUTION } from '../nodes/types/shared'
 import { ExecutionGraph } from './ExecutionGraph'
-import { currentRunSignal } from './executionState'
+import { currentRunSignal, executionGeneration } from './executionState'
+import { withLiveLoopValues } from './loopContext'
 import { nodeRunState } from './nodeRunState'
 
 /** All nodes reachable downstream from one output port of a node (not the node itself). */
@@ -69,8 +70,12 @@ export async function runLoopBodyPorts(
 
 	const body = new Set<TLShapeId>()
 	for (const port of Object.keys(itemPorts)) for (const id of downstreamFrom(editor, nodeId, port)) body.add(id)
-	const graph = new ExecutionGraph(editor, roots, { allowed: body, overrides })
-	await graph.execute()
+	// noCache (WP45): a cache hit answers with the card's stored output info, and inside a loop
+	// body that info is derived from the loop's idle item port (STOP). So a repeated item — or a
+	// While pass with the same value — "reached no result" and was dropped. Body cards always run.
+	const graph = new ExecutionGraph(editor, roots, { allowed: body, overrides, noCache: true })
+	// Nested loops: a card in an inner loop's body may read this loop's item too.
+	await withLiveLoopValues(editor, nodeId, itemPorts, () => graph.execute())
 	// A failed body node stops the loop: report the first error it left behind.
 	const runs = nodeRunState.get(editor)
 	for (const id of body) {
@@ -95,4 +100,53 @@ export async function runLoopBody(
 	value: PipelineValue
 ): Promise<LoopItemResult> {
 	return runLoopBodyPorts(editor, nodeId, { [itemPort]: value }, resultPort)
+}
+
+/** Let the browser handle input and paint. A MessageChannel task, not setTimeout(0): that one is
+ * clamped (and throttled to 1 s in a background tab), which would make long loops crawl. */
+function yieldToBrowser(): Promise<void> {
+	return new Promise((resolve) => {
+		const channel = new MessageChannel()
+		channel.port1.onmessage = () => resolve()
+		channel.port2.postMessage(null)
+	})
+}
+
+/**
+ * WP45: the pacing shared by For each and While. A loop body made only of quick cards never
+ * awaits anything real, so without this the whole loop ran as one long microtask chain: the
+ * window froze until it ended (10 000 items: about a minute) and Stop could not even be clicked.
+ * `tick()` gives the browser a turn every ~30 ms; `shouldReport()` limits progress writes to
+ * about 10 per second; `stopped()` is true once Stop (or a new run) has happened.
+ */
+export class LoopPacer {
+	private readonly generation: number
+	private readonly signal: AbortSignal | undefined
+	private lastYield = performance.now()
+	private lastReport = 0
+
+	constructor(private readonly editor: Editor) {
+		this.generation = executionGeneration(editor)
+		this.signal = currentRunSignal(editor)
+	}
+
+	stopped(): boolean {
+		return executionGeneration(this.editor) !== this.generation || !!this.signal?.aborted
+	}
+
+	async tick(): Promise<void> {
+		if (performance.now() - this.lastYield < 30) return
+		await yieldToBrowser()
+		this.lastYield = performance.now()
+	}
+
+	/** True when a progress update is due (always for the first and the last step). */
+	shouldReport(step: number, total?: number): boolean {
+		const now = performance.now()
+		if (step <= 1 || (total != null && step >= total) || now - this.lastReport >= 100) {
+			this.lastReport = now
+			return true
+		}
+		return false
+	}
 }

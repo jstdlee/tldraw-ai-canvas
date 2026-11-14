@@ -12,7 +12,7 @@ import {
 	ImageResizeNodeDefinition,
 	ImageToolNodeDefinition,
 } from './types/ImageNodes'
-import { ForEachNodeDefinition, IfNodeDefinition, LogicNodeDefinition } from './types/LogicNodes'
+import { ForEachNodeDefinition, IfNodeDefinition, LogicNodeDefinition, WhileNodeDefinition } from './types/LogicNodes'
 import { DecisionSwitchNodeDefinition } from './types/DecisionSwitchNode'
 import { CodeNodeDefinition } from './types/CodeNode'
 import { SubgraphNodeDefinition } from './types/SubgraphNode'
@@ -101,6 +101,7 @@ export const NodeDefinitions = {
 	if: IfNodeDefinition,
 	logic: LogicNodeDefinition,
 	for_each: ForEachNodeDefinition,
+	while: WhileNodeDefinition,
 	router: RouterNodeDefinition,
 	code: CodeNodeDefinition,
 	subgraph: SubgraphNodeDefinition,

@@ -5,7 +5,9 @@ import { sqlHasWrite } from './sqlStatements'
  * (http, download, save, camera, capture), non-determinism (random), time
  * (sleep, and any formula calling today()), and calls whose whole point is a
  * fresh answer each time (chat, image_gen, html_form — it waits for a new user
- * submission on every run).
+ * submission on every run). Loops (for_each, while) too (WP45): their result depends on the
+ * cards in the loop body, which are not part of the loop card's own settings or inputs, so a
+ * changed body kept returning the old cached result.
  */
 export const NO_CACHE_NODE_TYPES: ReadonlySet<string> = new Set([
 	'http',
@@ -18,6 +20,8 @@ export const NO_CACHE_NODE_TYPES: ReadonlySet<string> = new Set([
 	'chat',
 	'image_gen',
 	'html_form',
+	'for_each',
+	'while',
 ])
 
 /** True when a Database card's SQL (the field, or the wired override already applied to

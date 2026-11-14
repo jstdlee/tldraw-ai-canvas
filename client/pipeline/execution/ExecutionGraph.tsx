@@ -22,6 +22,7 @@ import { runHash } from '../../../shared/runHash'
 import { setNodeRun } from './nodeRunState'
 import { getArrowInputs, writeArrowOutputs } from './arrows'
 import { currentRunSignal } from './executionState'
+import { liveLoopValue } from './loopContext'
 import { isAbortError } from '../../../shared/abort'
 
 export interface ExecutionGraphOptions {
@@ -149,56 +150,37 @@ export class ExecutionGraph {
 		const sortedConnections = [...node.connections].sort((a, b) => a.order - b.order)
 
 		const overrides = this.options.overrides
+		// WP45: group the wires per input port. A port fed by several wires (e.g. both an If's
+		// "then" and "else" joined straight into one card) settles as "not taken" only when
+		// EVERY wire into it is STOP — before, the first untaken branch silently skipped the
+		// card even though the other branch delivered.
+		const byPort = new Map<string, NodePortConnection[]>()
 		for (const connection of sortedConnections) {
 			if (!connection || connection.terminal !== 'end') continue
 			if (ports[connection.ownPortId]?.feedback) continue
 			if (overrides?.has(`${nodeId}|${connection.ownPortId}`)) continue
-
-			const dependency = this.nodesById.get(connection.connectedShapeId)
-			let value: PipelineValue | STOP_EXECUTION
-			if (dependency) {
-				if (dependency.state !== 'executed') {
-					return
-				}
-
-				const output = dependency.outputs[connection.connectedPortId]
-				if (output === STOP_EXECUTION) {
-					// The required input comes from a branch that was never taken (an If/Decision
-					// switch's other output). This node can't meaningfully run either, but it must
-					// still settle to 'executed' (as STOP) and cascade into its own dependents — or
-					// anything further downstream (notably a Merge card gathering several branches)
-					// would wait on it forever instead of seeing "this branch didn't deliver".
-					await this.settleAsStopped(nodeId, node)
-					return
-				}
-
-				value = output as PipelineValue
-			} else {
-				const outputs = getNodeOutputPortInfo(this.editor, connection.connectedShapeId)
-				const output = outputs[connection.connectedPortId]
-
-				if (!output) {
-					return
-				}
-				if (output.value === STOP_EXECUTION) {
-					await this.settleAsStopped(nodeId, node)
-					return
-				}
-
-				value = output.value as PipelineValue
+			const list = byPort.get(connection.ownPortId) ?? []
+			list.push(connection)
+			byPort.set(connection.ownPortId, list)
+		}
+		for (const [portId, connections] of byPort) {
+			const values: PipelineValue[] = []
+			for (const connection of connections) {
+				const value = this.wiredValue(connection)
+				if (value === undefined) return // a dependency has not run yet
+				if (value !== STOP_EXECUTION) values.push(value)
 			}
-
-			const port = ports[connection.ownPortId]
-			if (port?.multi) {
-				const existing = inputs[connection.ownPortId]
-				if (Array.isArray(existing)) {
-					existing.push(value)
-				} else {
-					inputs[connection.ownPortId] = [value]
-				}
-			} else {
-				inputs[connection.ownPortId] = value
+			if (values.length === 0) {
+				// The required input comes from a branch that was never taken (an If/Decision
+				// switch's other output). This node can't meaningfully run either, but it must
+				// still settle to 'executed' (as STOP) and cascade into its own dependents — or
+				// anything further downstream (notably a Merge card gathering several branches)
+				// would wait on it forever instead of seeing "this branch didn't deliver".
+				await this.settleAsStopped(nodeId, node)
+				return
 			}
+			// A single port keeps the last wire's value (as before); a multi port gets them all.
+			inputs[portId] = ports[portId]?.multi ? values : values[values.length - 1]
 		}
 
 		if (overrides) {
@@ -265,6 +247,22 @@ export class ExecutionGraph {
 		await this.runNodeNow(nodeId, node, inputs, hash)
 	}
 
+	/** The value on one wire into a node: undefined while its source has not run yet, STOP when
+	 * that branch was not taken. A source outside this graph gives its stored output — or, when
+	 * it is a loop that is running right now (a nested loop's outer card), its live value. */
+	private wiredValue(connection: NodePortConnection): PipelineValue | STOP_EXECUTION | undefined {
+		const dependency = this.nodesById.get(connection.connectedShapeId)
+		if (dependency) {
+			if (dependency.state !== 'executed') return undefined
+			return (dependency.outputs[connection.connectedPortId] ?? null) as PipelineValue | STOP_EXECUTION
+		}
+		const live = liveLoopValue(this.editor, connection.connectedShapeId, connection.connectedPortId)
+		if (live !== undefined) return live
+		const output = getNodeOutputPortInfo(this.editor, connection.connectedShapeId)[connection.connectedPortId]
+		if (!output) return undefined
+		return output.value === STOP_EXECUTION ? STOP_EXECUTION : (output.value as PipelineValue)
+	}
+
 	/** Mark a node that can never meaningfully run (a required input settled to STOP, i.e. its
 	 * branch was never taken) as 'executed', with every one of its own start-terminal ports also
 	 * set to STOP, then continue the cascade into its dependents. Without this it would stay
@@ -311,19 +309,21 @@ export class ExecutionGraph {
 
 		const resolved = new Map<string, PipelineValue | STOP_EXECUTION>()
 		for (const connection of inConnections) {
-			const dependency = this.nodesById.get(connection.connectedShapeId)
-			if (dependency) {
-				if (dependency.state !== 'executed') continue
-				resolved.set(connection.ownPortId, dependency.outputs[connection.connectedPortId] ?? STOP_EXECUTION)
-			} else {
-				const output = getNodeOutputPortInfo(this.editor, connection.connectedShapeId)[connection.connectedPortId]
-				if (!output) continue
-				resolved.set(connection.ownPortId, output.value === STOP_EXECUTION ? STOP_EXECUTION : (output.value as PipelineValue))
-			}
+			const value = this.wiredValue(connection)
+			if (value === undefined) continue
+			resolved.set(connection.ownPortId, value ?? STOP_EXECUTION)
 		}
 
 		const hasValue = (v: PipelineValue | STOP_EXECUTION | undefined): v is PipelineValue =>
 			v !== undefined && v !== STOP_EXECUTION
+		// WP45: every wired branch settled and none delivered (e.g. a switch picked an output
+		// that is not wired here): skip onward like any untaken branch. Before, "all" ran with
+		// nothing and showed a red error with no message, and "first" waited forever, so a card
+		// further on (another Merge) never settled either.
+		if (inConnections.every((c) => resolved.has(c.ownPortId)) && ![...resolved.values()].some(hasValue)) {
+			await this.settleAsStopped(nodeId, node)
+			return
+		}
 		const ready =
 			mode === 'first'
 				? [...resolved.values()].some(hasValue)

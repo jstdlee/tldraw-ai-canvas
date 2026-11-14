@@ -133,8 +133,8 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 	},
 	if: {
 		title: 'If / else',
-		description: 'Routes a value down one of two outputs based on a condition.',
-		keywords: ['logic', 'branch', 'condition', 'if', 'else'],
+		description: 'Routes a value down one of two outputs based on a condition. For else-if, wire another If to "else".',
+		keywords: ['logic', 'branch', 'condition', 'if', 'else', 'elif', 'else if'],
 	},
 	logic: {
 		title: 'And / Or / Not',
@@ -146,9 +146,14 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'Runs the rest of the graph once per item in a list, or once per number in a range.',
 		keywords: ['loop', 'iterate', 'list', 'each', 'repeat', 'range', 'count', 'numbers'],
 	},
+	while: {
+		title: 'While',
+		description: 'Runs the rest of the graph again and again while a condition on the value holds, up to Max iterations.',
+		keywords: ['loop', 'while', 'repeat', 'until', 'iterate', 'again'],
+	},
 	router: {
 		title: 'Router',
-		description: 'Sends one input to one of several outputs.',
+		description: 'Copies one input to each of several outputs (legacy).',
 		keywords: ['logic', 'route', 'switch', 'branch'],
 	},
 	code: {

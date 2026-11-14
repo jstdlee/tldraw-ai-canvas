@@ -2380,6 +2380,19 @@ body {
 	margin: 0;
 }
 
+/* WP45: While's status can be long ("hit Max iterations (100), value still …"): it shrinks
+   with an ellipsis (full text in the row's tooltip), and a hit limit reads as a warning. */
+.WhileNode-progress .NodeHint {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.WhileNode-progress .NodeHint.WhileNode-warning {
+	color: var(--tl-color-warning);
+}
+
 /* WP27 Part D: the If card's "reads as a sentence" line. */
 .IfNode-sentence {
 	color: var(--tl-color-text-3);

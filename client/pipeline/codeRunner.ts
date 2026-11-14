@@ -1,4 +1,5 @@
 import { transform } from 'sucrase'
+import { formatCodeError, jsErrorLine, syntaxErrorInfo } from '../../shared/codeRun'
 
 /**
  * Runs Code-node functions. TypeScript is turned into JavaScript with sucrase,
@@ -36,7 +37,7 @@ self.onmessage = async (event) => {
 		const result = await fn(inputs)
 		self.postMessage({ ok: true, result: toTransferable(result), logs })
 	} catch (e) {
-		self.postMessage({ ok: false, error: (e && e.message) || String(e), logs })
+		self.postMessage({ ok: false, error: (e && e.message) || String(e), stack: (e && e.stack) || '', logs })
 	}
 }
 function toTransferable(v) {
@@ -52,20 +53,50 @@ function stringify(v: unknown): string | null {
 	return typeof v === 'string' ? v : JSON.stringify(v, null, 2)
 }
 
+export interface RunOptions {
+	timeoutMs?: number
+	/** Stop: ends the worker at once (WP45 — Stop used to wait for the time limit). */
+	signal?: AbortSignal
+}
+
+/** The error shown on the card: "Line N: message" when the line is known. */
+function compileOrExplain(source: string, lang: 'ts' | 'js'): string {
+	try {
+		return compileCode(source, lang)
+	} catch (e) {
+		const info = syntaxErrorInfo((e as Error).message ?? String(e))
+		throw new Error(formatCodeError(info.message, info.line))
+	}
+}
+
 export async function runCode(
 	source: string,
 	lang: 'ts' | 'js',
 	inputs: Record<string, string | null>,
 	outputIds: string[],
-	timeoutMs = 15_000
+	options: RunOptions = {}
 ): Promise<CodeRunResult> {
-	const code = compileCode(source, lang)
+	const timeoutMs = options.timeoutMs ?? 10_000
+	const signal = options.signal
+	const code = compileOrExplain(source, lang)
+	if (signal?.aborted) throw new DOMException('Stopped', 'AbortError')
 	workerUrl ??= URL.createObjectURL(new Blob([WORKER_SOURCE], { type: 'text/javascript' }))
+	// A fresh worker per run: an endless loop only ever blocks that worker, never the window,
+	// and terminate() ends it however stuck it is.
 	const worker = new Worker(workerUrl)
+	let onAbort: (() => void) | null = null
 	try {
-		const reply = await new Promise<{ ok: boolean; result?: unknown; error?: string; logs: string[] }>(
+		const reply = await new Promise<{ ok: boolean; result?: unknown; error?: string; stack?: string; logs: string[] }>(
 			(resolve, reject) => {
-				const timer = setTimeout(() => reject(new Error(`Code took longer than ${timeoutMs / 1000}s and was stopped`)), timeoutMs)
+				const timer = setTimeout(
+					() => reject(new Error(`Code took longer than ${timeoutMs / 1000} s and was stopped (Timeout field)`)),
+					timeoutMs
+				)
+				onAbort = () => {
+					clearTimeout(timer)
+					reject(new DOMException('Stopped', 'AbortError'))
+				}
+				signal?.addEventListener('abort', onAbort, { once: true })
 				worker.onmessage = (e) => {
 					clearTimeout(timer)
 					resolve(e.data)
@@ -77,7 +108,9 @@ export async function runCode(
 				worker.postMessage({ code, inputs })
 			}
 		)
-		if (!reply.ok) throw Object.assign(new Error(reply.error), { logs: reply.logs })
+		if (!reply.ok) {
+			throw Object.assign(new Error(formatCodeError(reply.error ?? 'Code error', jsErrorLine(reply.stack))), { logs: reply.logs })
+		}
 		const result = reply.result
 		const outputs: Record<string, string | null> = {}
 		// Several outputs: return { out1, out2, … }. One output: return any value.
@@ -95,6 +128,7 @@ export async function runCode(
 		}
 		return { outputs, logs: reply.logs }
 	} finally {
+		if (onAbort) signal?.removeEventListener('abort', onAbort)
 		worker.terminate()
 	}
 }

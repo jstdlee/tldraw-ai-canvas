@@ -78,6 +78,7 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	adjust: 'image', // legacy, prefer image_filter
 	// Flow & code
 	for_each: 'flow',
+	while: 'flow',
 	code: 'flow',
 	sleep: 'flow',
 	subgraph: 'flow', // "Group boxes"

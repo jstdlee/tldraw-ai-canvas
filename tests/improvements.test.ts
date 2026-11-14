@@ -43,6 +43,7 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	if: { inn: ['input', 'test'], out: ['then', 'else'] },
 	logic: { inn: ['a', 'b'], out: ['output'] },
 	for_each: { inn: ['list', 'result'], out: ['item', 'output'] },
+	while: { inn: ['initial', 'result'], out: ['value', 'iteration', 'output', 'count'] },
 	router: { inn: ['input'], out: ['output', 'out_0', 'out_1', 'out_2'] },
 	code: { inn: ['in1', 'in2'], out: ['output'] },
 	subgraph: { inn: [], out: [] },

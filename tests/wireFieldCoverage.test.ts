@@ -42,8 +42,9 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	if: ['condition', 'operand'],
 	logic: ['op'],
 	for_each: ['split', 'separator', 'rangeFrom', 'rangeTo', 'rangeStep', 'joiner', 'collect', 'resultColumn', 'noResult'],
+	while: ['condition', 'operand', 'maxIterations', 'noResult'],
 	router: ['outputCount'],
-	code: ['lang', 'code', 'inputCount', 'outputCount'],
+	code: ['lang', 'code', 'inputCount', 'outputCount', 'timeoutSec'],
 	output: ['kind'],
 	save: ['fileName', 'mode'],
 	// table: op params only (DataPipe's own design — see RULES/WP17: "only the op's params

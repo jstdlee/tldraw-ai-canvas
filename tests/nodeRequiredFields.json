@@ -122,6 +122,16 @@
 		"split",
 		"type"
 	],
+	"while": [
+		"condition",
+		"error",
+		"lastCount",
+		"lastValue",
+		"maxIterations",
+		"operand",
+		"progress",
+		"type"
+	],
 	"generate_text": [
 		"lastResultText",
 		"model",

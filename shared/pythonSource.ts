@@ -12,8 +12,14 @@ export function pythonProgram(
 		`keys = json.loads(${JSON.stringify(JSON.stringify(outputIds))})`,
 		'ns = {"inputs": inputs}',
 		'buf = io.StringIO()',
-		'with contextlib.redirect_stdout(buf):',
-		'    exec(user_code, ns, ns)',
+		// WP45: compiled as "<code>" so an error's traceback names the user's own line; on an
+		// error the print() output so far is still written out (it used to be lost).
+		'try:',
+		'    with contextlib.redirect_stdout(buf):',
+		'        exec(compile(user_code, "<code>", "exec"), ns, ns)',
+		'except BaseException:',
+		'    print("___LOG___" + buf.getvalue())',
+		'    raise',
 		'result = {key: ns.get(key) for key in keys}',
 		'print("___LOG___" + buf.getvalue())',
 		'print("___RESULT___" + json.dumps(result, default=str))',
@@ -35,4 +41,13 @@ export function readPythonResult(stdout: string): { outputs: Record<string, unkn
 	const logs = logAt === -1 ? '' : stdout.slice(logAt + '___LOG___'.length, resultAt).trim()
 	const outputs = JSON.parse(stdout.slice(resultAt + '___RESULT___'.length)) as Record<string, unknown>
 	return { outputs, logs }
+}
+
+/** The print() output in a run's stdout, also when the run failed (no result marker). */
+export function readPythonLogs(stdout: string): string {
+	const logAt = stdout.lastIndexOf('___LOG___')
+	if (logAt === -1) return ''
+	const resultAt = stdout.lastIndexOf('___RESULT___')
+	const end = resultAt > logAt ? resultAt : stdout.length
+	return stdout.slice(logAt + '___LOG___'.length, end).trim()
 }

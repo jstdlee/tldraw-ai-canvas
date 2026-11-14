@@ -10,7 +10,7 @@ import {
 import { Port, ShapePort } from '../../ports/Port'
 import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { NodeShape } from '../NodeShapeUtil'
-import { WireField } from './fields'
+import { PortRow, WireField } from './fields'
 import {
 	ExecutionResult,
 	InfoValues,
@@ -109,14 +109,8 @@ export class RouterNodeDefinition extends NodeDefinition<RouterNode> {
 function RouterNodeComponent({ shape, node }: NodeComponentProps<RouterNode>) {
 	return (
 		<>
-			<NodeRow>
-				<span
-					className="Port Port_end"
-					style={{ '--port-color': 'var(--port-color-any)' } as React.CSSProperties}
-				/>
-				<NodePortLabel dataType="any">Input</NodePortLabel>
-				<span className="NodeRow-connected-value">{node.outputCount} outputs</span>
-			</NodeRow>
+			{/* WP45: the input dot was a plain span (not a real Port), so it could not be dragged. */}
+			<PortRow shapeId={shape.id} portId="input" label="Input" dataType="any" hint={`copied to ${node.outputCount} outputs`} />
 			<WireField shapeId={shape.id} fieldKey="outputCount" label="Outputs" dataType="number">
 				<span className="NodeRow-disconnected">{node.outputCount} output ports</span>
 			</WireField>

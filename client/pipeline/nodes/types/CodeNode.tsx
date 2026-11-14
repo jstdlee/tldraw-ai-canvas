@@ -8,6 +8,9 @@ import {
 	MAX_CODE_PORTS,
 } from '../../../../shared/codePorts'
 import { DEFAULT_PYTHON } from '../../../../shared/pythonSource'
+import { clampCodeTimeoutSec, CODE_DEFAULT_TIMEOUT_SEC, CODE_MAX_TIMEOUT_SEC } from '../../../../shared/codeRun'
+import { isAbortError } from '../../../../shared/abort'
+import { currentRunSignal } from '../../execution/executionState'
 import { useState } from 'react'
 import { T, TldrawUiButton, useEditor } from 'tldraw'
 import { apiGenerateText } from '../../api/pipelineApi'
@@ -50,6 +53,8 @@ export const CodeNode = T.object({
 	outputCount: T.number,
 	inputNames: T.arrayOf(T.string).optional(),
 	outputNames: T.arrayOf(T.string).optional(),
+	// WP45: seconds before a run is stopped. Optional: an old saved card runs with the default.
+	timeoutSec: T.number.optional(),
 	request: T.string,
 	description: T.string.nullable(),
 	showAI: T.boolean,
@@ -91,6 +96,7 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 			code: DEFAULT_CODE,
 			inputCount: 2,
 			outputCount: 1,
+			timeoutSec: CODE_DEFAULT_TIMEOUT_SEC,
 			request: '',
 			description: null,
 			showAI: false,
@@ -111,9 +117,9 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 	getBodyHeightPx(shape: NodeShape, node: CodeNode) {
 		const portRows = Math.max(this.inCount(node), this.outCount(node) - 1, 1)
 		// +4 rows (WP17): lang/inputCount/outputCount split off the AI-toggle row onto their
-		// own, plus a label row for the code field itself.
+		// own, plus a label row for the code field itself. +1 (WP45): Timeout.
 		return (
-			getNodeRowHeightPx(shape.props.fontSize) * (portRows + 5) +
+			getNodeRowHeightPx(shape.props.fontSize) * (portRows + 6) +
 			CODE_HEIGHT_PX +
 			(node.showAI ? AI_HEIGHT_PX : 0) +
 			RESULT_HEIGHT_PX
@@ -146,13 +152,27 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 			args[inNames[i]] = v == null ? null : coerceToText(v)
 		}
 		const portIds = Array.from({ length: outCount }, (_, i) => outputId(i))
+		// WP45: the card's own time limit, and Stop ends the run at once (it used to wait for a
+		// fixed 15 s / 120 s limit).
+		const runOptions = { timeoutMs: clampCodeTimeoutSec(node.timeoutSec) * 1000, signal: currentRunSignal(this.editor) }
 		try {
 			const { outputs, logs } =
 				node.lang === 'py'
-					? await runPython(node.code, args, outNames)
-					: await runCode(node.code, node.lang === 'js' ? 'js' : 'ts', args, outNames)
+					? await runPython(node.code, args, outNames, runOptions)
+					: await runCode(node.code, node.lang === 'js' ? 'js' : 'ts', args, outNames, runOptions)
 			// Runners key results by output NAME; map them back onto stable port ids.
 			const byPort = Object.fromEntries(portIds.map((id, i) => [id, outputs[outNames[i]] ?? null]))
+			if (portIds.every((id) => byPort[id] == null)) {
+				// Nothing came out at all: say so, instead of a red badge with no message.
+				throw Object.assign(
+					new Error(
+						node.lang === 'py'
+							? `The code set no output. Assign a value to ${outNames.join(' / ')}.`
+							: `The code returned nothing. Return a value${outCount > 1 ? `, or { ${outNames.join(', ')} }` : ''}.`
+					),
+					{ logs }
+				)
+			}
 			updateNode<CodeNode>(this.editor, shape, (n) => ({
 				...n,
 				lastOutputs: JSON.stringify(byPort),
@@ -162,13 +182,18 @@ export class CodeNodeDefinition extends NodeDefinition<CodeNode> {
 			return Object.fromEntries(portIds.map((id) => [id, byPort[id] ?? STOP_EXECUTION]))
 		} catch (e) {
 			const err = e as Error & { logs?: string[] }
+			if (isAbortError(e)) {
+				updateNode<CodeNode>(this.editor, shape, (n) => ({ ...n, error: null }), false)
+				throw e
+			}
 			updateNode<CodeNode>(
 				this.editor,
 				shape,
 				(n) => ({ ...n, error: err.message, logs: err.logs?.join('\n') || null }),
 				false
 			)
-			return Object.fromEntries(portIds.map((id) => [id, STOP_EXECUTION]))
+			// RULES: report failure by throwing; the stored error keeps the card's own result box.
+			throw new Error(err.message)
 		}
 	}
 	getOutputInfo(shape: NodeShape, node: CodeNode, inputs: InfoValues): InfoValues {
@@ -350,6 +375,16 @@ function CodeNodeComponent({ shape, node }: NodeComponentProps<CodeNode>) {
 					max={MAX_CODE_PORTS}
 					value={outCount}
 					onChange={(next) => set({ outputCount: Math.max(1, Math.min(MAX_CODE_PORTS, next ?? 1)) })}
+				/>
+			</WireField>
+			<WireField shapeId={shape.id} fieldKey="timeoutSec" label="Timeout (s)" dataType="number" hint="Stop also ends a run">
+				<UiNumberInput
+					className="CodeNode-count"
+					min={0.1}
+					max={CODE_MAX_TIMEOUT_SEC}
+					step={1}
+					value={clampCodeTimeoutSec(node.timeoutSec)}
+					onChange={(next) => set({ timeoutSec: clampCodeTimeoutSec(next) })}
 				/>
 			</WireField>
 			<NodeRow>
