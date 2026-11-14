@@ -12,6 +12,45 @@ export function groupSelection(editor: Editor): TLShapeId | null {
 	return parent.id
 }
 
+/**
+ * The groups "Ungroup" acts on: the selected groups, or, inside a group (dived into),
+ * the focused group when no group is selected.
+ */
+function ungroupTargets(editor: Editor): TLGroupShape[] {
+	const selected = editor
+		.getSelectedShapes()
+		.filter((s): s is TLGroupShape => s.type === 'group' && !editor.isShapeOrAncestorLocked(s))
+	if (selected.length) return selected
+	const focused = editor.getFocusedGroup()
+	if (focused?.type === 'group' && !editor.isShapeOrAncestorLocked(focused)) return [focused as TLGroupShape]
+	return []
+}
+
+export function canUngroup(editor: Editor) {
+	return ungroupTargets(editor).length > 0
+}
+
+/**
+ * Ungroup (Ctrl+Shift+G, menu). Works on a selected group, on the group you dived into,
+ * and on an open box group: its hidden box is deleted, so the cards just stay on the page.
+ */
+export function ungroupSelection(editor: Editor): boolean {
+	const groups = ungroupTargets(editor)
+	if (!groups.length) return false
+	editor.run(() => {
+		editor.markHistoryStoppingPoint('ungroup')
+		const focusedId = editor.getFocusedGroupId()
+		const leaving = groups.find((g) => focusedId === g.id || editor.hasAncestor(focusedId as TLShapeId, g.id))
+		if (leaving) editor.setFocusedGroup(editor.getShape(leaving.parentId)?.type === 'group' ? (leaving.parentId as TLShapeId) : null)
+		const boxIds = groups
+			.map((g) => (typeof g.meta?.boxOf === 'string' ? (g.meta.boxOf as TLShapeId) : null))
+			.filter((id): id is TLShapeId => !!id && !!editor.getShape(id))
+		if (boxIds.length) editor.deleteShapes(boxIds)
+		editor.ungroupShapes(groups.map((g) => g.id))
+	})
+	return true
+}
+
 export function diveGroup(editor: Editor) {
 	const shape = editor.getOnlySelectedShape()
 	if (!shape || shape.type !== 'group') return false

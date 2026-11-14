@@ -201,7 +201,7 @@ function App() {
 			},
 			actions: (editor, actions, helpers) => ({
 				...actions,
-				...canvasActionOverrides(editor, helpers),
+				...canvasActionOverrides(editor, helpers, actions),
 				'ai-providers': {
 					id: 'ai-providers',
 					label: 'AI providers…',

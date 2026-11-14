@@ -59,7 +59,7 @@ async function toDataUrl(url: string | null): Promise<string | null> {
 /** Build a template from a packed node on the canvas. */
 export async function templateFromPacked(editor: Editor, proxyId: TLShapeId): Promise<CustomNodeTemplate> {
 	const proxy = editor.getShape<NodeShape>(proxyId)
-	if (!proxy || proxy.props.node.type !== 'subgraph') throw new Error('Select a box (right-click a selection → Group as box)')
+	if (!proxy || proxy.props.node.type !== 'subgraph') throw new Error('Select a collapsed card (right-click a selection → Collapse to card)')
 	const node = structuredClone(proxy.props.node as SubgraphNode)
 	const inner = new Set(node.innerIds as TLShapeId[])
 	const shapes = [...inner].map((id) => editor.getShape(id)).filter((s): s is TLShape => !!s)

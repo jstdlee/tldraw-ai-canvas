@@ -1,6 +1,6 @@
 import { GroupShapeUtil, HTMLContainer, SVGContainer, TLGroupShape } from '@tldraw/editor'
-import { IconCollapse, IconGroup, UiButton } from '../../ui'
-import { closeGroup } from '../subgraph'
+import { IconCollapse, IconGroup, UiIconButton } from '../../ui'
+import { collapseGroup } from '../subgraph'
 
 /**
  * tldraw refuses a second shape util with type "group".
@@ -26,27 +26,21 @@ export function installKeepGroup() {
 					/>
 				</SVGContainer>
 				<HTMLContainer>
-					{boxId ? (
-						<div
-							className="GroupEdgeLabel GroupEdgeLabel_box"
-							style={{ left: bounds.x, top: bounds.y - 24 }}
-							onPointerDown={(e) => e.stopPropagation()}
-						>
-							<IconGroup size={13} />
-							<span className="GroupEdgeLabel-text">{label}</span>
-							<UiButton
-								size="sm"
-								variant="low"
-								icon={<IconCollapse size={13} />}
-								label="Close to box"
-								onClick={() => void closeGroup(editor, shape.id)}
-							/>
-						</div>
-					) : (
-						<div className="GroupEdgeLabel" style={{ left: bounds.x, top: bounds.y - 18 }}>
-							{label}
-						</div>
-					)}
+					<div
+						className={boxId ? 'GroupEdgeLabel GroupEdgeLabel_box' : 'GroupEdgeLabel GroupEdgeLabel_tools'}
+						style={{ left: bounds.x, top: bounds.y - (boxId ? 24 : 22) }}
+						onPointerDown={(e) => e.stopPropagation()}
+					>
+						{boxId && <IconGroup size={13} />}
+						<span className="GroupEdgeLabel-text">{label}</span>
+						{/* WP47: every group folds into one card (an expanded box folds back into its box). */}
+						<UiIconButton
+							className="GroupEdgeLabel-collapse"
+							icon={<IconCollapse size={13} />}
+							title="Collapse to one card (Alt+Shift+C)"
+							onClick={() => void collapseGroup(editor, shape.id)}
+						/>
+					</div>
 				</HTMLContainer>
 			</>
 		)

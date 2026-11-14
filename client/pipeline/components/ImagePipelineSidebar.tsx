@@ -525,7 +525,7 @@ export function ImagePipelineSidebar({ editor }: { editor: Editor }) {
 											<div className="ImagePipelineSidebar-empty">
 												<UiEmpty
 													icon={<IconGroup />}
-													text="Select cards, right-click → “Group as box”, then “Save as my node”."
+													text="Select cards, right-click → “Collapse to card”, then “Save as my node”."
 												/>
 											</div>
 										) : (

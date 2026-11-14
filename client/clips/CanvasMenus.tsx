@@ -8,6 +8,8 @@ import {
 	MoveToPageMenu,
 	ReorderMenuSubmenu,
 	SelectAllMenuItem,
+	TLShapeId,
+	TLUiActionItem,
 	TLUiActionsContextType,
 	TLUiContextMenuProps,
 	TLUiOverrideHelpers,
@@ -32,8 +34,15 @@ import { openAgentPanel } from '../agent/agentPanelState'
 import { $findOpen } from './FindBar'
 import { compareTargets, copyDocument, keepVariant, openCompare, retryVariantRequest, selectedVariant, splitIntoParagraphs } from './rewrite'
 import { $imageEditorTarget } from './ImageEditor'
-import { diveGroup, groupSelection, leaveGroup, renameSelection } from '../pipeline/groups/groupActions'
-import { closeGroup, openGroup, packSelection, unpack } from '../pipeline/subgraph'
+import {
+	canUngroup,
+	diveGroup,
+	groupSelection,
+	leaveGroup,
+	renameSelection,
+	ungroupSelection,
+} from '../pipeline/groups/groupActions'
+import { collapseGroup, openGroup, packSelection } from '../pipeline/subgraph'
 import { insertBlankTable, insertTableTemplate, tableUseAsData } from '../pipeline/table/TableShapeUtil'
 import { TABLE_TEMPLATE_LABELS, type TableTemplateId } from '../../shared/table/canvasTableOps'
 import {
@@ -109,13 +118,30 @@ export const MermaidIcon = (
 	</svg>
 )
 
-/** All canvas feature actions, with keyboard shortcuts ($ = Ctrl/Cmd, ! = Shift, ? = Alt). */
+/** The one selected group (plain or an expanded box), or null. */
+function selectedGroupId(editor: Editor) {
+	const shape = editor.getOnlySelectedShape()
+	return shape?.type === 'group' ? shape.id : null
+}
+
+/**
+ * All canvas feature actions, with keyboard shortcuts ($ = Ctrl/Cmd, ! = Shift, ? = Alt).
+ * `actions` are tldraw's own (needed to wrap its Group action).
+ */
 export function canvasActionOverrides(
 	editor: Editor,
-	helpers: TLUiOverrideHelpers
+	helpers: TLUiOverrideHelpers,
+	actions: TLUiActionsContextType = {}
 ): TLUiActionsContextType {
 	const notify: Notify = (title, severity = 'info') =>
 		helpers.addToast({ title, severity, keepOpen: severity === 'error' })
+	const collapse = async (groupId: TLShapeId) => {
+		const result = await collapseGroup(editor, groupId)
+		if (result?.removedWires) {
+			notify(`${result.removedWires} wire${result.removedWires === 1 ? '' : 's'} removed`, 'warning')
+		}
+	}
+	const tldrawGroup = actions['group'] as TLUiActionItem | undefined
 	const a = (id: string, label: string, onSelect: () => unknown, kbd?: string) => ({
 		[id]: { id, label, kbd, readonlyOk: false, onSelect: () => void onSelect() },
 	})
@@ -183,24 +209,32 @@ export function canvasActionOverrides(
 			if (!toggleImageRatio(editor)) notify('Select images first', 'warning')
 			else notify(keep ? 'Image can now stretch freely' : 'Image keeps its ratio')
 		}, '?r'),
-		...a('pack-nodes', 'Group as box', async () => {
-			if (!(await packSelection(editor))) notify('Select at least one node to group', 'warning')
+		// WP47: one name for one thing: "Collapse to card" folds cards or a group into one card,
+		// "Expand" turns that card back into its group.
+		...a('pack-nodes', 'Collapse to card', async () => {
+			const groupId = selectedGroupId(editor)
+			if (groupId) return collapse(groupId)
+			if (!(await packSelection(editor))) notify('Select at least one card or one group', 'warning')
 		}, '$!p'),
-		...a('open-group', 'Open group', () => {
+		// Alt+C is Compare, so Collapse is Alt+Shift+C (checked: no tldraw or app action uses it).
+		...a('collapse-group', 'Collapse to card', () => {
+			const groupId = selectedGroupId(editor) ?? findOpenBoxGroup(editor)
+			if (!groupId) return notify('Select one group', 'warning')
+			return collapse(groupId)
+		}, '?!c'),
+		...a('open-group', 'Expand', () => {
 			const s = editor.getOnlySelectedShape()
 			if (!(s?.type === 'node' && (s.props as any).node?.type === 'subgraph')) return
 			openGroup(editor, s.id)
 		}),
-		...a('close-to-box', 'Close to box', async () => {
+		...a('close-to-box', 'Collapse to card', async () => {
 			const groupId = findOpenBoxGroup(editor)
-			if (!groupId) return
-			const removed = await closeGroup(editor, groupId)
-			if (removed) notify(`${removed} wire${removed === 1 ? '' : 's'} removed`, 'warning')
+			if (groupId) await collapse(groupId)
 		}),
 		...a('save-custom-node', 'Save as my node…', async () => {
 			const s = editor.getOnlySelectedShape()
 			if (!(s?.type === 'node' && (s.props as any).node?.type === 'subgraph')) {
-				return notify('Group nodes first (Ctrl+Shift+P), then select the box', 'warning')
+				return notify('Collapse cards to a card first (Ctrl+Shift+P), then select it', 'warning')
 			}
 			const name = window.prompt('Name for this node:', (s.props as any).node.title)
 			if (!name) return
@@ -231,9 +265,35 @@ export function canvasActionOverrides(
 				notify((e as Error).message, 'error')
 			}
 		}),
+		// WP47: no shortcut here. It had Ctrl+Shift+G, tldraw's Ungroup key: both ran on one
+		// key press (ungroup, then group again), so ungroup never worked. Ctrl+G groups.
 		...a('group-shapes', 'Group selection', () => {
 			if (!groupSelection(editor)) notify('Select at least two shapes', 'warning')
-		}, '$!g'),
+		}),
+		ungroup: {
+			id: 'ungroup',
+			label: 'Ungroup',
+			icon: 'ungroup',
+			kbd: 'cmd+shift+g,ctrl+shift+g',
+			readonlyOk: false,
+			isEnabled: () => editor.isIn('select') && canUngroup(editor),
+			onSelect: () => {
+				if (!editor.isIn('select')) editor.setCurrentTool('select')
+				ungroupSelection(editor)
+			},
+		},
+		...(tldrawGroup
+			? {
+					group: {
+						...tldrawGroup,
+						// Ctrl+G on one group ungroups it: the same way as Ungroup (box groups, focus).
+						onSelect: (source) => {
+							if (selectedGroupId(editor)) ungroupSelection(editor)
+							else tldrawGroup.onSelect(source)
+						},
+					} satisfies TLUiActionItem,
+				}
+			: {}),
 		...a('rename-shape', 'Rename component or group', () => {
 			const name = window.prompt('Name on the top edge')
 			if (!name) return
@@ -245,9 +305,9 @@ export function canvasActionOverrides(
 		...a('leave-group', 'Back from group', () => {
 			if (!leaveGroup(editor)) notify('You are not inside a group', 'warning')
 		}),
-		...a('unpack-node', 'Ungroup box', () => {
+		...a('unpack-node', 'Expand', () => {
 			const s = editor.getOnlySelectedShape()
-			if (s?.type === 'node' && (s.props as any).node?.type === 'subgraph') unpack(editor, s.id)
+			if (s?.type === 'node' && (s.props as any).node?.type === 'subgraph') openGroup(editor, s.id)
 		}),
 		...a('run-node', 'Run card', () => {
 			const ids = selectedNodeIds(editor)
@@ -309,18 +369,19 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 	const canCompare = useValue('can compare', () => !!compareTargets(editor), [editor])
 	const isFrame = useValue('one frame', () => editor.getOnlySelectedShape()?.type === 'frame', [editor])
 	const openBoxGroupId = useValue('open box group', () => findOpenBoxGroup(editor), [editor])
+	const isPlainGroup = useValue('one plain group', () => !!selectedGroupId(editor) && !findOpenBoxGroup(editor), [editor])
+	const ungroupable = useValue('can ungroup', () => canUngroup(editor), [editor])
 	const canZip = useValue('can zip wires', () => zipTargets(editor).length >= 2, [editor])
 	const canUnzip = useValue('can unzip wires', () => zipTargets(editor).some(hasZip), [editor])
 	return (
 		<DefaultContextMenu {...props}>
 			{/* 1. Card */}
-			{(hasNodes || isPackedNode || openBoxGroupId) && (
+			{(hasNodes || isPackedNode || openBoxGroupId || isPlainGroup) && (
 				<TldrawUiMenuGroup id="card-tools">
 					{hasNodes && <TldrawUiMenuActionItem actionId="run-node" />}
 					{hasNodes && <TldrawUiMenuActionItem actionId="run-node-no-cache" />}
 					{isPackedNode ? (
 						<>
-							<TldrawUiMenuActionItem actionId="open-group" />
 							<TldrawUiMenuActionItem actionId="unpack-node" />
 							<TldrawUiMenuActionItem actionId="export-node-file" />
 						</>
@@ -396,9 +457,10 @@ export function CanvasContextMenu(props: TLUiContextMenuProps) {
 			<TldrawUiMenuGroup id="select-all">
 				<SelectAllMenuItem />
 			</TldrawUiMenuGroup>
-			{hasSelection && (
+			{(hasSelection || ungroupable) && (
 				<TldrawUiMenuGroup id="group-tools">
 					<TldrawUiMenuActionItem actionId="group-shapes" />
+					{ungroupable && <TldrawUiMenuActionItem actionId="ungroup" />}
 					<TldrawUiMenuActionItem actionId="rename-shape" />
 					<TldrawUiMenuActionItem actionId="dive-group" />
 					<TldrawUiMenuActionItem actionId="leave-group" />
