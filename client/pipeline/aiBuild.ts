@@ -16,6 +16,7 @@ import { startExecution } from './execution/executionState'
 import { createNodeAt } from './placeNode'
 import { getNodeDefinition, NodeType } from './nodes/nodeTypes'
 import { NodeShape } from './nodes/NodeShapeUtil'
+import { panIntoView } from '../view/viewCamera'
 
 const ALLOWED_TYPES_KEY = 'oh-my-tldraw:ai-types'
 
@@ -297,10 +298,8 @@ export function applyAiPlan(
 
 		if (touched.length) {
 			editor.select(...touched)
-			const bounds = editor.getSelectionPageBounds()
-			if (bounds && !editor.getViewportPageBounds().contains(bounds)) {
-				editor.zoomToSelection({ animation: { duration: 200 } })
-			}
+			// WP46: pan (never zoom) so the applied plan is in view.
+			panIntoView(editor, touched)
 		}
 	})
 	if (opts.runAfter && touched.length) void startExecution(editor, new Set(touched))

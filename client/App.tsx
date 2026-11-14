@@ -76,6 +76,7 @@ import { IconSparkle } from './ui'
 import { ImageEditorModal } from './clips/ImageEditor'
 import { RewriteDialogs } from './clips/RewriteDialogs'
 import { RatioImageShapeUtil } from './clips/shapeOptions'
+import { CAMERA_OPTIONS, installViewBehaviour, showContentOnLoad, zoomActionOverrides } from './view/viewCamera'
 
 // Every tldraw asset (fonts, icons, translations) is bundled, so the app works offline.
 const assetUrls = getAssetUrlsByImport()
@@ -98,6 +99,8 @@ const getShapeVisibility = (shape: TLShape) =>
 
 const options: Partial<TldrawOptions> = {
 	actionShortcutsLocation: 'menu',
+	// WP46: zoom steps 5–800 %, plain wheel pans, Ctrl+wheel / pinch zoom around the pointer.
+	camera: CAMERA_OPTIONS,
 	// Bullets, numbers and checklists in every rich-text shape.
 	text: { tipTapConfig: { extensions: canvasTipTapExtensions } },
 }
@@ -152,6 +155,8 @@ function App() {
 		;(window as any).agentApp = app
 		import('./pipeline/customNodes').then((m) => ((window as any).customNodes = m))
 		import('./pipeline/subgraph').then((m) => ((window as any).subgraph = m))
+		import('./pipeline/loadExample').then((m) => ((window as any).loadExample = m.loadExample))
+		import('../shared/examples').then((m) => ((window as any).canvasExamples = m.EXAMPLES))
 	}, [app])
 
 	const overrides: TLUiOverrides = useMemo(
@@ -201,6 +206,7 @@ function App() {
 			},
 			actions: (editor, actions, helpers) => ({
 				...actions,
+				...zoomActionOverrides(editor, actions),
 				...canvasActionOverrides(editor, helpers),
 				'ai-providers': {
 					id: 'ai-providers',
@@ -356,6 +362,14 @@ function App() {
 							watchFieldPortAnchors(editor)
 							registerNodeGuards(editor)
 							installAltScroll()
+							// WP46. Returned so React's StrictMode remount does not install it twice.
+							const uninstallView = installViewBehaviour(editor)
+							// After layout, so the toolbar and panels can be measured.
+							const frame = requestAnimationFrame(() => showContentOnLoad(editor))
+							return () => {
+								cancelAnimationFrame(frame)
+								uninstallView()
+							}
 						}}
 					>
 						<TldrawAgentAppProvider onMount={setApp} onUnmount={handleUnmount} />

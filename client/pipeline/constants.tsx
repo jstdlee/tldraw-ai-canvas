@@ -13,7 +13,8 @@ export const NODE_FOOTER_HEIGHT_PX = 40
 export const NODE_ROW_HEIGHT_PX = 44
 /** Cards without a stored `fontSize` (old canvases) render at this size. */
 export const DEFAULT_NODE_FONT_PX = 20
-/** New cards are created at this size (WP16 Part A, supersedes WP15 item F2). */
+/** New cards are created at this size (WP16 Part A; reviewed in WP46: title 16, body 14, labels 13 px
+ * on a 320 px card, readable at 100 %; new text shapes start at tldraw size S = 18 px to match). */
 export const NEW_NODE_FONT_PX = 16
 /** Row px per 1px of card font (WP16): `rowPx = round(fontPx * NODE_ROW_SCALE)`. */
 export const NODE_ROW_SCALE = 2.25

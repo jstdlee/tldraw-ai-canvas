@@ -64,3 +64,19 @@ Write the before / after values and the reasons in a short table at the end of t
 `npx tsc --noEmit -p .` clean, `npx vitest run` green, your spec and those specs pass with
 `CHOKIDAR_USEPOLLING=1 CHOKIDAR_INTERVAL=2000 E2E_WEB_PORT=5204 E2E_API_PORT=8804 npx playwright test <files>`.
 Do not run the whole e2e suite. Do not commit.
+
+## Font sizes: before / after (WP46 result)
+
+Card type scale (WP16): title 1em, body 0.875em, labels 0.8125em of the card font. tldraw text sizes are
+`theme.fontSize` (16) × `FONT_SIZES` (s 1.125, m 1.5, l 2.25, xl 2.75); note/geo labels use `LABEL_FONT_SIZES`.
+
+| Item | Before | After | Reason |
+|---|---|---|---|
+| New card font (`NEW_NODE_FONT_PX`) | 16 px (title 16, body 14, labels 13) | 16 px (no change) | Cards are 320 px wide (`NODE_WIDTH_PX`), inside the 300–360 px target. At 16 px the body holds about 35 characters per line and is readable at 100 %. Placement code and many e2e specs use 16. |
+| Card without a stored `fontSize` (`DEFAULT_NODE_FONT_PX`) | 20 px | 20 px (no change) | Only old saved cards use it. Changing it would change how saved canvases look; A−/A+ stores `undefined` at 20 px. |
+| New text shape | size `m`: 24 px | size `s`: 18 px | `s` is the smallest tldraw step and the closest to the card text (title 16, body 14). `m` was 1.5× the card title. Set once with `editor.setStyleForNextShapes(DefaultSizeStyle, 's')` on mount, only when the user has not picked a size; existing shapes keep their size. |
+| New note / geo label | `m`: 22 px | `s`: 18 px | Same shared size style as text. |
+| New draw / geo / arrow stroke | `m`: 3.5 px | `s`: 2 px | Side effect of the shared size style (tldraw has one size style for text and strokes). The style panel still sets any size, and that choice is kept. |
+| Markdown / Mermaid clip text | 14 px | 14 px (no change) | Same as the card body text at the default card font. |
+| Table shape, size `m` | 12.5 px | 12.5 px (no change) | Dense data grid; its row heights (36 px) are tuned to it (WP40). Changing it would reflow saved tables. Readable at 100 %. |
+| Comment pins and threads | 12–14 px (tldraw's commenting UI) | no change | Screen UI from `@tldraw/commenting`, not canvas content. |
