@@ -54,6 +54,7 @@ import { NODE_GROUP_LABELS, NODE_GROUP_ORDER } from '../../shared/nodeGroups'
 import { CommentMenuItem } from '../comments/comments'
 import { formatSelectionAsList, selectionHasRichText } from '../text/listFormat'
 import { hasZip, unzipWires, zipTargets, zipWires } from '../pipeline/connection/zipWires'
+import { centerView } from '../view/viewCamera'
 
 /**
  * Delete the selection, skipping nodes whose "Lock delete" is on. Used by the
@@ -70,13 +71,6 @@ export function eraseSelection(editor: Editor, notify: Notify) {
 	if (locked.length) {
 		notify(`${locked.length} locked node${locked.length === 1 ? '' : 's'} kept`, 'warning')
 	}
-}
-
-function centerView(editor: Editor) {
-	const selected = editor.getSelectionPageBounds()
-	const bounds = selected ?? editor.getCurrentPageBounds()
-	if (!bounds) return
-	editor.centerOnPoint(bounds.center, { animation: { duration: 200 } })
 }
 
 function resetZoom(editor: Editor) {

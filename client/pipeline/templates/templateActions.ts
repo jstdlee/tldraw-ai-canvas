@@ -2,6 +2,7 @@ import { createBindingId, createShapeId, Editor, TLShapeId, VecModel } from 'tld
 import { getNodePortConnections } from '../nodes/nodePorts'
 import { NodeShape } from '../nodes/NodeShapeUtil'
 import { NodeType } from '../nodes/nodeTypes'
+import { panIntoView } from '../../view/viewCamera'
 import {
 	PipelineTemplate,
 	saveTemplate,
@@ -151,4 +152,6 @@ export function stampTemplate(editor: Editor, template: PipelineTemplate, positi
 		// Select all the new shapes.
 		editor.select(...Array.from(localIdToShapeId.values()))
 	})
+	// WP46: pan (never zoom) so the stamped template is in view.
+	panIntoView(editor, Array.from(localIdToShapeId.values()))
 }

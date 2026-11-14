@@ -2,6 +2,7 @@ import { createBindingId, createShapeId, Editor, TLShapeId, VecModel } from 'tld
 import { CanvasExample } from '../../shared/examples'
 import { getNodeDefinition } from './nodes/nodeTypes'
 import { NodeType } from './nodes/nodeTypes'
+import { panIntoView } from '../view/viewCamera'
 
 /** Stamp an example workflow at a page point. */
 export function loadExample(editor: Editor, example: CanvasExample, origin: VecModel) {
@@ -71,4 +72,6 @@ export function loadExample(editor: Editor, example: CanvasExample, origin: VecM
 		}
 		editor.select(...[...ids.values()])
 	})
+	// WP46: a big insert that lands (partly) off screen pans into view.
+	panIntoView(editor, [...ids.values()])
 }

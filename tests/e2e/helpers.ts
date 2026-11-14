@@ -22,6 +22,13 @@ export async function gotoApp(page: Page): Promise<void> {
 	await page.goto('/')
 	await page.waitForFunction(() => Boolean((window as any).editor))
 	await freshCanvas(page)
+	// WP46 centers an empty canvas's page origin on load (one frame after mount). Specs here place
+	// cards in page space and expect the page origin at the canvas's top-left at 100 %, so put the
+	// camera back there once that first frame has run.
+	await page.evaluate(async () => {
+		await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+		;(window as any).editor.setCamera({ x: 0, y: 0, z: 1 })
+	})
 }
 
 /** Delete every shape on the current page ("freshCanvas"). */
