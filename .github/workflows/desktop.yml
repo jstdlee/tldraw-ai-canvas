@@ -1,6 +1,6 @@
 name: Desktop app
 
-# Builds the offline desktop app for Linux and Windows.
+# Builds the offline desktop app for Windows x64 and Linux arm64 only.
 # Electron packages one set of installers. MyGo packages the same server and web build.
 # A pushed tag like v0.1.0 also publishes a GitHub release with the installers.
 
@@ -40,9 +40,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Linux x64
-            os: ubuntu-latest
-            args: --linux --x64
           - name: Linux arm64
             os: ubuntu-24.04-arm
             args: --linux --arm64
@@ -95,15 +92,10 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      - name: Package MyGo for Linux and Windows
+      - name: Package MyGo for Linux arm64 and Windows x64
         run: npm run build:mygo
         env:
-          MYGO_PLATFORMS: linux/amd64,linux/arm64,windows/amd64
-      - uses: actions/upload-artifact@v4
-        with:
-          name: oh-my-tldraw-mygo-linux-amd64
-          if-no-files-found: error
-          path: mygo/out/linux-amd64/*.deb
+          MYGO_PLATFORMS: linux/arm64,windows/amd64
       - uses: actions/upload-artifact@v4
         with:
           name: oh-my-tldraw-mygo-linux-arm64
@@ -144,12 +136,11 @@ jobs:
             | System | File |
             | --- | --- |
             | Windows x64 | `oh-my-tldraw-…-windows-x64-setup.exe` or the portable exe |
-            | Linux x64 | `oh-my-tldraw-…-linux-x86_64.AppImage` or the amd64 `.deb` |
             | Linux arm64 | `oh-my-tldraw-…-linux-arm64.AppImage` or the arm64 `.deb` |
 
             The builds are not code-signed: Windows SmartScreen may ask "Run anyway".
             On Linux: `chmod +x *.AppImage` and run it.
 
-            MyGo is one installer per system. Linux amd64: `oh-my-tldraw_*_amd64.deb`. Linux arm64: `oh-my-tldraw_*_arm64.deb`. Windows: `Oh My tldraw Setup *.exe`.
+            MyGo is one installer per system. Linux arm64: `oh-my-tldraw_*_arm64.deb`. Windows: `Oh My tldraw Setup *.exe`.
             Your settings and data are kept in the app's user-data folder (Help → Open data folder).
           files: artifacts/*
