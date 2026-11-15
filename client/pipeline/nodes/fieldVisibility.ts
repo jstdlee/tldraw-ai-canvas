@@ -50,6 +50,9 @@ export function hiddenFieldKeys(node: NodeType, ctx: HiddenFieldCtx = {}): Set<s
 			if (!node.extractText) return new Set(['extract', 'selector', 'attribute'])
 			return node.extract === 'selector' ? new Set() : new Set(['selector', 'attribute'])
 		}
+		case 'ask_user':
+			// Options only matter for "Choose one of options"; the card hides that row otherwise.
+			return String(node.answerType) === 'choose' ? new Set() : new Set(['options'])
 		case 'jev':
 			return node.kind === 'noul' ? new Set(['options']) : new Set()
 		// WP35 Part B: "Language" only means anything for find: "fence" (restrict to one
