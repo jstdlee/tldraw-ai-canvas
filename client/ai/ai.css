@@ -1000,3 +1000,10 @@
 	color: var(--tl-color-text-3);
 	font-variant-numeric: tabular-nums;
 }
+
+.ai-not-served {
+	margin-left: 6px;
+	color: var(--tl-color-danger);
+	font-size: 11px;
+	white-space: nowrap;
+}

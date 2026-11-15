@@ -280,3 +280,55 @@ test.describe('OpenRouter free card: fetch failure shows a friendly error, not a
 		await expect(card).not.toContainText("Couldn't load free models")
 	})
 })
+
+test.describe('AI providers dialog: Fetch models refreshes the saved list', () => {
+	test('marks saved models the provider no longer serves; Add all new and Remove not served update the list', async ({ page }) => {
+		await gotoApp(page)
+		const current = await page.evaluate(async () => (await fetch('/api/config')).json())
+		const provider = { id: 'gw', name: 'Gateway', kind: 'openai-compatible', baseURL: 'http://127.0.0.1:1/v1', enabled: true }
+		const models = ['old/retired', 'grok/grok-4.7'].map((id) => ({
+			key: `gw/${id}`,
+			providerId: 'gw',
+			model: id,
+			label: id,
+			capabilities: ['chat'],
+			supportsTemperature: true,
+		}))
+		await page.evaluate(
+			async ({ current, provider, models }) => {
+				await fetch('/api/config', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						...current,
+						providers: [...current.providers.filter((p: { id: string }) => p.id !== 'gw'), provider],
+						models: [...current.models.filter((m: { providerId: string }) => m.providerId !== 'gw'), ...models],
+					}),
+				})
+			},
+			{ current, provider, models }
+		)
+		await gotoApp(page)
+		let liveRefreshed = false
+		await page.route('**/api/models?refresh=1', async (route) => {
+			liveRefreshed = true
+			await route.fulfill({ json: { providers: [] } })
+		})
+		await page.route('**/api/providers/models', (route) =>
+			route.fulfill({ json: { models: [{ id: 'grok/grok-4.7' }, { id: 'claude/claude-sonnet-5-5' }] } })
+		)
+		await openProvidersDialog(page)
+		await page.locator('.ai-dialog__list-item', { hasText: 'Gateway' }).click()
+		await page.getByRole('button', { name: 'Fetch models' }).click()
+		await expect(page.locator('.ai-status')).toContainText('1 new, 1 saved model is not served any more')
+		const rows = page.locator('table.ai-models tbody tr')
+		await expect(rows.filter({ has: page.locator('.ai-not-served') })).toHaveCount(1)
+		await expect.poll(() => liveRefreshed).toBe(true)
+
+		await page.getByRole('button', { name: 'Add all new' }).click()
+		await page.getByRole('button', { name: 'Remove not served' }).click()
+		await expect(rows).toHaveCount(2)
+		const labels = await page.locator('table.ai-models input.ai-model-label').evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value))
+		expect(labels).toEqual(['grok/grok-4.7', 'claude/claude-sonnet-5-5'])
+	})
+})

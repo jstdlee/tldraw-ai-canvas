@@ -18,7 +18,7 @@ const PREFILL = '{"actions": [{"_type":'
  * that accepts the request but never streams anything back — the request used to hang
  * forever with no error. Reset on every text chunk; overridable for tests.
  */
-export const AGENT_STREAM_IDLE_TIMEOUT_MS = Number(process.env.AGENT_STREAM_IDLE_TIMEOUT_MS) || 90_000
+export const AGENT_STREAM_IDLE_TIMEOUT_MS = Number(process.env.AGENT_STREAM_IDLE_TIMEOUT_MS) || 180_000
 
 /**
  * Re-yield `iterable`, but throw a clear timeout error if no chunk arrives within `ms` of

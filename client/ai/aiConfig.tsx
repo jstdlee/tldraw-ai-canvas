@@ -241,7 +241,7 @@ let liveLoadedAt = 0
 export function loadLiveModels(force = false) {
 	if (liveLoading) return liveLoading
 	if (!force && $liveModels.get() && Date.now() - liveLoadedAt < 60_000) return Promise.resolve()
-	liveLoading = fetch('/api/models')
+	liveLoading = fetch(force ? '/api/models?refresh=1' : '/api/models')
 		.then((res) => readJson<{ providers: LiveProviderModels[] }>(res))
 		.then((data) => {
 			$liveModels.set(data.providers)

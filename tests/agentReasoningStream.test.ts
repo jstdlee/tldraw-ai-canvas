@@ -110,8 +110,8 @@ describe('withIdleTimeout (fix for a hang with no error — Problem 1b)', () => 
 		expect(chunks).toEqual(['ok'])
 	})
 
-	it('has a sane production default (90s)', () => {
-		expect(AGENT_STREAM_IDLE_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000)
+	it('has a sane production default (180s: slow reasoning models need it)', () => {
+		expect(AGENT_STREAM_IDLE_TIMEOUT_MS).toBeGreaterThanOrEqual(150_000)
 	})
 })
 

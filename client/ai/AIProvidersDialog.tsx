@@ -21,6 +21,7 @@ import {
 	$aiConfig,
 	fetchMcpConfig,
 	fetchProviderModels,
+	loadLiveModels,
 	fetchSearchConfig,
 	fetchSkills,
 	saveAIConfig,
@@ -222,10 +223,18 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 		try {
 			const list = await fetchProviderModels(provider)
 			setFetched(list)
+			const served = new Set(list.map((m) => m.id))
+			const saved = models.filter((m) => m.providerId === provider.id)
+			const fresh = list.filter((m) => !saved.some((x) => x.model === m.id)).length
+			const gone = list.length ? saved.filter((m) => !served.has(m.model)).length : 0
 			setStatus({
 				kind: 'info',
-				text: list.length ? `Found ${list.length} models.` : 'The provider listed no models. Add model ids by hand.',
+				text: list.length
+					? `Found ${list.length} models: ${fresh} new, ${gone} saved model${gone === 1 ? ' is' : 's are'} not served any more.`
+					: 'The provider listed no models. Add model ids by hand.',
 			})
+			// The model menus read the live lists: refresh them now, not after their 60 s cache.
+			void loadLiveModels(true)
 		} catch (e) {
 			setFetched(null)
 			setStatus({ kind: 'error', text: (e as Error).message })
@@ -238,6 +247,7 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 		setBusy(true)
 		try {
 			await saveAIConfig({ providers, models, defaults })
+			void loadLiveModels(true)
 			onClose()
 		} catch (e) {
 			setStatus({ kind: 'error', text: `Save failed: ${(e as Error).message}` })
@@ -640,6 +650,29 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 								{status && <div className={'ai-status is-' + status.kind}>{status.text}</div>}
 
 								{fetched && fetched.length > 0 && (
+									<div className="ai-row ai-gap">
+										<button
+											className="ai-button"
+											disabled={fetched.every((m) => models.some((x) => x.key === modelKey(provider.id, m.id)))}
+											onClick={() => fetched.forEach((m) => addModel(m.id, m.label, m.vision))}
+										>
+											Add all new
+										</button>
+										<button
+											className="ai-button"
+											disabled={!providerModels.some((m) => !fetched.some((f) => f.id === m.model))}
+											title="Remove saved models this provider does not serve any more"
+											onClick={() =>
+												setModels((ms) =>
+													ms.filter((m) => m.providerId !== provider.id || fetched.some((f) => f.id === m.model))
+												)
+											}
+										>
+											Remove not served
+										</button>
+									</div>
+								)}
+								{fetched && fetched.length > 0 && (
 									<div className="ai-fetched">
 										{fetched.map((m) => {
 											const added = models.some((x) => x.key === modelKey(provider.id, m.id))
@@ -689,6 +722,11 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 														title={m.model}
 														onChange={(e) => updateModel(m.key, { label: e.target.value })}
 													/>
+													{fetched && fetched.length > 0 && !fetched.some((f) => f.id === m.model) && (
+														<span className="ai-not-served" title="The last Fetch models did not list this model">
+															not served
+														</span>
+													)}
 												</td>
 												{MODEL_CAPABILITIES.map((cap) => (
 													<td key={cap} className="ai-center">

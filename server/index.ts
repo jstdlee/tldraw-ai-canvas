@@ -105,6 +105,9 @@ app.put('/api/config', async (c) => {
 	return c.json(toPublicConfig(config))
 })
 
+/** Live model lists per provider (cached 60 s); cleared by a manual fetch or ?refresh=1. */
+const liveCache = new Map<string, { at: number; models: ProviderModelInfo[] }>()
+
 /** List the models a (possibly unsaved) provider serves. */
 app.post('/api/providers/models', async (c) => {
 	const body = (await c.req.json()) as {
@@ -114,6 +117,8 @@ app.post('/api/providers/models', async (c) => {
 	const { hasApiKey: _h, keyRef, ...provider } = body.provider
 	const apiKey = provider.apiKey || (keyRef ? resolveSecret(keyRef, process.env, getSecretValue) : undefined) || stored?.apiKey
 	const models = await listProviderModels({ ...provider, apiKey })
+	// A manual fetch means the user wants fresh lists everywhere: drop the menus' cache too.
+	liveCache.clear()
 	return c.json({ models })
 })
 
@@ -131,10 +136,10 @@ app.delete('/api/secrets/:id', (c) => {
 	return c.json({ ok: true })
 })
 
-/** Live model lists from every enabled provider (cached 60 s), for the model dropdowns. */
-const liveCache = new Map<string, { at: number; models: ProviderModelInfo[] }>()
+/** Live model lists from every enabled provider, for the model dropdowns (see liveCache). */
 app.get('/api/models', async (c) => {
 	const config = loadConfig()
+	if (c.req.query('refresh')) liveCache.clear()
 	const results = await Promise.all(
 		config.providers
 			.filter((p) => p.enabled)
