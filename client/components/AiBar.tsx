@@ -121,7 +121,6 @@ function AiBar() {
 	const [input, setInput] = useState('')
 	const [pending, setPending] = useState<QuickAction | null>(null)
 	const [explicit, setExplicit] = useState(false)
-	const [dismissed, setDismissed] = useState<string | null>(null)
 	const [working, setWorking] = useState<{ seenBusy: boolean; since: number } | null>(null)
 	const [askedId, setAskedId] = useState<string | null>(null)
 	const [showMore, setShowMore] = useState(false)
@@ -133,7 +132,6 @@ function AiBar() {
 		() => editor.getIsReadonly() || editor.getEditingShapeId() != null || editor.isInAny(...BUSY_STATES),
 		[editor]
 	)
-	const inSelect = useValue('ai bar select tool', () => editor.isIn('select'), [editor])
 	const busy = useValue('ai bar busy', () => isAgentBusy(agent), [agent])
 	const question = useValue(
 		'ai bar question',
@@ -144,15 +142,15 @@ function AiBar() {
 		[agent]
 	)
 
-	// A new selection gets its own bar, even after Escape on the last one.
+	// A different selection closes a bar the user opened for the last one.
 	useEffect(() => {
 		setShowMore(false)
 		setPending(null)
+		setExplicit(false)
 	}, [selectionKey])
 
 	const close = useCallback(() => {
 		setExplicit(false)
-		setDismissed(editor.getSelectedShapeIds().join(','))
 		setPending(null)
 		setAskedId(null)
 		inputRef.current?.blur()
@@ -240,7 +238,6 @@ function AiBar() {
 		handledNonce.current = request.nonce
 		$aiBarRequest.set(null)
 		setExplicit(true)
-		setDismissed(null)
 		if (request.run) {
 			submit(request.run)
 		} else if (request.prefill != null) {
@@ -308,7 +305,9 @@ function AiBar() {
 	const showQuestion = !!question && question.id === askedId
 	const visible =
 		!blocked &&
-		(explicit || !!working || showQuestion || (!!selectionKey && dismissed !== selectionKey && inSelect))
+		// Never on selection alone: only when asked (card AI button, Ctrl+K, menus), while a task
+		// runs, or while the agent's question waits for an answer.
+		(explicit || !!working || showQuestion)
 
 	useLayoutEffect(() => {
 		const el = barRef.current

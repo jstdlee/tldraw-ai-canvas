@@ -266,9 +266,8 @@ test.describe('WP44: agent dock', () => {
 
 	test('no floating chat, build or fill panel, and no AI dialog for these features', async ({ page }) => {
 		const cardId = await createNode(page, { type: 'prompt', text: 'hello' }, { x: 300, y: 200 })
-		// WP48: no ✦ button on cards.
-		await nodeLocator(page, cardId).hover()
-		await expect(nodeLocator(page, cardId).locator('.NodeAiButton')).toHaveCount(0)
+		// The card's AI button opens the bar (not a floating panel).
+		await expect(nodeLocator(page, cardId).locator('.NodeAiButton')).toHaveCount(1)
 
 		// Build with AI from the context menu: a pending action in the AI bar, not a panel.
 		await selectShapes(page, [cardId])

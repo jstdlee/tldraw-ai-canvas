@@ -32,6 +32,7 @@ import {
 	IconCopy,
 	IconMore,
 	IconPlay,
+	IconSparkle,
 	IconStop,
 	UiButton,
 	UiErrorBanner,
@@ -568,6 +569,16 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 					}}
 				/>
 				<div className="NodeShape-footer-tools">
+					<UiIconButton
+						className="NodeAiButton"
+						icon={<IconSparkle />}
+						title="Ask AI about this card (Ctrl+K)"
+						onClick={() => {
+							// The AI bar opens only on request: this button, Ctrl+K or the menus.
+							editor.select(shape.id)
+							openAiBar()
+						}}
+					/>
 					<CopyOutputButton shape={shape} />
 					<UiIconButton
 						icon={shape.props.collapsed ? <IconChevronDown /> : <IconChevronUp />}

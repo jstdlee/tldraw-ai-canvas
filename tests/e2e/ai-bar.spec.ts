@@ -31,6 +31,8 @@ const barInput = (page: Page) => page.locator('.ai-bar textarea[name="ai-bar-inp
 const dock = (page: Page) => page.locator('aside.agent-dock.is-open')
 
 async function ask(page: Page, text: string) {
+	// The bar opens only on request (card AI button, Ctrl+K, menus), never on selection alone.
+	if (!(await bar(page).isVisible())) await page.keyboard.press('Control+k')
 	await barInput(page).click()
 	await barInput(page).fill(text)
 	await barInput(page).press('Enter')
@@ -56,9 +58,12 @@ test.describe('WP48: AI bar', () => {
 		await gotoApp(page)
 	})
 
-	test('the bar appears above a selection and follows zoom', async ({ page }) => {
+	test('selecting does not open the bar; the card AI button opens it above the card, and it follows zoom', async ({ page }) => {
 		const id = await createNode(page, { type: 'prompt', text: 'hello' }, { x: 200, y: 300 })
 		await selectShapes(page, [id])
+		await page.waitForTimeout(400)
+		await expect(bar(page)).toHaveCount(0)
+		await nodeLocator(page, id).locator('.NodeAiButton').click()
 		await expect(bar(page)).toBeVisible()
 		await expect(bar(page).locator('.ai-bar-scope')).toHaveText(/^Card: /)
 
@@ -97,10 +102,9 @@ test.describe('WP48: AI bar', () => {
 		await expect(bar(page)).toHaveCount(0)
 	})
 
-	test('no ✦ button on cards and no round dock button', async ({ page }) => {
+	test('each card has one AI button; there is no round dock button', async ({ page }) => {
 		const id = await createNode(page, { type: 'prompt', text: 'hello' }, { x: 200, y: 300 })
-		await nodeLocator(page, id).hover()
-		await expect(page.locator('.NodeAiButton')).toHaveCount(0)
+		await expect(nodeLocator(page, id).locator('.NodeAiButton')).toHaveCount(1)
 		await expect(page.locator('.agent-dock-button')).toHaveCount(0)
 		// The top-right "Agent" toggle still opens the dock.
 		await page.locator('.app-panel-toggles').getByText('Agent', { exact: true }).click()
