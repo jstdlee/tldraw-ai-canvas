@@ -10,7 +10,7 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	prompt: { in: [], out: ['output'], fields: ['text'] },
 	prompt_concat: { in: ['prefix', 'main', 'suffix'], out: ['output'], fields: ['separator'] },
 	text_tool: { in: ['input', 'input2'], out: ['output'], fields: ['op', 'a', 'b'] },
-	http: { in: ['url', 'body', 'request'], out: ['output'], fields: ['method', 'url', 'query', 'headers', 'body', 'auth', 'authValue', 'extractText'] },
+	http: { in: ['url', 'body', 'request'], out: ['output'], fields: ['method', 'url', 'query', 'headers', 'body', 'auth', 'authValue', 'extractText', 'extract', 'selector', 'attribute'] },
 	download: { in: ['url'], out: ['output'], fields: ['url', 'fileName'] },
 	net_tool: { in: ['target'], out: ['output'], fields: ['tool', 'target', 'option'] },
 	postgres: { in: ['input'], out: ['output'], fields: ['mode', 'sql', 'csv', 'sourceUrl'] },
@@ -87,6 +87,12 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	template: { in: [], out: ['output'], fields: ['template', 'escape'] },
 	merge: { in: ['in1', 'in2'], out: ['output'], fields: ['mode', 'separator'] },
 	gallery: { in: ['images'], out: ['output'], fields: ['columns'] },
+	// Flow safety (WP49)
+	try_catch: { in: ['input', 'result'], out: ['body', 'output', 'error'], fields: ['retries', 'waitSec'] },
+	ask_user: { in: ['input'], out: ['answer', 'rejected'], fields: ['question', 'answerType', 'options', 'timeoutMin'] },
+	set_variable: { in: ['value'], out: ['output'], fields: ['name'] },
+	get_variable: { in: ['after'], out: ['output'], fields: ['name'] },
+	notify: { in: ['input'], out: ['output'], fields: ['title', 'message', 'sound'] },
 }
 
 export function catalogPrompt(): string {

@@ -470,7 +470,9 @@ test.describe('Code card', () => {
 	})
 
 	test('Python offline: a clear message about the one-time download, not a hang', async ({ page }) => {
+		// WP49: the app ships Pyodide at /pyodide/; block that copy too, so the CDN fallback runs.
 		await page.route('**/cdn.jsdelivr.net/**', (route) => route.abort())
+		await page.route('**/pyodide/**', (route) => route.abort())
 		const a = await createDefaultNode(page, 'prompt', { text: 'hello world' }, { x: 0, y: 0 })
 		const c = await createDefaultNode(page, 'code', { lang: 'py', inputCount: 1, code: 'output = inputs["a"].upper()\n' }, { x: 400, y: 0 })
 		await zoomToFit(page)

@@ -223,6 +223,32 @@ export const EXAMPLES: CanvasExample[] = [
 		{ from: 'double', fromPort: 'output', to: 'loop', toPort: 'result' },
 		{ from: 'loop', fromPort: 'output', to: 'out', toPort: 'input' },
 	]),
+	// WP49: flow safety cards.
+	step('try-catch-fetch', 'Try / catch a web request', 'HTTP runs inside Try / catch with 2 retries; a failure goes to "error" and a Notify, not a stopped flow.', [
+		{ id: 'url', type: 'prompt', x: 0, y: 0, props: { text: 'https://example.com' } },
+		{ id: 'try', type: 'try_catch', x: 460, y: 0, props: { retries: 2, waitSec: 1 } },
+		{ id: 'fetch', type: 'http', x: 920, y: 0, props: { method: 'GET', url: '', extractText: true } },
+		{ id: 'ok', type: 'output', x: 920, y: 520 },
+		{ id: 'warn', type: 'notify', x: 1380, y: 520, props: { title: 'Fetch failed', message: '{{input}}', sound: false } },
+	], [
+		{ from: 'url', fromPort: 'output', to: 'try', toPort: 'input' },
+		{ from: 'try', fromPort: 'body', to: 'fetch', toPort: 'url' },
+		{ from: 'fetch', fromPort: 'output', to: 'try', toPort: 'result' },
+		{ from: 'try', fromPort: 'output', to: 'ok', toPort: 'input' },
+		{ from: 'try', fromPort: 'error', to: 'warn', toPort: 'input' },
+	]),
+	step('ask-and-remember', 'Ask, then remember the answer', 'Ask user picks a tone; Set variable keeps it for the canvas; Get variable reads it after.', [
+		{ id: 'topic', type: 'prompt', x: 0, y: 0, props: { text: 'the launch post' } },
+		{ id: 'ask', type: 'ask_user', x: 460, y: 0, props: { question: 'Which tone for {{input}}?', answerType: 'choose', options: 'Friendly\nFormal' } },
+		{ id: 'keep', type: 'set_variable', x: 920, y: 0, props: { name: 'tone' } },
+		{ id: 'read', type: 'get_variable', x: 1380, y: 0, props: { name: 'tone' } },
+		{ id: 'out', type: 'output', x: 1840, y: 0 },
+	], [
+		{ from: 'topic', fromPort: 'output', to: 'ask', toPort: 'input' },
+		{ from: 'ask', fromPort: 'answer', to: 'keep', toPort: 'value' },
+		{ from: 'keep', fromPort: 'output', to: 'read', toPort: 'after' },
+		{ from: 'read', fromPort: 'output', to: 'out', toPort: 'input' },
+	]),
 	step('if-regex-check', 'Regex check', 'If the text matches the pattern, "then" carries it; otherwise "else" does.', [
 		{ id: 'p', type: 'prompt', x: 0, y: 0, props: { text: 'order-2024-0193' } },
 		{ id: 'g', type: 'if', x: 460, y: 0, props: { condition: 'regex', operand: '^order-\\d{4}-\\d+$' } },

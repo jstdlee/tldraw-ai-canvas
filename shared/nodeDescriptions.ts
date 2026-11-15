@@ -158,7 +158,7 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 	},
 	code: {
 		title: 'Code',
-		description: 'Runs a small TypeScript, JavaScript or Python function with your own inputs and outputs.',
+		description: 'Runs a small TypeScript, JavaScript or Python function with your own inputs and outputs. Python works offline; packages such as numpy or pandas download on first use.',
 		keywords: ['code', 'script', 'function', 'typescript', 'python', 'javascript'],
 	},
 	subgraph: {
@@ -280,5 +280,31 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		title: 'Gallery',
 		description: 'Shows a list of images as a grid (lines, a JSON list, or a table\'s url column), with "Download all" as a zip.',
 		keywords: ['gallery', 'grid', 'images', 'thumbnails', 'zip', 'download', 'batch'],
+	},
+	// Flow safety (WP49)
+	try_catch: {
+		title: 'Try / catch',
+		description: 'Runs a body of cards; on failure sends the error message down "error" instead of stopping, after optional retries.',
+		keywords: ['try', 'catch', 'error', 'retry', 'fail', 'fallback', 'exception', 'safe'],
+	},
+	ask_user: {
+		title: 'Ask user',
+		description: 'Pauses the run and asks you: approve or reject, choose an option, or type an answer.',
+		keywords: ['ask', 'approve', 'reject', 'human', 'confirm', 'question', 'pause', 'review', 'choose'],
+	},
+	set_variable: {
+		title: 'Set variable',
+		description: 'Stores a value under a name for the whole canvas (saved with it).',
+		keywords: ['variable', 'set', 'store', 'global', 'name', 'state', 'save'],
+	},
+	get_variable: {
+		title: 'Get variable',
+		description: 'Reads a canvas variable; waits for every Set variable of that name in the same run.',
+		keywords: ['variable', 'get', 'read', 'global', 'name', 'state'],
+	},
+	notify: {
+		title: 'Notify',
+		description: 'Shows a desktop notification and an in-app notice, then passes its input on.',
+		keywords: ['notify', 'notification', 'alert', 'toast', 'done', 'sound', 'desktop', 'message'],
 	},
 }

@@ -4,7 +4,11 @@ import { CodeRunResult, RunOptions } from './codeRunner'
 
 /**
  * Run Python in Pyodide (WASM), in a Web Worker. The runtime is loaded on the first call.
- * That download needs a network once; later loads come from the browser cache.
+ *
+ * WP49: the runtime ships with the app (the `pyodide` npm package, served at /pyodide/ by
+ * scripts/vite-pyodide-plugin.js and copied to dist/pyodide/ on build), so Python runs with no
+ * network. The jsDelivr CDN is only a fallback for when the app's own copy is missing. Packages
+ * (numpy, pandas, …) are not bundled: an `import` of one downloads it from the CDN on first use.
  *
  * WP45: one loaded worker is kept between runs (it used to be thrown away after every run, so
  * every run loaded Pyodide again). A run that times out or is stopped ends its worker, which is
@@ -12,26 +16,47 @@ import { CodeRunResult, RunOptions } from './codeRunner'
  * message, so an offline machine gets an answer, not a two-minute hang.
  */
 
-const PYODIDE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/'
-/** How long the one-time runtime download may take before we give up. */
+const PYODIDE_CDN_URL = 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/'
+/** How long the one-time runtime load may take before we give up. */
 const LOAD_TIMEOUT_MS = 90_000
 
+/** The app's own copy, as an absolute URL (the worker runs from a blob: URL). */
+function localPyodideUrl(): string {
+	return new URL('pyodide/', new URL(import.meta.env.BASE_URL ?? '/', location.href)).href
+}
+
 const WORKER_SOURCE = `
+async function loadFrom(indexURL) {
+  importScripts(indexURL + 'pyodide.js')
+  return await loadPyodide({ indexURL })
+}
 self.onmessage = async (event) => {
-  const { program } = event.data
+  const { program, code, localURL, cdnURL } = event.data
   if (!self.pyodide) {
     try {
-      importScripts('${PYODIDE_URL}pyodide.js')
-      self.pyodide = await loadPyodide({ indexURL: '${PYODIDE_URL}' })
+      try {
+        self.pyodide = await loadFrom(localURL)
+        self.pyodideSource = 'local'
+      } catch (localError) {
+        self.pyodide = await loadFrom(cdnURL)
+        self.pyodideSource = 'cdn'
+      }
+      // Packages are not bundled: they always come from the CDN.
+      self.pyodide._api.config.indexURL = cdnURL
     } catch (error) {
       self.postMessage({ type: 'done', ok: false, loadFailed: true, error: (error && error.message) || String(error) })
       return
     }
   }
-  self.postMessage({ type: 'loaded' })
+  self.postMessage({ type: 'loaded', source: self.pyodideSource })
   const stdout = []
   self.pyodide.setStdout({ batched: (line) => stdout.push(line) })
   try {
+    try {
+      await self.pyodide.loadPackagesFromImports(code)
+    } catch (error) {
+      throw new Error('A Python package could not be downloaded (packages such as numpy come from cdn.jsdelivr.net on first use): ' + ((error && error.message) || String(error)))
+    }
     await self.pyodide.runPythonAsync(program)
     self.postMessage({ type: 'done', ok: true, stdout: stdout.join('\\n') })
   } catch (error) {
@@ -104,7 +129,7 @@ export async function runPython(
 				clearTimeout(timer)
 				reject(new Error(PYTHON_DOWNLOAD_MESSAGE))
 			}
-			worker.postMessage({ program })
+			worker.postMessage({ program, code: source, localURL: localPyodideUrl(), cdnURL: PYODIDE_CDN_URL })
 		})
 		if (reply.loadFailed) throw new Error(PYTHON_DOWNLOAD_MESSAGE)
 		// A Python error leaves the runtime fine: keep the worker for the next run.

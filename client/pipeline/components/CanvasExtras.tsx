@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useEditor, useValue } from 'tldraw'
 import { $searchBlink } from '../../shell/shellState'
+import { FlowToasts } from './FlowToasts'
 
 /**
  * Canvas overlays mounted inside <Tldraw>: the search blink. WP44: the card AI ("fill") panel,
@@ -8,7 +9,13 @@ import { $searchBlink } from '../../shell/shellState'
  * agent panel now (client/components/ChatPanel.tsx).
  */
 export function CanvasExtras() {
-	return <SearchBlink />
+	return (
+		<>
+			<SearchBlink />
+			{/* WP49: toasts from Ask user / Notify, and the Variables dialog. */}
+			<FlowToasts />
+		</>
+	)
 }
 
 /** A dashed outline that blinks around the shape a search just jumped to. */

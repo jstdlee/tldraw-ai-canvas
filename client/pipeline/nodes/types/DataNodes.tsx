@@ -16,7 +16,8 @@ import { getNextConnectionIndex } from '../../connection/keepConnectionsAtBottom
 import { createNodeAt } from '../../placeNode'
 import { readSpreadsheet } from '../../excel'
 import { storeFile, loadFileBytes } from '../../fileStore'
-import { storeBlob } from '../../imageOps'
+import { renderChartPng } from '../../chartExport'
+import { ChartExportRow } from './ChartExportRow'
 import { sleep } from '../../utils/sleep'
 import { getNodeInputPortValues, getWiredSourceTitle, isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
@@ -1017,53 +1018,9 @@ function getChartTheme(editor: Editor): ChartTheme {
 	}
 }
 
-/** Render an ECharts option to a stored PNG URL, off-screen (never shown). */
 /** Histograms have no X column, so X must not block picking the same column for Y. */
 function chartXFor(node: ChartNode): string {
 	return node.kind === 'histogram' ? '' : node.xCol
-}
-
-async function renderChartPng(option: Record<string, unknown>, width = 960, height = 600): Promise<string> {
-	const mod = await import('echarts')
-	// Paint the theme's own background so dark-theme text stays readable in the image.
-	const background =
-		getComputedStyle(document.querySelector('.tl-container') ?? document.body).getPropertyValue('--tl-color-background').trim() || '#fff'
-	// Server-side SVG mode: no DOM node and no animation frame, so it renders the same whether
-	// or not the page is visible (an off-screen canvas left pie charts empty).
-	const chart = mod.init(null, null, { renderer: 'svg', ssr: true, width, height })
-	chart.setOption({ ...option, animation: false, backgroundColor: background })
-	const svg = chart.renderToSVGString()
-	chart.dispose()
-	const svgBlob = new Blob([svg], { type: 'image/svg+xml' })
-	try {
-		return await storeBlob(await svgToPng(svgBlob, width, height, 2))
-	} catch {
-		// Rasterizing failed (no canvas support): keep the SVG, it still shows and places fine.
-		return await storeBlob(svgBlob)
-	}
-}
-
-async function svgToPng(svg: Blob, width: number, height: number, scale: number): Promise<Blob> {
-	const url = URL.createObjectURL(svg)
-	try {
-		const img = new Image()
-		img.src = url
-		await Promise.race([
-			img.decode(),
-			new Promise((_, reject) => setTimeout(() => reject(new Error('SVG decode timed out')), 5000)),
-		])
-		const canvas = document.createElement('canvas')
-		canvas.width = width * scale
-		canvas.height = height * scale
-		const ctx = canvas.getContext('2d')
-		if (!ctx) throw new Error('No 2D canvas')
-		ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-		return await new Promise<Blob>((resolve, reject) =>
-			canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('PNG encode failed'))), 'image/png')
-		)
-	} finally {
-		URL.revokeObjectURL(url)
-	}
 }
 
 export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
@@ -1115,7 +1072,8 @@ export class ChartNodeDefinition extends NodeDefinition<ChartNode> {
 		// area — a flexible region (`.ChartNode-viewWrap`, see shell.css) that absorbs the
 		// textarea's real height being taller than one nominal row, the same way Profile's does.
 		const dataWired = isInputWired(this.editor, shape.id, 'data')
-		const rows = 4 + (dataWired ? 0 : 1) + extra.length + 1 + (node.titlesOpen ? titleFields.length : 0)
+		// WP49: + the export row (Save PNG / SVG, Copy image, Place on canvas) under the chart.
+		const rows = 4 + (dataWired ? 0 : 1) + extra.length + 1 + (node.titlesOpen ? titleFields.length : 0) + 1
 		return rowPx * rows + CHART_AREA_PX
 	}
 	getPorts(shape: NodeShape, node: ChartNode): Record<string, ShapePort> {
@@ -1489,6 +1447,12 @@ function ChartComponent({ shape, node }: NodeComponentProps<ChartNode>) {
 					{node.imageUrl && <FieldMax title="Open the chart" onClick={() => setZoomOpen(true)} />}
 				</div>
 			)}
+			<ChartExportRow
+				shape={shape}
+				ready={table.headers.length > 0 && columns.yCols.length > 0}
+				label={node.title || shape.props.label || 'chart'}
+				getOption={() => buildChart(table, chartSpecFrom(node, columns.xCol, columns.yCols, seriesCol), theme)}
+			/>
 			{zoomOpen && node.imageUrl && (
 				<ImageZoom src={node.imageUrl} onClose={() => setZoomOpen(false)} editor={editor} nextTo={shape} />
 			)}

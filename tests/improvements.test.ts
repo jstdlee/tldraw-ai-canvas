@@ -70,6 +70,11 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	merge: { inn: ['in1', 'in2'], out: ['output'] },
 	gallery: { inn: ['images'], out: ['output'] },
 	agent: { inn: ['context', 'task', 'model'], out: ['output', 'steps'] },
+	try_catch: { inn: ['input', 'result'], out: ['body', 'output', 'error'] },
+	ask_user: { inn: ['input'], out: ['answer', 'rejected'] },
+	set_variable: { inn: ['value'], out: ['output'] },
+	get_variable: { inn: ['after'], out: ['output'] },
+	notify: { inn: ['input'], out: ['output'] },
 }
 
 describe('llm usage', () => {

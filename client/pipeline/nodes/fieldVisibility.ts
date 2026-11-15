@@ -44,6 +44,12 @@ export function hiddenFieldKeys(node: NodeType, ctx: HiddenFieldCtx = {}): Set<s
 			if (node.collect !== 'table') hidden.add('resultColumn')
 			return hidden
 		}
+		case 'http': {
+			// WP49: "Read" only applies with "web page → text" on; selector + attribute only in
+			// its CSS selector mode.
+			if (!node.extractText) return new Set(['extract', 'selector', 'attribute'])
+			return node.extract === 'selector' ? new Set() : new Set(['selector', 'attribute'])
+		}
 		case 'jev':
 			return node.kind === 'noul' ? new Set(['options']) : new Set()
 		// WP35 Part B: "Language" only means anything for find: "fence" (restrict to one

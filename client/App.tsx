@@ -42,6 +42,7 @@ import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { ImagePipelineSidebar } from './pipeline/components/ImagePipelineSidebar'
 import { CanvasExtras } from './pipeline/components/CanvasExtras'
+import { VariablesMenuItem } from './pipeline/components/FlowToasts'
 import { commentToolOverrides, commentTools } from '@tldraw/commenting'
 import { CommentsLayer, CommentsMenuGroup, useCanvasStore } from './comments/comments'
 import { canvasTipTapExtensions, ListsRichTextToolbar, registerChecklistClicks } from './text/listFormat'
@@ -288,6 +289,7 @@ function App() {
 							kbd="shift+a"
 							onSelect={() => togglePanel('chat')}
 						/>
+						<VariablesMenuItem />
 						<TldrawUiMenuItem id="map-view" label="Map view" onSelect={() => { $mapOpen.set(!$mapOpen.get()) }} />
 						<TldrawUiMenuItem id="feature-list" label="Features vs tldraw" onSelect={() => { $featuresOpen.set(true) }} />
 						<TldrawUiMenuItem id="backup-15" label="Auto backup every 15 min" onSelect={() => saveBackup({ minutes: 15, target: 'folder' })} />

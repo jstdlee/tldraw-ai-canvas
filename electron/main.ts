@@ -80,9 +80,10 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(async () => {
-	// Camera node, clipboard (copy output): allow; everything else: deny.
+	// Camera node, clipboard (copy output), Notify card (WP49: the Web Notification API shows a
+	// native desktop notification in Electron): allow; everything else: deny.
 	session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-		callback(['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'].includes(permission))
+		callback(['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'notifications'].includes(permission))
 	})
 
 	Menu.setApplicationMenu(

@@ -16,7 +16,7 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	prompt: ['text'],
 	prompt_concat: ['separator'],
 	text_tool: ['op', 'a', 'b'],
-	http: ['method', 'query', 'headers', 'auth', 'extractText'],
+	http: ['method', 'query', 'headers', 'auth', 'extractText', 'extract', 'selector', 'attribute'],
 	download: ['fileName'],
 	web_search: ['provider', 'count', 'tavilyDepth', 'tavilyIncludeAnswer', 'exaIncludeText'],
 	net_tool: ['tool', 'option'],
@@ -70,6 +70,12 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	template: ['template', 'escape'],
 	merge: ['mode', 'separator'],
 	gallery: ['columns'],
+	// WP49
+	try_catch: ['retries', 'waitSec'],
+	ask_user: ['question', 'answerType', 'options', 'timeoutMin'],
+	set_variable: ['name'],
+	get_variable: ['name'],
+	notify: ['title', 'message', 'sound'],
 }
 
 /** Fields deliberately left unwired, each with a reason (kept with the `wire: false` flag

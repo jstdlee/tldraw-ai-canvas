@@ -83,12 +83,18 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	sleep: 'flow',
 	subgraph: 'flow', // "Group boxes"
 	merge: 'flow',
+	// Flow safety (WP49)
+	try_catch: 'flow',
+	ask_user: 'flow',
+	set_variable: 'flow',
+	get_variable: 'flow',
 	// Output
 	output: 'output',
 	save: 'output',
 	table_view: 'output',
 	html_preview: 'output',
 	gallery: 'output',
+	notify: 'output', // WP49
 }
 
 export function categoryOf(type: string): string {

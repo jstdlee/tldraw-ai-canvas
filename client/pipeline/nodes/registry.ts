@@ -43,6 +43,13 @@ import { ExtractNodeDefinition } from './types/ExtractNode'
 import { TemplateNodeDefinition } from './types/TemplateNode'
 import { MergeNodeDefinition } from './types/MergeNode'
 import { GalleryNodeDefinition } from './types/GalleryNode'
+import {
+	AskUserNodeDefinition,
+	GetVariableNodeDefinition,
+	NotifyNodeDefinition,
+	SetVariableNodeDefinition,
+	TryCatchNodeDefinition,
+} from './types/FlowSafetyNodes'
 import type { NodeDefinition, NodeDefinitionConstructor } from './types/shared'
 import {
 	getNodeDefinition as getNodeDefinitionFromStore,
@@ -128,6 +135,12 @@ export const NodeDefinitions = {
 	file_in: FileInNodeDefinition,
 	url_in: UrlInNodeDefinition,
 	sleep: SleepNodeDefinition,
+	// Flow safety (WP49)
+	try_catch: TryCatchNodeDefinition,
+	ask_user: AskUserNodeDefinition,
+	set_variable: SetVariableNodeDefinition,
+	get_variable: GetVariableNodeDefinition,
+	notify: NotifyNodeDefinition,
 } satisfies Record<string, NodeDefinitionConstructor<any>>
 
 /**

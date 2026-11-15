@@ -24,6 +24,7 @@ import { getArrowInputs, writeArrowOutputs } from './arrows'
 import { currentRunSignal } from './executionState'
 import { liveLoopValue } from './loopContext'
 import { isAbortError } from '../../../shared/abort'
+import { pendingSetters, variableName } from '../../../shared/flowSafety'
 
 export interface ExecutionGraphOptions {
 	/** Only these nodes may run (loop bodies, packed groups). */
@@ -144,6 +145,9 @@ export class ExecutionGraph {
 			await this.executeMergeIfReady(nodeId, node)
 			return
 		}
+		// WP49: a Get variable card runs after every Set variable card of the same name in this
+		// run (they are not wired to it, so the wires alone do not order them).
+		if ((node.shape.props.node as { type: string }).type === 'get_variable' && this.waitsForSetters(nodeId, node)) return
 
 		const inputs: Record<string, PipelineValue | PipelineValue[]> = {}
 		const ports = getNodePorts(this.editor, nodeId)
@@ -280,13 +284,62 @@ export class ExecutionGraph {
 		) as ExecutionResult
 		this.nodesById.set(nodeId, { ...node, state: 'executed', outputs })
 
-		const dependents = []
+		const dependents = this.wakeVariableGetters(node)
 		for (const connection of Object.values(node.connections)) {
 			if (!connection || connection.terminal !== 'start') continue
 			if (isFeedbackEnd(this.editor, connection.connectedShapeId, connection.connectedPortId)) continue
 			dependents.push(this.executeNodeIfReady(connection.connectedShapeId))
 		}
 		await Promise.all(dependents)
+	}
+
+	/** WP49: true while a Set variable card of this Get's name has not settled in this run. */
+	private waitsForSetters(nodeId: TLShapeId, node: PendingExecutionGraphNode): boolean {
+		const name = variableName((node.shape.props.node as { name?: unknown }).name)
+		if (!name) return false
+		const cards = [...this.nodesById.entries()].map(([id, entry]) => ({
+			id: id as string,
+			type: (entry.shape.props.node as { type: string }).type,
+			name: variableName((entry.shape.props.node as { name?: unknown }).name),
+			settled: entry.state === 'executed',
+		}))
+		if (!cards.some((card) => card.type === 'set_variable' && card.name === name)) return false
+		return pendingSetters({ id: nodeId, name }, cards, this.downstreamInGraph(nodeId)).length > 0
+	}
+
+	/** Every card in this graph reachable from `nodeId`'s outputs (not following loop-backs). */
+	private downstreamInGraph(nodeId: TLShapeId): Set<string> {
+		const found = new Set<string>()
+		const toVisit = [nodeId]
+		while (toVisit.length) {
+			const id = toVisit.pop()!
+			const entry = this.nodesById.get(id)
+			if (!entry) continue
+			for (const connection of entry.connections) {
+				if (!connection || connection.terminal !== 'start') continue
+				if (isFeedbackEnd(this.editor, connection.connectedShapeId, connection.connectedPortId)) continue
+				const next = connection.connectedShapeId
+				if (found.has(next) || next === nodeId) continue
+				found.add(next)
+				toVisit.push(next)
+			}
+		}
+		return found
+	}
+
+	/** WP49: after a Set variable card settles, retry the Get variable cards of its name. */
+	private wakeVariableGetters(node: { shape: NodeShape }): Promise<void>[] {
+		const value = node.shape.props.node as { type: string; name?: unknown }
+		if (value.type !== 'set_variable') return []
+		const name = variableName(value.name)
+		const wakes: Promise<void>[] = []
+		for (const [id, entry] of this.nodesById.entries()) {
+			const other = entry.shape.props.node as { type: string; name?: unknown }
+			if (entry.state === 'waiting' && other.type === 'get_variable' && variableName(other.name) === name) {
+				wakes.push(this.executeNodeIfReady(id))
+			}
+		}
+		return wakes
 	}
 
 	/**
@@ -439,7 +492,7 @@ export class ExecutionGraph {
 			console.warn('Writing node output to canvas failed:', e)
 		)
 
-		const executingDependentPromises = []
+		const executingDependentPromises = this.wakeVariableGetters(node)
 		for (const connection of Object.values(node.connections)) {
 			if (!connection || connection.terminal !== 'start') continue
 			if (isFeedbackEnd(this.editor, connection.connectedShapeId, connection.connectedPortId)) continue

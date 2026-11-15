@@ -62,8 +62,9 @@ export function formatCodeError(message: string, line: number | null | undefined
 	return line ? `Line ${line}: ${message}` : message
 }
 
-/** Shown when the Python runtime cannot be downloaded (offline, blocked, or too slow). */
+/** Shown when the Python runtime cannot be loaded. WP49: the app ships its own copy, so this
+ * only happens when that copy is missing (e.g. an incomplete build) and the CDN fallback fails. */
 export const PYTHON_DOWNLOAD_MESSAGE =
-	'Python needs a one-time download of its runtime (Pyodide, about 10 MB, from cdn.jsdelivr.net), and it could not be loaded. ' +
-	'Connect to the internet and run this card once; the browser then keeps a copy for later runs. ' +
+	"Python could not load its runtime (Pyodide): the app's own copy is missing and the one-time download from cdn.jsdelivr.net (about 10 MB) failed. " +
+	'Rebuild the app, or connect to the internet and run this card once. ' +
 	'JavaScript and TypeScript work offline.'

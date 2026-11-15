@@ -22,6 +22,13 @@ export const NO_CACHE_NODE_TYPES: ReadonlySet<string> = new Set([
 	'html_form',
 	'for_each',
 	'while',
+	// WP49: Try / catch runs a body (like a loop); Ask user waits for a person; Set/Get variable
+	// read and write the canvas variables (not an input); Notify is a side effect.
+	'try_catch',
+	'ask_user',
+	'set_variable',
+	'get_variable',
+	'notify',
 ])
 
 /** True when a Database card's SQL (the field, or the wired override already applied to

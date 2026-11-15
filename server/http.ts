@@ -6,6 +6,8 @@ import { resolveSecret } from '../shared/secrets'
 import { ConfigError, DATA_DIR } from './config'
 import { resolveImage, saveImage } from './images'
 import { getSecretValue } from './secretsStore'
+import { extractArticle, formatArticle, selectorTable } from '../shared/htmlScrape'
+import { toCsv } from '../shared/tableText'
 
 /** Files from the Download node and the Save node. Never committed. */
 export const DOWNLOAD_DIR = join(DATA_DIR, 'downloads')
@@ -21,6 +23,13 @@ export interface HttpRequestInput {
 	body?: string
 	/** Turn an HTML page into readable text. */
 	extractText?: boolean
+	/** WP49: what to read out of an HTML page when `extractText` is on: the full text (default),
+	 * the main article (title, text, links), or the elements a CSS selector matches (a table). */
+	extract?: 'full' | 'article' | 'selector'
+	/** For extract "selector". */
+	selector?: string
+	/** For extract "selector": also read this attribute of each match (e.g. href) as a column. */
+	attribute?: string
 	/** Bearer / basic auth: `auth` picks the scheme, `authRef` (`secret:<id>`/`env:NAME`) or a
 	 * legacy plain `authValue` gives the value. Resolved here so the secret never reaches the client. */
 	auth?: string
@@ -89,6 +98,26 @@ export function htmlToText(html: string): string {
 	return title ? `${title}\n\n${body}` : body
 }
 
+/** WP49: the HTTP card's Extract modes. "full" is the old whole-page text. */
+export function extractHtml(html: string, input: Pick<HttpRequestInput, 'extract' | 'selector' | 'attribute'>, pageUrl?: string): string {
+	if (input.extract === 'selector') {
+		let table: { headers: string[]; rows: string[][] }
+		try {
+			table = selectorTable(html, input.selector ?? '', input.attribute, pageUrl)
+		} catch (e) {
+			throw new ConfigError((e as Error).message)
+		}
+		return toCsv(table.headers, table.rows)
+	}
+	if (input.extract === 'article') {
+		const article = extractArticle(html, pageUrl)
+		// The chosen block's own HTML goes through the same HTML-to-text as "full", so both read alike.
+		const body = htmlToText(html.slice(article.range.start, article.range.end))
+		return formatArticle({ ...article, text: body || article.text })
+	}
+	return htmlToText(html)
+}
+
 function isTextType(contentType: string) {
 	return /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded|ld\+json|rss|atom))|\+json|\+xml/.test(
 		contentType
@@ -143,7 +172,7 @@ export async function httpRequest(input: HttpRequestInput): Promise<HttpResult> 
 			// Not valid JSON after all: keep the raw text.
 		}
 	}
-	if (input.extractText && contentType.includes('html')) text = htmlToText(text)
+	if (input.extractText && contentType.includes('html')) text = extractHtml(text, input, res.url || input.url)
 	return { status: res.status, ok: res.ok, contentType, text, bytes: bytes.byteLength, headers: responseHeaders, ms }
 }
 

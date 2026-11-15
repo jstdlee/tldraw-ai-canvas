@@ -184,6 +184,48 @@ export function IconAlert({ size }: IconProps) {
 	)
 }
 
+/** WP49 Try / catch: a shield. */
+export function IconShield({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M8 1.8 13 3.6v4c0 3.1-2.1 5.4-5 6.6-2.9-1.2-5-3.5-5-6.6v-4L8 1.8Z" />
+			<path d="m5.8 8 1.5 1.5 2.9-3" />
+		</Svg>
+	)
+}
+
+/** WP49 Ask user: a speech bubble with a question mark. */
+export function IconAsk({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M2.5 3.5h11v7.2H8.2l-3 2.6v-2.6H2.5V3.5Z" />
+			<path d="M6.6 5.9a1.4 1.4 0 1 1 1.9 1.3c-.4.2-.5.4-.5.8" />
+			<path d="M8 9.4h.01" />
+		</Svg>
+	)
+}
+
+/** WP49 Notify: a bell. */
+export function IconBell({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M4 11V7.2a4 4 0 0 1 8 0V11l1.2 1.4H2.8L4 11Z" />
+			<path d="M6.6 13.6a1.5 1.5 0 0 0 2.8 0" />
+		</Svg>
+	)
+}
+
+/** WP49 Set / Get variable: a box with x. */
+export function IconVariable({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M4.5 2.8C3.4 2.8 3 3.4 3 4.4v2c0 .9-.5 1.6-1.2 1.6.7 0 1.2.7 1.2 1.6v2c0 1 .4 1.6 1.5 1.6" />
+			<path d="M11.5 2.8c1.1 0 1.5.6 1.5 1.6v2c0 .9.5 1.6 1.2 1.6-.7 0-1.2.7-1.2 1.6v2c0 1-.4 1.6-1.5 1.6" />
+			<path d="m6 6 4 4M10 6l-4 4" />
+		</Svg>
+	)
+}
+
 export function IconClose({ size }: IconProps) {
 	return (
 		<Svg size={size}>

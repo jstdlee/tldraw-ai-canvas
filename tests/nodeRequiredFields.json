@@ -453,5 +453,43 @@
 		"error",
 		"lastImages",
 		"type"
+	],
+	"try_catch": [
+		"lastAttempts",
+		"lastError",
+		"lastOutcome",
+		"lastValue",
+		"progress",
+		"retries",
+		"type",
+		"waitSec"
+	],
+	"ask_user": [
+		"answerType",
+		"error",
+		"lastAnswer",
+		"lastQuestion",
+		"lastRejected",
+		"options",
+		"question",
+		"timeoutMin",
+		"type"
+	],
+	"set_variable": [
+		"error",
+		"name",
+		"type"
+	],
+	"get_variable": [
+		"error",
+		"name",
+		"type"
+	],
+	"notify": [
+		"lastShown",
+		"message",
+		"sound",
+		"title",
+		"type"
 	]
 }

@@ -178,6 +178,10 @@ export function apiHttp(
 		headers?: Record<string, string>
 		body?: string
 		extractText?: boolean
+		/** WP49: with extractText, what to read: full text, main article, or CSS selector matches. */
+		extract?: 'full' | 'article' | 'selector'
+		selector?: string
+		attribute?: string
 		/** Bearer / basic auth: `auth` picks the scheme, `authRef` (`secret:<id>`) or `authValue` gives the value. The server resolves it; the value never comes back. */
 		auth?: string
 		authRef?: string

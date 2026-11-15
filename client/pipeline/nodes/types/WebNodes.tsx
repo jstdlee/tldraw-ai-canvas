@@ -25,7 +25,7 @@ import { useFieldPortAnchor } from '../../ports/useFieldPortAnchor'
 import { getNodeDefinition } from '../definitionStore'
 import { getNodePortConnections, isInputWired } from '../nodePorts'
 import { NodeShape } from '../NodeShapeUtil'
-import { UiButton, UiCheckbox, UiGrowingInput, UiSecretInput, UiTextInput } from '../../../ui'
+import { UiButton, UiCheckbox, UiGrowingInput, UiSecretInput, UiSelect, UiTextInput } from '../../../ui'
 import { isImageValue, PortRow, stopEvent, useInputConnected, NodeSelect, NodeTextResult, WireField, WireFieldHeader } from './fields'
 import {
 	areAnyInputsOutOfDate,
@@ -105,6 +105,11 @@ export const HttpNode = T.object({
 	/** `secret:<id>` from the server's secret store, or `env:NAME`. */
 	authRef: T.string.optional(),
 	extractText: T.boolean,
+	/** WP49: with extractText on, what to read: 'full' (default), 'article', or 'selector'. */
+	extract: T.string.optional(),
+	/** WP49: for extract "selector": the CSS selector, and an optional attribute column. */
+	selector: T.string.optional(),
+	attribute: T.string.optional(),
 	lastStatus: T.string.nullable(),
 	lastText: T.string.nullable(),
 	lastImageUrl: T.string.nullable(),
@@ -114,6 +119,17 @@ export const HttpNode = T.object({
 })
 
 const HTTP_WIDTH_PX = 400
+
+/** WP49: the HTTP card's "Read" choices, shown when "web page → readable text" is on. */
+const HTTP_EXTRACT_OPTIONS = [
+	{ value: 'full', label: 'Full text', hint: 'All readable text of the page.' },
+	{ value: 'article', label: 'Main article', hint: 'The main text, its title, and its links.' },
+	{ value: 'selector', label: 'CSS selector', hint: 'The text (and an attribute) of each matched element, as a table.' },
+] as { value: 'full' | 'article' | 'selector'; label: string; hint: string }[]
+
+export function httpExtractMode(value: string | undefined): 'full' | 'article' | 'selector' {
+	return value === 'article' || value === 'selector' ? value : 'full'
+}
 const HTTP_QUERY_HEIGHT_PX = 64
 const HTTP_HEADERS_HEIGHT_PX = 80
 const HTTP_BODY_HEIGHT_PX = 110
@@ -158,8 +174,10 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 		// WP27 Part B: the URL field wraps/grows (UiGrowingInput) when not wired — reserve its
 		// max-rows cap on top of the one row already budgeted for it.
 		const urlConnected = isInputWired(this.editor, shape.id, 'url')
+		// WP49: the Extract mode row (when "web page → text" is on), and selector + attribute.
+		const extraRows = _node.extractText ? 1 + (_node.extract === 'selector' ? 2 : 0) : 0
 		return (
-			getNodeRowHeightPx(shape.props.fontSize) * 11 +
+			getNodeRowHeightPx(shape.props.fontSize) * (11 + extraRows) +
 			HTTP_QUERY_HEIGHT_PX +
 			HTTP_HEADERS_HEIGHT_PX +
 			HTTP_BODY_HEIGHT_PX +
@@ -222,6 +240,9 @@ export class HttpNodeDefinition extends NodeDefinition<HttpNode> {
 					authRef: authRef || undefined,
 					authValue,
 					extractText: node.extractText,
+					extract: httpExtractMode(node.extract),
+					selector: node.selector,
+					attribute: node.attribute,
 				},
 				currentRunSignal(this.editor)
 			)
@@ -421,6 +442,21 @@ function HttpNodeComponent({ shape, node }: NodeComponentProps<HttpNode>) {
 			<WireField shapeId={shape.id} fieldKey="extractText" label="Extract">
 				<UiCheckbox checked={node.extractText} label="Web page → readable text" onChange={(extractText) => set({ extractText })} />
 			</WireField>
+			{node.extractText && (
+				<WireField shapeId={shape.id} fieldKey="extract" label="Read">
+					<UiSelect value={httpExtractMode(node.extract)} options={HTTP_EXTRACT_OPTIONS} onChange={(extract) => set({ extract })} />
+				</WireField>
+			)}
+			{node.extractText && httpExtractMode(node.extract) === 'selector' && (
+				<>
+					<WireField shapeId={shape.id} fieldKey="selector" label="Selector">
+						<UiTextInput placeholder="e.g. h2 a, .price" value={node.selector ?? ''} onChange={(selector) => set({ selector })} />
+					</WireField>
+					<WireField shapeId={shape.id} fieldKey="attribute" label="Attribute">
+						<UiTextInput placeholder="optional, e.g. href" value={node.attribute ?? ''} onChange={(attribute) => set({ attribute })} />
+					</WireField>
+				</>
+			)}
 			<NodeRow>
 				<span className={'NodeStatus' + (node.error ? ' is-error' : '')} title={node.lastHeaders ?? node.lastStatus ?? ''}>
 					{node.error ?? node.lastStatus ?? 'Not run yet'}
