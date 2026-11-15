@@ -32,7 +32,6 @@ import {
 	IconCopy,
 	IconMore,
 	IconPlay,
-	IconSparkle,
 	IconStop,
 	UiButton,
 	UiErrorBanner,
@@ -60,7 +59,7 @@ import { openGroup } from '../subgraph'
 import { placeImageOnCanvas, placeTextOnCanvas } from '../placeOnCanvas'
 import { formatRunMs } from '../../../shared/llmUsage'
 import { pastePatch } from '../../../shared/pasteTarget'
-import { openAgentPanel } from '../../agent/agentPanelState'
+import { openAiBar } from '../../agent/aiBarState'
 import { readClipboard } from '../clipboard'
 import { apiImportImage } from '../api/pipelineApi'
 import { clearNodeRun, getNodeRun } from '../execution/nodeRunState'
@@ -569,16 +568,6 @@ function NodeShapeComponent({ shape }: { shape: NodeShape }) {
 					}}
 				/>
 				<div className="NodeShape-footer-tools">
-					<UiIconButton
-						className="NodeAiButton"
-						icon={<IconSparkle />}
-						title="Ask AI about this node"
-						onClick={() => {
-							// WP44: the card's AI runs in the docked agent panel, scoped to this card.
-							editor.select(shape.id)
-							openAgentPanel({ focus: true })
-						}}
-					/>
 					<CopyOutputButton shape={shape} />
 					<UiIconButton
 						icon={shape.props.collapsed ? <IconChevronDown /> : <IconChevronUp />}
@@ -718,8 +707,9 @@ function NodeErrorBanner({
 				message={message}
 				onCopy={() => void navigator.clipboard.writeText(message)}
 				onFix={() => {
+					// WP48: Fix opens the AI bar on this card, prefilled; the user sends it.
 					editor.select(shape.id)
-					openAgentPanel({ run: { action: 'fix-error', text: message } })
+					openAiBar({ prefill: `Fix this error: ${message}` })
 				}}
 				onDismiss={onDismiss}
 			/>

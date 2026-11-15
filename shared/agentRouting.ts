@@ -1,7 +1,8 @@
 /**
- * WP44: the agent panel's routing. One input, many AI features: a quick action chip or free
- * text, read against the scope (what is selected), picks the route that runs the task. Pure
- * so it can be unit-tested (tests/agentRouting.test.ts).
+ * WP44/WP48: the agent's routing. A quick action chip keeps its direct route (it is explicit and
+ * needs no understanding step); free text always goes to the one agent, which picks a
+ * capability itself (draw, build-workflow, fill-card, edit-text, ask-user, answer). Pure so it
+ * can be unit-tested (tests/agentRouting.test.ts).
  */
 
 import type { AgentScope } from './agentScope'
@@ -15,7 +16,9 @@ export type AgentRouteId =
 	| 'send-to-pipeline'
 	| 'node-assist'
 	| 'build'
+	| 'edit-text'
 	| 'agent'
+	| 'ask-user'
 
 export type QuickActionId =
 	// canvas
@@ -58,12 +61,6 @@ export interface AgentRoute {
 	job?: TextJob | ImageJob
 	/** build only: revise the last plan instead of starting a new one. */
 	revision?: boolean
-}
-
-/** The last task in the thread, when no message was sent after it. */
-export interface LastTaskInfo {
-	route: string
-	status: string
 }
 
 export interface QuickAction {
@@ -149,11 +146,7 @@ const WIRE_UP_GOAL = 'Wire these cards up and fill in their settings so they wor
  * answer (Translate… without a language, Rewrite… without instructions, Build a workflow
  * without a goal): the panel then asks for it (prefilled input or a sheet).
  */
-export function routeAgentTask(
-	scope: Pick<AgentScope, 'kind'>,
-	request: AgentTaskRequest,
-	context: { lastTask?: LastTaskInfo | null } = {}
-): AgentRoute | null {
+export function routeAgentTask(_scope: Pick<AgentScope, 'kind'>, request: AgentTaskRequest): AgentRoute | null {
 	if ('action' in request) {
 		const action = request.action
 		const extra = request.text?.trim() ?? ''
@@ -193,14 +186,10 @@ export function routeAgentTask(
 		}
 	}
 
+	// WP48: free text is never routed by the scope: the one agent reads the request and the
+	// selection, and chooses fill-card, build-workflow, edit-text, drawing or a question.
 	const text = request.text.trim()
 	if (!text) return null
-	// A plan that is still waiting for Apply: the next words revise it.
-	if (context.lastTask?.route === 'build' && context.lastTask.status === 'done') {
-		return { route: 'build', label: text, text, revision: true }
-	}
-	if (scope.kind === 'card') return { route: 'node-assist', label: text, text }
-	if (scope.kind === 'cards') return { route: 'build', label: text, text }
 	return { route: 'agent', label: text, text }
 }
 

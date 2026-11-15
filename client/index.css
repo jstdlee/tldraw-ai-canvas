@@ -1166,3 +1166,140 @@ button.prompt-tag span {
 .agent-action-type-message {
 	color: var(--tl-color-text-1);
 }
+
+/* WP48: the AI bar, just above the selection (InFrontOfTheCanvas; viewport coordinates). */
+.ai-bar {
+	position: absolute;
+	z-index: 300;
+	pointer-events: all;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 6px;
+	border-radius: var(--tl-radius-4);
+	border: 1px solid var(--tl-color-divider);
+	background: var(--tl-color-panel);
+	box-shadow: var(--tl-shadow-3);
+	color: var(--tl-color-text-1);
+	font-family: var(--tl-font-sans);
+	font-size: 12px;
+}
+
+.ai-bar-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	min-width: 0;
+}
+
+.ai-bar-scope {
+	flex: 0 0 auto;
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	margin-top: 5px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--tl-color-muted-1);
+	color: var(--tl-color-text-3);
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+.ai-bar-row .agent-pending-tag {
+	margin-top: 5px;
+	flex: 0 0 auto;
+}
+
+.ai-bar-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	resize: none;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--tl-color-text-1);
+	font: inherit;
+	font-size: 13px;
+	line-height: 18px;
+	padding: 5px 2px;
+	/* One line that grows to four, then scrolls. */
+	max-height: calc(18px * 4 + 10px);
+	overflow-y: auto;
+}
+
+.ai-bar-input::placeholder {
+	color: var(--tl-color-text-3);
+}
+
+.ai-bar-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 0 2px 2px;
+}
+
+.ai-bar-progress,
+.ai-bar-question-text {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 4px 4px;
+	color: var(--tl-color-text-3);
+}
+
+.ai-bar-question {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.ai-bar-question-text {
+	color: var(--tl-color-text-1);
+	align-items: flex-start;
+}
+
+.ai-bar .agent-apply-first {
+	margin: 0;
+}
+
+/* WP48: "Apply the current change first?" */
+.agent-apply-first {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0 8px 8px;
+	padding: 6px 8px;
+	border-radius: var(--tl-radius-3);
+	background: color-mix(in srgb, var(--tl-color-warning) 14%, transparent);
+	color: var(--tl-color-text-1);
+	font-size: 12px;
+}
+
+.agent-apply-first > span {
+	flex: 1 1 auto;
+}
+
+.agent-adjust-row {
+	margin: 0 8px 6px;
+}
+
+.chat-model-chip.is-warning {
+	color: var(--tl-color-warning);
+}
+
+.chat-task-question {
+	font-size: 12px;
+	color: var(--tl-color-text-1);
+	margin: 4px 0;
+}
+
+.chat-task-options-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin: 4px 0;
+}

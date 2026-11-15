@@ -38,6 +38,7 @@ import {
 } from './agent/TldrawAgentAppProvider'
 import { $agentPanelRequest, openAgentPanel } from './agent/agentPanelState'
 import { AgentDock } from './components/AgentDock'
+import { $aiBarApp, AiBarHost } from './components/AiBar'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { ImagePipelineSidebar } from './pipeline/components/ImagePipelineSidebar'
@@ -72,7 +73,6 @@ import { FindBar } from './clips/FindBar'
 import { installKeepGroup } from './pipeline/groups/KeepGroupShapeUtil'
 import { ShellChrome } from './shell/ShellChrome'
 import { $featuresOpen, $libraryRail, $mapOpen, saveBackup, writeLibraryRail } from './shell/shellState'
-import { IconSparkle } from './ui'
 import { ImageEditorModal } from './clips/ImageEditor'
 import { RewriteDialogs } from './clips/RewriteDialogs'
 import { RatioImageShapeUtil } from './clips/shapeOptions'
@@ -143,11 +143,15 @@ function App() {
 	const handleUnmount = useCallback(() => setApp(null), [])
 	const closeChat = useCallback(() => setPanels((p) => ({ ...p, chat: false })), [])
 
-	// WP44: every AI entry point (menus, shortcuts, the ✦ on a card) opens the docked panel.
+	// WP44/WP48: a request sent from the AI bar (and Adjust, sheets) opens the docked panel.
 	const panelRequest = useValue('agent panel request', () => $agentPanelRequest.get(), [])
 	useEffect(() => {
 		if (panelRequest) setPanels((p) => (p.chat ? p : { ...p, chat: true }))
 	}, [panelRequest])
+
+	useEffect(() => {
+		$aiBarApp.set(app)
+	}, [app])
 
 	// Dev only: lets scripts and tests drive the agent and the node library.
 	useEffect(() => {
@@ -242,17 +246,8 @@ function App() {
 	const components: TLComponents = useMemo(
 		() => ({
 			RichTextToolbar: ListsRichTextToolbar,
-			InFrontOfTheCanvas: () => (
-				<>
-					<OnCanvasNodePicker />
-					<PipelineRegions />
-					<ZipSliderLayer />
-					<FindBarHost />
-					<ShellChrome />
-					<SetupBanner />
-					<CommentsLayer />
-				</>
-			),
+			// Module-level (stable), so opening the dock does not remount the canvas layers (WP48).
+			InFrontOfTheCanvas: CanvasFront,
 			MainMenu: () => (
 				<DefaultMainMenu>
 					<CommentsMenuGroup />
@@ -381,18 +376,23 @@ function App() {
 				<ImageEditorModal editor={editor} />
 				<ModelHealthToasts />
 				<AgentDock app={app} open={panels.chat} isDark={isDark} onClose={closeChat} />
-				{!panels.chat && (
-					<button
-						className={`agent-dock-button ${isDark ? 'tl-theme__dark' : 'tl-theme__light'}`}
-						type="button"
-						title="Agent panel (Shift+A)"
-						onClick={() => togglePanel('chat')}
-					>
-						<IconSparkle size={22} />
-					</button>
-				)}
 			</div>
 		</TldrawUiToastsProvider>
+	)
+}
+
+function CanvasFront() {
+	return (
+		<>
+			<OnCanvasNodePicker />
+			<PipelineRegions />
+			<ZipSliderLayer />
+			<FindBarHost />
+			<ShellChrome />
+			<SetupBanner />
+			<CommentsLayer />
+			<AiBarHost />
+		</>
 	)
 }
 

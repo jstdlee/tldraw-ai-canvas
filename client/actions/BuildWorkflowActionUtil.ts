@@ -4,9 +4,9 @@ import { getEditorScope, startTask } from '../agent/agentTasks'
 import { AgentActionUtil, registerActionUtil } from './AgentActionUtil'
 
 /**
- * WP44: the drawing agent's `build-workflow` action. A free-text request for a pipeline
- * ("load sales.xlsx and chart it") becomes cards: it runs Build with AI for the goal and adds
- * a `build` task to the thread, with the plan for the user to Apply (it is never applied here).
+ * WP44/WP48: the agent's `build-workflow` action. A request for cards ("load sales.xlsx and
+ * chart it", "wire these up") runs Build with AI for the goal and adds a `build` task to the
+ * thread; its plan is placed on the canvas as a preview (ghost cards and wires) to Apply.
  */
 export const BuildWorkflowActionUtil = registerActionUtil(
 	class BuildWorkflowActionUtil extends AgentActionUtil<BuildWorkflowAction> {

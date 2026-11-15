@@ -172,6 +172,37 @@ export async function runRewrite(
 	return made
 }
 
+/**
+ * WP48 edit-text: ask for new wording of each shape's text (same prompt as Rewrite), without
+ * changing the canvas. The caller writes the answers in place (as a preview).
+ */
+export async function rewriteTexts(
+	editor: Editor,
+	sourceIds: TLShapeId[],
+	instructions: string,
+	signal?: AbortSignal
+): Promise<{ id: TLShapeId; text: string }[]> {
+	const out: { id: TLShapeId; text: string }[] = []
+	for (const id of sourceIds) {
+		const source = editor.getShape(id)
+		if (!source) continue
+		const { text } = await apiGenerateText({ input: shapeText(editor, source), prompt: buildRewritePrompt(instructions) }, signal)
+		if (!text.trim()) throw new Error('The model sent an empty answer. Try again or pick another model.')
+		out.push({ id, text: text.trim() })
+	}
+	return out
+}
+
+/** Put `text` into a shape that holds text (rich text or Markdown). False when it cannot take text. */
+export function setShapeText(editor: Editor, id: TLShapeId, text: string): boolean {
+	const shape = editor.getShape(id)
+	if (!shape) return false
+	const props = 'richText' in shape.props ? { richText: textToRichText(text) } : shape.type === 'markdown' ? { md: text } : null
+	if (!props) return false
+	editor.updateShape({ id: shape.id, type: shape.type, props } as any)
+	return true
+}
+
 /** What "Rewrite again" runs: the selected variant's source, with the same instructions. */
 export function retryVariantRequest(editor: Editor): { sourceId: TLShapeId; instructions: string; label: string } | null {
 	const pick = selectedVariant(editor)

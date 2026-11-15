@@ -4,19 +4,25 @@ import { NODE_SPECS } from '../../../shared/nodeSpecs'
 import { SmallSpinner } from '../../../shared/icons/SmallSpinner'
 import { ChatHistoryTaskItem } from '../../../shared/types/ChatHistoryItem'
 import {
+	answerQuestion,
 	applyAssistTask,
 	applyBuildTask,
+	applyPreview,
 	buildNeed,
+	discardPreview,
 	discardTask,
 	isTaskLive,
+	rearrangeBuildPreview,
 	retryTask,
 	showOnCanvas,
 	stopTask,
 } from '../../agent/agentTasks'
+import { $adjustTarget } from '../../agent/aiBarState'
+import { openAgentPanel } from '../../agent/agentPanelState'
 import { useAgent } from '../../agent/TldrawAgentAppProvider'
 import { AiPlanRows } from '../../pipeline/components/AiPlanRows'
 import type { NodeAssistResult } from '../../pipeline/assist'
-import { IconSparkle, UiButton, UiCheckbox } from '../../ui'
+import { IconSparkle, UiButton, UiCheckbox, UiChip } from '../../ui'
 import { MarkdownMessage } from './MarkdownMessage'
 
 function formatValue(value: unknown): string {
@@ -26,8 +32,8 @@ function formatValue(value: unknown): string {
 }
 
 /**
- * WP44: one agent-panel task in the thread — running (spinner + Stop), its result (text with
- * "Show on canvas", a build plan with Apply / Discard, a card assist with change rows), or an
+ * WP44/WP48: one task in the thread — running (spinner + Stop), a preview (its change is on
+ * the canvas, marked: Apply / Adjust / Discard), a result, a question with answer chips, or an
  * error with Retry.
  */
 export function ChatTaskMessage({ item }: { item: ChatHistoryTaskItem }) {
@@ -62,24 +68,97 @@ export function ChatTaskMessage({ item }: { item: ChatHistoryTaskItem }) {
 function TaskBody({ item }: { item: ChatHistoryTaskItem }) {
 	switch (item.route) {
 		case 'build':
-			return item.plan ? <BuildBody item={item} /> : null
+			return item.plan ? <BuildBody item={item} /> : <ResultBody item={item} />
 		case 'node-assist':
-			return item.assist ? <AssistBody item={item} /> : null
+			return item.assist ? <AssistBody item={item} /> : <ResultBody item={item} />
+		case 'ask-user':
+			return <QuestionBody item={item} />
 		default:
 			return <ResultBody item={item} />
 	}
 }
 
+/** Apply / Adjust / Discard for a preview, or its final state. */
+export function PreviewActions({ item, onApply }: { item: ChatHistoryTaskItem; onApply?: () => void }) {
+	const agent = useAgent()
+	if (item.status === 'preview') {
+		return (
+			<div className="chat-task-actions chat-task-preview-actions">
+				<UiButton
+					size="sm"
+					variant="primary"
+					label="Apply"
+					onClick={() => (onApply ? onApply() : applyPreview(agent, item.id))}
+				/>
+				<UiButton
+					size="sm"
+					label="Adjust"
+					title="Say what to change: the next message revises this preview"
+					onClick={() => {
+						$adjustTarget.set(item.id)
+						openAgentPanel({ focus: true })
+					}}
+				/>
+				<UiButton size="sm" label="Discard" onClick={() => discardPreview(agent, item.id)} />
+				<span className="chat-task-hint">Preview on the canvas</span>
+			</div>
+		)
+	}
+	if (item.status === 'applied' || item.status === 'discarded') {
+		return (
+			<div className="chat-task-actions">
+				<span className="chat-task-state">{item.status === 'applied' ? 'Applied' : 'Discarded'}</span>
+				{item.status === 'applied' && !!item.placedIds?.length && (
+					<UiButton size="sm" label="Show on canvas" onClick={() => showOnCanvas(agent.editor, item.placedIds!)} />
+				)}
+			</div>
+		)
+	}
+	return null
+}
+
 /** The result text (Markdown, at most 8 lines until "Show more") and "Show on canvas". */
 function ResultBody({ item }: { item: ChatHistoryTaskItem }) {
 	const agent = useAgent()
+	const isPreviewTask = item.previewDiff != null
 	return (
 		<>
 			{item.text && <ClampedMarkdown text={item.text} />}
-			{!!item.placedIds?.length && (
-				<div className="chat-task-actions">
-					<UiButton size="sm" label="Show on canvas" onClick={() => showOnCanvas(agent.editor, item.placedIds!)} />
+			{isPreviewTask ? (
+				<PreviewActions item={item} />
+			) : (
+				!!item.placedIds?.length && (
+					<div className="chat-task-actions">
+						<UiButton size="sm" label="Show on canvas" onClick={() => showOnCanvas(agent.editor, item.placedIds!)} />
+					</div>
+				)
+			)}
+		</>
+	)
+}
+
+function QuestionBody({ item }: { item: ChatHistoryTaskItem }) {
+	const agent = useAgent()
+	const open = item.status === 'done'
+	return (
+		<>
+			{item.text && <div className="chat-task-question">{item.text}</div>}
+			{!!item.options?.length && (
+				<div className="chat-task-options-chips">
+					{item.options.map((option) => (
+						<UiChip
+							key={option}
+							label={option}
+							active={item.answer === option}
+							onClick={open ? () => answerQuestion(agent, item.id, option) : undefined}
+						/>
+					))}
 				</div>
+			)}
+			{open ? (
+				<span className="chat-task-hint">Pick an answer or type one below.</span>
+			) : (
+				item.answer && <span className="chat-task-state">Answered: {item.answer}</span>
 			)}
 		</>
 	)
@@ -111,45 +190,43 @@ function ClampedMarkdown({ text }: { text: string }) {
 function BuildBody({ item }: { item: ChatHistoryTaskItem }) {
 	const agent = useAgent()
 	const plan = item.plan as AiPlan
-	const [arrange, setArrange] = useState(plan.arrange !== 'none')
 	const [runAfter, setRunAfter] = useState(false)
+	const [legacyArrange, setLegacyArrange] = useState(plan.arrange !== 'none')
 	const hasChanges = !!(plan.add.length || plan.update.length || plan.wires.length || plan.unwire.length)
-	const open = item.status === 'done'
+	const preview = item.status === 'preview'
+	// Saved before WP48: a plan still waiting with no preview on the canvas.
+	const legacyOpen = item.status === 'done' && hasChanges && item.previewDiff == null
+	const arrange = preview ? item.arranged !== false : legacyArrange
 	return (
 		<>
 			<div className="chat-task-plan">
-				<AiPlanRows editor={agent.editor} plan={plan} warnings={item.warnings ?? []} />
+				<AiPlanRows editor={agent.editor} plan={plan} warnings={item.warnings ?? []} names={item.planNames} before={item.planBefore} />
 			</div>
-			{open && hasChanges && (
+			{(preview || legacyOpen) && (
 				<div className="chat-task-options">
 					{(plan.add.length > 0 || plan.wires.length > 0) && (
-						<UiCheckbox checked={arrange} onChange={setArrange} label="Arrange cards" />
+						<UiCheckbox
+							checked={arrange}
+							onChange={(next) => (preview ? rearrangeBuildPreview(agent, item.id, next) : setLegacyArrange(next))}
+							label="Arrange cards"
+						/>
 					)}
 					<UiCheckbox checked={runAfter} onChange={setRunAfter} label="Run after building" />
 				</div>
 			)}
-			<div className="chat-task-actions">
-				{open ? (
-					<>
-						<UiButton
-							size="sm"
-							variant="primary"
-							label="Apply"
-							disabled={!hasChanges}
-							onClick={() => applyBuildTask(agent, item.id, { arrange, runAfter })}
-						/>
-						<UiButton size="sm" label="Discard" onClick={() => discardTask(agent, item.id)} />
-						<span className="chat-task-hint">Type below to revise the plan.</span>
-					</>
-				) : (
-					<>
-						<span className="chat-task-state">{item.status === 'applied' ? 'Applied' : 'Discarded'}</span>
-						{item.status === 'applied' && !!item.placedIds?.length && (
-							<UiButton size="sm" label="Show on canvas" onClick={() => showOnCanvas(agent.editor, item.placedIds!)} />
-						)}
-					</>
-				)}
-			</div>
+			{legacyOpen ? (
+				<div className="chat-task-actions">
+					<UiButton
+						size="sm"
+						variant="primary"
+						label="Apply"
+						onClick={() => applyBuildTask(agent, item.id, { arrange: legacyArrange, runAfter })}
+					/>
+					<UiButton size="sm" label="Discard" onClick={() => discardTask(agent, item.id)} />
+				</div>
+			) : (
+				<PreviewActions item={item} onApply={() => applyPreview(agent, item.id, { runAfter })} />
+			)}
 		</>
 	)
 }
@@ -158,14 +235,14 @@ function AssistBody({ item }: { item: ChatHistoryTaskItem }) {
 	const agent = useAgent()
 	const assist = item.assist as NodeAssistResult
 	const cardId = item.scopeIds[0]
-	const open = item.status === 'done'
+	const legacyOpen = item.status === 'done' && assist.changes.length > 0 && item.previewDiff == null
 	return (
 		<>
 			{assist.say && <ClampedMarkdown text={assist.say} />}
 			{assist.changes.length > 0 && (
 				<div className="chat-task-diff">
 					{assist.changes.map((change) => (
-						<div key={change.key} className="chat-task-diffRow">
+						<div key={change.key} className="chat-task-diffRow" data-field={change.key}>
 							<span className="chat-task-diffLabel">{change.label}</span>
 							<span>
 								{formatValue(change.before)} → {formatValue(change.after)}
@@ -187,17 +264,13 @@ function AssistBody({ item }: { item: ChatHistoryTaskItem }) {
 					{err}
 				</p>
 			))}
-			{assist.changes.length > 0 && (
+			{legacyOpen ? (
 				<div className="chat-task-actions">
-					{open ? (
-						<>
-							<UiButton size="sm" variant="primary" label="Apply" onClick={() => applyAssistTask(agent, item.id)} />
-							<UiButton size="sm" label="Discard" onClick={() => discardTask(agent, item.id)} />
-						</>
-					) : (
-						<span className="chat-task-state">{item.status === 'applied' ? 'Applied' : 'Discarded'}</span>
-					)}
+					<UiButton size="sm" variant="primary" label="Apply" onClick={() => applyAssistTask(agent, item.id)} />
+					<UiButton size="sm" label="Discard" onClick={() => discardTask(agent, item.id)} />
 				</div>
+			) : (
+				<PreviewActions item={item} />
 			)}
 		</>
 	)

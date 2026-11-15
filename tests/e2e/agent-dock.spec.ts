@@ -15,8 +15,19 @@ async function mockGenerateText(page: Page, reply: string | ((body: any) => stri
 	})
 }
 
+async function mockStream(page: Page, actions: Record<string, unknown>[]) {
+	await page.route('**/stream', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'text/event-stream',
+			body: actions.map((a) => `data: ${JSON.stringify({ ...a, complete: true, time: 10 })}\n\n`).join(''),
+		})
+	)
+}
+
+/** WP48: the dock opens from the top-right "Agent" toggle (there is no round button). */
 async function openDock(page: Page) {
-	await page.locator('.agent-dock-button').click()
+	await page.locator('.app-panel-toggles').getByText('Agent', { exact: true }).click()
 	const dock = page.locator('aside.agent-dock.is-open')
 	await expect(dock).toBeVisible()
 	return dock
@@ -87,7 +98,7 @@ test.describe('WP44: agent dock', () => {
 
 		// Close: the canvas gets its width back.
 		await reloaded.getByTitle('Close').click()
-		await expect(page.locator('.agent-dock-button')).toBeVisible()
+		await expect(page.locator('aside.agent-dock.is-open')).toHaveCount(0)
 		await expect.poll(async () => (await canvasWidth(page)).canvas).toBeGreaterThan(open.canvas + 300)
 	})
 
@@ -134,9 +145,10 @@ test.describe('WP44: agent dock', () => {
 		expect(placed.links).toBe(2)
 	})
 
-	test('free text with one card selected: assist change rows, Apply changes the card', async ({ page }) => {
+	test('free text with one card selected: the agent fills the card as a preview, Apply keeps it', async ({ page }) => {
 		await mockGenerateText(page, JSON.stringify({ say: 'Updated the text.', props: { text: 'new text from AI' }, needs: [] }))
 		const cardId = await createNode(page, { type: 'prompt', text: 'old text' }, { x: 0, y: 0 })
+		await mockStream(page, [{ _type: 'fill-card', cardId: cardId.replace(/^shape:/, ''), request: 'make it say something new' }])
 		await selectShapes(page, [cardId])
 		const dock = await openDock(page)
 
@@ -145,14 +157,14 @@ test.describe('WP44: agent dock', () => {
 		await input.press('Enter')
 
 		const task = dock.locator('.chat-task[data-task-route="node-assist"]')
-		await expect(task).toHaveAttribute('data-task-status', 'done')
+		await expect(task).toHaveAttribute('data-task-status', 'preview')
 		await expect(task.locator('.chat-task-diffRow')).toContainText('new text from AI')
 		await task.getByText('Apply', { exact: true }).click()
 		await expect(task).toHaveAttribute('data-task-status', 'applied')
 		expect((await nodeProps<{ text: string }>(page, cardId)).text).toBe('new text from AI')
 	})
 
-	test('free text with two cards: a plan message, Apply adds the planned cards', async ({ page }) => {
+	test('free text with two cards: the agent plans cards as a preview, Apply keeps them', async ({ page }) => {
 		const plan = {
 			summary: 'Add a note card',
 			add: [{ ref: 'n1', type: 'prompt', props: { text: 'hello from the plan' } }],
@@ -163,6 +175,7 @@ test.describe('WP44: agent dock', () => {
 			arrange: 'tidy',
 		}
 		await mockGenerateText(page, JSON.stringify(plan))
+		await mockStream(page, [{ _type: 'build-workflow', goal: 'wire these up' }])
 		const a = await createNode(page, { type: 'prompt', text: 'one' }, { x: 0, y: 0 })
 		const b = await createNode(page, { type: 'prompt', text: 'two' }, { x: 400, y: 0 })
 		await selectShapes(page, [a, b])
@@ -174,12 +187,13 @@ test.describe('WP44: agent dock', () => {
 		await input.press('Enter')
 
 		const task = dock.locator('.chat-task[data-task-route="build"]')
-		await expect(task).toHaveAttribute('data-task-status', 'done')
+		await expect(task).toHaveAttribute('data-task-status', 'preview')
 		await expect(task).toContainText('Add a note card')
 		await expect(task.getByText('Arrange cards')).toBeVisible()
 		await expect(task.getByText('Run after building')).toBeVisible()
 
-		const countBefore = await page.evaluate(() => (window as any).editor.getCurrentPageShapes().filter((s: any) => s.type === 'node').length)
+		// The preview already shows the planned card (ghost); Apply keeps it.
+		const countBefore = await page.evaluate(() => (window as any).editor.getCurrentPageShapes().filter((s: any) => s.type === 'node').length) - 1
 		await task.getByText('Apply', { exact: true }).click()
 		await expect(task).toHaveAttribute('data-task-status', 'applied')
 		const nodes = await page.evaluate(() =>
@@ -217,7 +231,7 @@ test.describe('WP44: agent dock', () => {
 		await expect(page.locator('.ai-dialog')).toHaveCount(0)
 	})
 
-	test('Fix with AI on a card error runs at once', async ({ page }) => {
+	test('Fix with AI on a card error opens the AI bar prefilled; the Fix error chip runs at once', async ({ page }) => {
 		const prompts: string[] = []
 		await mockGenerateText(page, (body) => {
 			prompts.push(String(body.prompt ?? ''))
@@ -229,45 +243,42 @@ test.describe('WP44: agent dock', () => {
 		await expect(banner).toBeVisible()
 		await banner.getByTitle('Fix with AI').click()
 
+		const bar = page.locator('.ai-bar')
+		await expect(bar).toBeVisible()
+		await expect(bar.locator('textarea')).toHaveValue(/^Fix this error: /)
+		await bar.locator('.agent-quick-action', { hasText: 'Fix error' }).click()
+
 		const dock = page.locator('aside.agent-dock.is-open')
 		await expect(dock).toBeVisible()
-		await expect(dock.locator('.agent-scope-label')).toHaveText(/^Card: /)
 		const task = dock.locator('.chat-task[data-task-route="node-assist"]')
-		await expect(task).toHaveAttribute('data-task-status', 'done')
+		await expect(task).toHaveAttribute('data-task-status', 'preview')
 		await expect(task).toContainText('Fix error')
 		expect(prompts[0]).toMatch(/^Fix this error: /)
 	})
 
-	test('Ctrl+Shift+K opens the dock and focuses the input', async ({ page }) => {
-		await expect(page.locator('aside.agent-dock.is-open')).toHaveCount(0)
+	test('Ctrl+Shift+K opens the AI bar and focuses its input (WP48)', async ({ page }) => {
 		await clickEmptyCanvas(page)
 		await page.keyboard.press('Control+Shift+K')
-		const dock = page.locator('aside.agent-dock.is-open')
-		await expect(dock).toBeVisible()
-		await expect(dock.locator('textarea[name="input"]')).toBeFocused()
+		const bar = page.locator('.ai-bar')
+		await expect(bar).toBeVisible()
+		await expect(bar.locator('textarea')).toBeFocused()
 	})
 
 	test('no floating chat, build or fill panel, and no AI dialog for these features', async ({ page }) => {
-		await mockGenerateText(page, JSON.stringify({ say: 'ok', props: {}, needs: [] }))
 		const cardId = await createNode(page, { type: 'prompt', text: 'hello' }, { x: 300, y: 200 })
-		await page.locator('.agent-dock-button').click()
-		await expect(page.locator('aside.agent-dock.is-open')).toBeVisible()
-
-		// The ✦ button on a card: selects it and focuses the dock, no floating card panel.
+		// WP48: no ✦ button on cards.
 		await nodeLocator(page, cardId).hover()
-		await nodeLocator(page, cardId).locator('.NodeAiButton').click()
-		await expect(page.locator('aside.agent-dock .agent-scope-label')).toHaveText(/^Card: /)
-		await expect(page.locator('aside.agent-dock textarea[name="input"]')).toBeFocused()
+		await expect(nodeLocator(page, cardId).locator('.NodeAiButton')).toHaveCount(0)
 
-		// Build with AI from the context menu: a pending action in the dock, not a panel.
+		// Build with AI from the context menu: a pending action in the AI bar, not a panel.
 		await selectShapes(page, [cardId])
 		// Right-click the card's title row (its body holds a text field that keeps pointer events).
 		const box = (await nodeLocator(page, cardId).boundingBox())!
 		await page.mouse.click(box.x + 20, box.y + 10, { button: 'right' })
 		await page.getByRole('menuitem', { name: 'AI', exact: true }).click()
 		await page.getByRole('menuitem', { name: /Build with AI/ }).click()
-		await expect(page.locator('aside.agent-dock .agent-pending-tag')).toHaveText(/Build a workflow/)
-		await expect(page.locator('aside.agent-dock textarea[name="input"]')).toBeFocused()
+		await expect(page.locator('.ai-bar .agent-pending-tag')).toHaveText(/Build a workflow/)
+		await expect(page.locator('.ai-bar textarea')).toBeFocused()
 		await expect(page.locator('.FloatingPanel')).toHaveCount(0)
 		await expect(page.locator('[role="dialog"][aria-label="Agent chat"]')).toHaveCount(0)
 		await expect(page.locator('.ai-dialog')).toHaveCount(0)

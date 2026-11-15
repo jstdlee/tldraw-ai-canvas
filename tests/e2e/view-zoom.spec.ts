@@ -84,7 +84,7 @@ test.describe('WP46: view, zoom and fonts', () => {
 	test('opening the agent dock and the node library keeps the center point', async ({ page }) => {
 		await createNode(page, { type: 'prompt', text: 'center' }, { x: 0, y: 0 })
 		const before = await viewCenter(page)
-		await page.locator('.agent-dock-button').click()
+		await page.locator('.app-panel-toggles').getByText('Agent', { exact: true }).click()
 		await expect(page.locator('aside.agent-dock.is-open')).toBeVisible()
 		await page.waitForTimeout(500) // the dock's width transition + tldraw's throttled resize
 		const withDock = await viewCenter(page)

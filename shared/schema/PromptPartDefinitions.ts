@@ -68,6 +68,27 @@ export interface ScreenshotPart {
 export interface SelectedShapesPart {
 	type: 'selectedShapes'
 	shapeIds: SimpleShapeId[]
+	/** WP48: the selected pipeline cards, described (type, fields with values, ports, wires, error). */
+	cards?: SelectedCardInfo[]
+}
+
+/** WP48: one selected pipeline card, as the agent sees it. */
+export interface SelectedCardInfo {
+	id: SimpleShapeId
+	type: string
+	title: string
+	label?: string
+	fields: Record<string, unknown>
+	inputs: string[]
+	outputs: string[]
+	wires: string[]
+	error?: string
+}
+
+/** WP48: the card catalog, one line per card type, so the agent can pick build-workflow or fill-card. */
+export interface CardCatalogPart {
+	type: 'cardCatalog'
+	catalog: string
 }
 
 export interface TimePart {
@@ -457,16 +478,35 @@ export const ScreenshotPartDefinition: PromptPartDefinition<ScreenshotPart> = {
 export const SelectedShapesPartDefinition: PromptPartDefinition<SelectedShapesPart> = {
 	type: 'selectedShapes',
 	priority: -55,
-	buildContent({ shapeIds }: SelectedShapesPart) {
+	buildContent({ shapeIds, cards }: SelectedShapesPart) {
 		if (!shapeIds || shapeIds.length === 0) {
 			return []
 		}
 
-		if (shapeIds.length === 1) {
-			return [`The user has this shape selected: ${shapeIds[0]}`]
+		const lines =
+			shapeIds.length === 1
+				? [`The user has this shape selected: ${shapeIds[0]}`]
+				: [`The user has these shapes selected: ${shapeIds.join(', ')}`]
+		if (cards?.length) {
+			lines.push(
+				`${cards.length === 1 ? 'This selected shape is a pipeline card' : 'These selected shapes are pipeline cards'} (type, current field values, ports, wires and error). To change one card's fields use \`fill-card\`; to add, wire or change several cards use \`build-workflow\`:`,
+				JSON.stringify(cards)
+			)
 		}
+		return lines
+	},
+}
 
-		return [`The user has these shapes selected: ${shapeIds.join(', ')}`]
+// CardCatalog (WP48)
+export const CardCatalogPartDefinition: PromptPartDefinition<CardCatalogPart> = {
+	type: 'cardCatalog',
+	priority: -80,
+	buildContent({ catalog }: CardCatalogPart) {
+		if (!catalog) return []
+		return [
+			'Pipeline cards the user can have on the canvas (type — title: what it does). Cards are made with `build-workflow` and set up with `fill-card`, never drawn with shapes:',
+			catalog,
+		]
 	},
 }
 

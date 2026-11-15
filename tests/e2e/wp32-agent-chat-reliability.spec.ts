@@ -12,7 +12,7 @@ import { gotoApp } from './helpers'
 
 /** WP44: the agent chat is the docked agent panel (a right-hand layout column). */
 async function openChat(page: import('@playwright/test').Page) {
-	await page.locator('.agent-dock-button').click()
+	await page.locator('.app-panel-toggles').getByText('Agent', { exact: true }).click()
 	const panel = page.locator('aside.agent-dock.is-open')
 	await expect(panel).toBeVisible()
 	return panel

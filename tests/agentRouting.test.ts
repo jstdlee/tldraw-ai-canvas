@@ -86,26 +86,14 @@ describe('routeAgentTask (WP44)', () => {
 		expect(routeAgentTask(card, { action: 'card-chip', text: ' ' })).toBeNull()
 	})
 
-	it('routes free text by scope', () => {
-		expect(routeAgentTask(card, { text: 'filter rows over 3' })).toMatchObject({ route: 'node-assist', text: 'filter rows over 3' })
-		expect(routeAgentTask(cards, { text: 'wire them' })?.route).toBe('build')
+	it('sends all free text to the one agent, whatever the scope (WP48)', () => {
+		expect(routeAgentTask(card, { text: 'filter rows over 3' })).toMatchObject({ route: 'agent', text: 'filter rows over 3' })
+		expect(routeAgentTask(cards, { text: 'wire them' })?.route).toBe('agent')
 		expect(routeAgentTask(canvas, { text: 'draw a cat' })?.route).toBe('agent')
 		expect(routeAgentTask(text, { text: 'what is this?' })?.route).toBe('agent')
 		expect(routeAgentTask(image, { text: 'hi' })?.route).toBe('agent')
 		expect(routeAgentTask(mixed, { text: 'hi' })?.route).toBe('agent')
 		expect(routeAgentTask(canvas, { text: '   ' })).toBeNull()
-	})
-
-	it('free text after an unapplied plan revises it', () => {
-		const lastTask = { route: 'build', status: 'done' }
-		expect(routeAgentTask(canvas, { text: 'use a line chart' }, { lastTask })).toMatchObject({ route: 'build', revision: true })
-		expect(routeAgentTask(card, { text: 'use a line chart' }, { lastTask })).toMatchObject({ route: 'build', revision: true })
-		// Applied, discarded or failed plans do not.
-		expect(routeAgentTask(canvas, { text: 'hi' }, { lastTask: { route: 'build', status: 'applied' } })?.route).toBe('agent')
-		expect(routeAgentTask(canvas, { text: 'hi' }, { lastTask: { route: 'build', status: 'discarded' } })?.route).toBe('agent')
-		expect(routeAgentTask(canvas, { text: 'hi' }, { lastTask: { route: 'text-job', status: 'done' } })?.route).toBe('agent')
-		// A quick action is never a revision.
-		expect(routeAgentTask(text, { action: 'summarize' }, { lastTask })?.route).toBe('text-job')
 	})
 
 	it('builds the revision prompt from the goal, the change and the previous plan', () => {

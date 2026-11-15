@@ -9,6 +9,7 @@ import { getLanguageModel, getProviderOptions } from '../llm'
 import { buildMessages } from './prompt/buildMessages'
 import { buildSystemPrompt } from './prompt/buildSystemPrompt'
 import { closeAndParseJson } from './closeAndParseJson'
+import { errorText } from '../../shared/format/agentError'
 
 const PREFILL = '{"actions": [{"_type":'
 
@@ -108,12 +109,70 @@ export async function* streamAgentActions(
 
 	// Prefill the assistant turn to force the JSON start, where the model allows it.
 	const prefill = !!modelConfig.supportsPrefill
-	if (prefill) messages.push({ role: 'assistant', content: PREFILL })
 
+	// WP48 bug 5: a reply that is not in the actions format gets one retry with a format
+	// reminder before the request fails.
+	let lastPreview = ''
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const attemptMessages: ModelMessage[] = [...messages]
+		if (attempt > 0) {
+			attemptMessages.push({ role: 'user', content: FORMAT_REMINDER })
+		}
+		if (prefill) attemptMessages.push({ role: 'assistant', content: PREFILL })
+		const result = yield* streamAttempt({
+			model,
+			systemPrompt,
+			isAnthropic,
+			messages: attemptMessages,
+			modelConfig,
+			provider,
+			prefill,
+			signal,
+		})
+		if (result.yielded) return
+		if (signal?.aborted) return
+		lastPreview = result.preview
+		console.warn(`[agent] ${modelConfig.key} returned no actions${attempt === 0 ? ' (retrying with a format reminder)' : ''}. Reply starts:\n${result.preview}`)
+	}
+	// The model answered, but not in the agent's JSON format. Small local
+	// models often do this; say so instead of silently doing nothing.
+	throw new Error(
+		`${modelConfig.label || modelConfig.key} did not return canvas actions. ` +
+			`Try a stronger agent model. Reply started: ${lastPreview.slice(0, 160)}`
+	)
+}
+
+const FORMAT_REMINDER =
+	'Your last reply was not in the required format. Reply again with ONLY one JSON object of the form {"actions": [ ... ]} ' +
+	'that follows the JSON schema. No prose, no Markdown, no code fences. To answer in words, use a "message" action.'
+
+/**
+ * One request to the model, yielding its actions as they stream in. Returns whether any action
+ * was yielded and, if none, the start of the reply. A provider error is thrown as its own text.
+ */
+async function* streamAttempt({
+	model,
+	systemPrompt,
+	isAnthropic,
+	messages,
+	modelConfig,
+	provider,
+	prefill,
+	signal,
+}: {
+	model: ReturnType<typeof getLanguageModel>
+	systemPrompt: string
+	isAnthropic: boolean
+	messages: ModelMessage[]
+	modelConfig: ReturnType<typeof resolveModel>['model']
+	provider: ReturnType<typeof resolveModel>['provider']
+	prefill: boolean
+	signal?: AbortSignal
+}): AsyncGenerator<Streaming<AgentAction>, { yielded: boolean; preview: string }> {
 	// Problem 1b: `onError` throwing here does NOT reliably propagate as an exception out of
 	// `textStream`'s iteration (confirmed: a missing-API-key failure against a local router
 	// left `textStream` ending with zero chunks and no thrown error, which used to surface as
-	// the generic "did not return canvas actions" message below — hiding the real cause).
+	// the generic "did not return canvas actions" message — hiding the real cause).
 	// Capture it instead, and prefer it over the generic message once the stream ends.
 	let streamError: unknown = null
 	const { textStream } = streamText({
@@ -166,23 +225,15 @@ export async function* streamAgentActions(
 		yield { ...maybeIncompleteAction, complete: true, time: Date.now() - startTime }
 	}
 
-	if (cursor === 0) {
-		if (streamError) {
-			// A real provider/transport failure (bad key, unreachable host, model refused the
-			// request, …): surface it as-is instead of the generic "wrong format" message.
-			const message = streamError instanceof Error ? streamError.message : String(streamError)
-			console.warn(`[agent] ${modelConfig.key} failed: ${message}`)
-			throw new Error(message)
-		}
-		// The model answered, but not in the agent's JSON format. Small local
-		// models often do this; say so instead of silently doing nothing.
-		const preview = buffer.trim().slice(0, 400) || '(empty reply)'
-		console.warn(`[agent] ${modelConfig.key} returned no actions. Reply starts:\n${preview}`)
-		throw new Error(
-			`${modelConfig.label || modelConfig.key} did not return canvas actions. ` +
-				`Try a stronger agent model. Reply started: ${preview.slice(0, 160)}`
-		)
+	if (cursor === 0 && streamError) {
+		// A real provider/transport failure (bad key, unreachable host, model refused the
+		// request, …): surface it as-is instead of the generic "wrong format" message.
+		// WP48 bug 2: providers throw plain objects too; never show "[object Object]".
+		const message = errorText(streamError) || 'The model request failed.'
+		console.warn(`[agent] ${modelConfig.key} failed: ${message}`)
+		throw new Error(message)
 	}
+	return { yielded: cursor > 0, preview: buffer.trim().slice(0, 400) || '(empty reply)' }
 }
 
 /**

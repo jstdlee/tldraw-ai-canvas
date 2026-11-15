@@ -64,6 +64,8 @@ export function useFieldPortAnchor<T extends HTMLElement>(shapeId: TLShapeId, ke
 	useEffect(() => {
 		const el = ref.current
 		if (!el) return
+		// WP48: lets an AI preview highlight this field's row (shared/aiPreview.ts previewMarksCss).
+		el.dataset.fieldKeys = key
 
 		const measure = () => {
 			const rect = el.getBoundingClientRect()
@@ -105,6 +107,7 @@ export function useFieldPortAnchors<T extends HTMLElement>(shapeId: TLShapeId, k
 	useEffect(() => {
 		const el = ref.current
 		if (!el || keys.length === 0) return
+		el.dataset.fieldKeys = keys.join(' ')
 
 		const measure = () => {
 			const rect = el.getBoundingClientRect()

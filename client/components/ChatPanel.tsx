@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { TLShapeId, useToasts, useValue } from 'tldraw'
-import { AgentTaskRequest, getQuickActions, QuickAction, quickAction } from '../../shared/agentRouting'
+import { AgentTaskRequest, getQuickActions, QuickAction } from '../../shared/agentRouting'
 import { NODE_GROUPS } from '../../shared/nodeGroups'
 import { NODE_SPECS } from '../../shared/nodeSpecs'
-import { getModelLabel, openProvidersDialog } from '../ai/aiConfig'
+import { getModelFallbackWarning, getModelLabel, openProvidersDialog } from '../ai/aiConfig'
 import { $agentPanelRequest } from '../agent/agentPanelState'
-import { cardErrorMessage, getEditorScope, runAgentRequest } from '../agent/agentTasks'
+import { cardErrorMessage, getEditorScope } from '../agent/agentTasks'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
 import { loadAllowedTypes, saveAllowedTypes } from '../pipeline/aiBuild'
-import { IconChevronDown, IconChevronRight, IconClose, IconMore, IconPlus, IconSparkle, UiChip, UiIconButton } from '../ui'
+import { IconChevronDown, IconChevronRight, IconClose, IconMore, IconPlus, IconSparkle, UiButton, UiChip, UiIconButton } from '../ui'
 import { PresetsSheet, RewriteSheet } from './AgentSheets'
 import { ChatHistory } from './chat-history/ChatHistory'
 import { getAgentHistorySections } from './chat-history/ChatHistorySection'
 import { autoGrow, ChatInput } from './ChatInput'
+import { useAgentSend } from './useAgentSend'
 import { TodoList } from './TodoList'
 
 type Sheet = 'rewrite' | 'presets'
@@ -44,6 +45,8 @@ export function ChatPanelHeader({ onClose, onOpenSheet }: { onClose: () => void;
 	const agent = useAgent()
 	const modelName = useValue('modelName', () => agent.modelName.getModelName(), [agent])
 	const modelLabel = useValue('model label', () => getModelLabel(modelName || null, 'agent'), [modelName])
+	// WP48 bug 4: say so when the agent's model is missing and another one is used instead.
+	const modelWarning = useValue('model warning', () => getModelFallbackWarning('agent', modelName || null), [modelName])
 	const history = useAnchoredPopover()
 	const menu = useAnchoredPopover()
 	const [buildOptions, setBuildOptions] = useState(false)
@@ -62,8 +65,13 @@ export function ChatPanelHeader({ onClose, onOpenSheet }: { onClose: () => void;
 			<strong className="agent-dock-title">
 				<IconSparkle size={16} /> Agent
 			</strong>
-			<button className="chat-model-chip" type="button" title="Set up AI providers and models" onClick={openProvidersDialog}>
-				{modelLabel}
+			<button
+				className={'chat-model-chip' + (modelWarning ? ' is-warning' : '')}
+				type="button"
+				title={modelWarning ? `${modelWarning}. Pick one in AI providers.` : 'Set up AI providers and models'}
+				onClick={openProvidersDialog}
+			>
+				{modelWarning ?? modelLabel}
 			</button>
 			<div className="agent-dock-header-actions">
 				<UiIconButton
@@ -261,10 +269,8 @@ export function ChatPanel({ sheet, setSheet }: { sheet: Sheet | null; setSheet: 
 	// The pending action belongs to the scope it was picked for.
 	useEffect(() => setPending(null), [scope.kind])
 
-	const run = useCallback(
-		(request: AgentTaskRequest) => runAgentRequest(agent, getEditorScope(editor), request),
-		[agent, editor]
-	)
+	const { send: sendRequest, confirm, resolveConfirm, adjustTask, cancelAdjust } = useAgentSend()
+	const run = useCallback((request: AgentTaskRequest) => sendRequest(request), [sendRequest])
 
 	const pickAction = useCallback(
 		(action: QuickAction) => {
@@ -309,21 +315,13 @@ export function ChatPanel({ sheet, setSheet }: { sheet: Sheet | null; setSheet: 
 		handledNonce.current = request.nonce
 		$agentPanelRequest.set(null)
 		if (request.sheet) setSheet(request.sheet)
-		if (request.run) {
-			const result = runAgentRequest(agent, getEditorScope(editor), request.run)
-			if (result.status === 'needs-input' && 'action' in request.run) {
-				const action = quickAction(request.run.action)
-				if (action.needs === 'sheet') setSheet('rewrite')
-				else pickAction(action)
-			}
-		}
 		if (request.prefill != null) {
 			setInput(request.prefill)
 			focusInput()
 		} else if (request.focus) {
 			focusInput()
 		}
-	}, [request, agent, editor, pickAction, focusInput, setSheet])
+	}, [request, focusInput, setSheet])
 
 	const isDark = useValue('dark mode', () => editor.user.getIsDarkMode(), [editor])
 
@@ -360,6 +358,15 @@ export function ChatPanel({ sheet, setSheet }: { sheet: Sheet | null; setSheet: 
 						onSaved={(message) => toasts.addToast({ title: message, severity: 'success' })}
 					/>
 				)}
+				{confirm && <ApplyFirstPrompt onChoose={resolveConfirm} />}
+				{adjustTask && (
+					<div className="agent-adjust-row">
+						<button type="button" className="agent-pending-tag" title="Stop adjusting" onClick={cancelAdjust}>
+							Adjust: {adjustTask.label}
+							<IconClose size={12} />
+						</button>
+					</div>
+				)}
 				<ChatInput
 					inputRef={inputRef}
 					value={input}
@@ -372,6 +379,18 @@ export function ChatPanel({ sheet, setSheet }: { sheet: Sheet | null; setSheet: 
 					}}
 				/>
 			</div>
+		</div>
+	)
+}
+
+/** WP48: only one preview at a time. Shown when a new request is sent while a change waits. */
+export function ApplyFirstPrompt({ onChoose }: { onChoose: (choice: 'apply' | 'discard' | 'cancel') => void }) {
+	return (
+		<div className="agent-apply-first" role="alertdialog" aria-label="Apply the current change first?">
+			<span>Apply the current change first?</span>
+			<UiButton size="sm" variant="primary" label="Apply" onClick={() => onChoose('apply')} />
+			<UiButton size="sm" label="Discard" onClick={() => onChoose('discard')} />
+			<UiIconButton icon={<IconClose />} title="Cancel" onClick={() => onChoose('cancel')} />
 		</div>
 	)
 }

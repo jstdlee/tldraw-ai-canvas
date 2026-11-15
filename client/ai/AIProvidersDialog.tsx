@@ -768,7 +768,16 @@ export function AIProvidersDialog({ onClose }: { onClose(): void }) {
 											{m.label}
 										</option>
 									))}
+									{/* WP48 bug 4: keep a missing default visible instead of showing "First that can". */}
+									{defaults[cap] && !models.some((m) => m.key === defaults[cap]) && (
+										<option value={defaults[cap]}>{defaults[cap]} (missing)</option>
+									)}
 								</select>
+								{defaults[cap] && !models.some((m) => m.key === defaults[cap]) && (
+									<span className="ai-defaults__warning" role="alert">
+										{`Not in the models list, using ${modelsByCapability[cap][0]?.label ?? 'no model'}`}
+									</span>
+								)}
 							</label>
 							)
 						})}
