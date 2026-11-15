@@ -223,6 +223,21 @@ export function getDefaultModelKey(
 }
 
 /**
+ * WP48 bug 4: the default model for a capability is set but is not in the models list (removed,
+ * renamed, or its provider's list changed), so `getDefaultModelKey` silently falls back to the
+ * first model that can. Returns what was asked for and what is used instead, or null.
+ */
+export function getDefaultModelFallback(
+	config: { models: ModelConfig[]; defaults: AIDefaults },
+	capability: ModelCapability
+): { wanted: string; used: ModelConfig | null } | null {
+	const preferred = config.defaults[capability as keyof AIDefaults]
+	if (!preferred || config.models.some((m) => m.key === preferred)) return null
+	const usedKey = getDefaultModelKey(config, capability)
+	return { wanted: preferred, used: config.models.find((m) => m.key === usedKey) ?? null }
+}
+
+/**
  * Guess what a model can do from its id. Used when models are fetched from a
  * provider, so the user only has to fix the guesses that are wrong.
  */

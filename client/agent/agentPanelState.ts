@@ -1,23 +1,20 @@
 import { atom } from 'tldraw'
-import type { AgentTaskRequest } from '../../shared/agentRouting'
 
 export type { AgentTaskRequest as AgentRequest } from '../../shared/agentRouting'
 
 export interface AgentPanelOpenOptions {
 	/** Text to put in the input (the input gets focus). */
 	prefill?: string
-	/** A request to run at once with the current selection as scope. */
-	run?: AgentTaskRequest
 	/** A sheet to open above the input. */
 	sheet?: 'rewrite' | 'presets'
-	/** Focus the input (Ctrl+Shift+K, the ✦ button on a card). */
+	/** Focus the input (Adjust on a preview). */
 	focus?: boolean
 }
 
 /**
- * WP44: the one way into the docked agent panel. App opens the dock when this is set; the
- * panel runs / prefills / opens the sheet, then clears it. `nonce` makes two equal requests
- * in a row both count.
+ * WP44/WP48: opens the docked agent panel (the thread). App opens the dock when this is set;
+ * the panel prefills / focuses / opens the sheet, then clears it. AI requests start in the AI
+ * bar (aiBarState.ts); the dock only shows them. `nonce` makes two equal requests both count.
  */
 export const $agentPanelRequest = atom<(AgentPanelOpenOptions & { nonce: number }) | null>('agent panel request', null)
 

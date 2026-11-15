@@ -1,5 +1,5 @@
 import { Editor, RecordsDiff, reverseRecordsDiff, structuredClone, TLRecord } from 'tldraw'
-import { createAgentErrorHistoryItem } from '../../shared/format/agentError'
+import { createAgentErrorHistoryItem, errorText } from '../../shared/format/agentError'
 import { convertTldrawShapeToFocusedShape } from '../../shared/format/convertTldrawShapeToFocusedShape'
 import { AgentModelName } from '../../shared/models'
 import { AgentAction } from '../../shared/types/AgentAction'
@@ -604,10 +604,11 @@ export class TldrawAgent {
 		const availableActions = modeDefinition.actions
 
 		const requestPromise = (async () => {
-			const prompt = await this.preparePrompt(request, helpers)
 			let incompleteDiff: RecordsDiff<TLRecord> | null = null
 			const actionPromises: Promise<void>[] = []
 			try {
+				// WP48 bug 1: inside the try, so a prompt that cannot be built still ends with an error.
+				const prompt = await this.preparePrompt(request, helpers)
 				for await (const action of this.streamAgentActions({ prompt, signal })) {
 					if (cancelled) break
 
@@ -765,7 +766,8 @@ export class TldrawAgent {
 
 							// If the response contains an error, throw it
 							if ('error' in data) {
-								throw new Error(data.error)
+								// WP48 bug 2: the error may be an object; show its text.
+								throw new Error(errorText(data.error) || 'The model request failed.')
 							}
 
 							const agentAction: Streaming<AgentAction> = data

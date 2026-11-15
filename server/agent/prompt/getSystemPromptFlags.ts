@@ -36,6 +36,13 @@ export function getSystemPromptFlags(actions: AgentAction['_type'][], parts: Pro
 		// Drawing
 		hasPen: actions.includes('pen'),
 
+		// WP48: capabilities beyond drawing
+		hasBuildWorkflow: actions.includes('build-workflow'),
+		hasFillCard: actions.includes('fill-card'),
+		hasEditText: actions.includes('edit-text'),
+		hasAskUser: actions.includes('ask-user'),
+		hasCardCatalogPart: parts.includes('cardCatalog'),
+
 		// Request
 		hasMessagesPart: parts.includes('messages'),
 		hasDataPart: parts.includes('data'),

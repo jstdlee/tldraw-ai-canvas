@@ -73,7 +73,8 @@ test.describe('WP37 UI polish', () => {
 		// WP44: Build with AI runs in the docked agent panel; its button is the plan's Apply.
 		const plan = { summary: 'Add a card', add: [{ ref: 'n1', type: 'prompt', props: { text: 'x' } }], update: [], wires: [], unwire: [], notes: [], arrange: 'tidy' }
 		await page.route('**/api/generate-text', (route) => route.fulfill({ json: { text: JSON.stringify(plan) } }))
-		await page.keyboard.press('Control+Shift+K')
+		// WP48: Ctrl+Shift+K opens the AI bar; the dock opens from its top-right toggle.
+		await page.locator('.app-panel-toggles').getByText('Agent', { exact: true }).click()
 		const dock = page.locator('aside.agent-dock.is-open')
 		await expect(dock).toBeVisible()
 		await dock.locator('.agent-quick-action', { hasText: 'Build a workflow' }).click()

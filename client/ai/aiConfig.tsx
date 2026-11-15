@@ -1,6 +1,7 @@
 import { NodeSelect } from '../pipeline/nodes/types/NodeSelect'
 import { atom, useValue } from 'tldraw'
 import {
+	getDefaultModelFallback,
 	getDefaultModelKey,
 	ModelCapability,
 	ModelConfig,
@@ -183,6 +184,28 @@ export function getDefaultModel(capability: ModelCapability): ModelConfig | unde
 	if (!config) return undefined
 	const key = getDefaultModelKey(config, capability)
 	return config.models.find((m) => m.key === key)
+}
+
+/**
+ * WP48 bug 4: a warning when the model a capability should use is not in the models list and
+ * another one is used instead, e.g. "Agent model not set, using GPT-5". `key` is a per-use pick
+ * (the agent's model menu); empty means the default for the capability.
+ */
+export function getModelFallbackWarning(capability: ModelCapability, key?: string | null): string | null {
+	const config = $aiConfig.get()
+	if (!config || !config.models.length) return null
+	const name = capability.charAt(0).toUpperCase() + capability.slice(1)
+	if (key && !config.models.some((m) => m.key === key)) {
+		const live = $liveModels.get()?.some((p) => p.models.some((m) => m.key === key))
+		if (live || config.providers.some((p) => key.startsWith(`${p.id}/`))) return null
+		const used = getDefaultModel(capability)
+		return used ? `${name} model not set, using ${used.label || used.key}` : `${name} model not set`
+	}
+	const fallback = getDefaultModelFallback(config, capability)
+	if (!fallback) return null
+	return fallback.used
+		? `${name} model not set, using ${fallback.used.label || fallback.used.key}`
+		: `${name} model not set`
 }
 
 export function getModelLabel(key: string | null | undefined, capability: ModelCapability) {

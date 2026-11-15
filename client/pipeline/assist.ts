@@ -1,7 +1,7 @@
 import { Editor, TLShapeId } from 'tldraw'
 import { validateProps } from '../../shared/aiPlan'
 import { extractJsonObject } from '../../shared/nodeAssist'
-import { NodeSpec, NODE_SPECS, nodeSpecText } from '../../shared/nodeSpecs'
+import { fieldOptionsText, NodeSpec, NODE_SPECS, nodeSpecText } from '../../shared/nodeSpecs'
 import { describeCanvasNode, nodeAssistContext } from './aiContext'
 import { apiGenerateText } from './api/pipelineApi'
 import { NodeShape } from './nodes/NodeShapeUtil'
@@ -47,6 +47,7 @@ function buildSystemPrompt(spec: NodeSpec): string {
 		rules,
 		'',
 		nodeSpecText(spec.type),
+		fieldOptionsText(spec.type),
 		'',
 		'Reply with JSON only, in this shape:',
 		'{"say":"one or two sentences","props":{"<field>":<value>},"needs":[{"type":"<node type>","why":"…"}]}',

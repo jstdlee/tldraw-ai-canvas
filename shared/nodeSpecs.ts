@@ -1544,4 +1544,25 @@ export function specPrompt(types?: string[]): string {
 	return list.map(nodeSpecText).join('\n\n')
 }
 
+/** WP48: one short line per card type the AI may add, for the agent's prompt (brief, not the full spec). */
+export function cardCatalogText(types?: string[]): string {
+	const list = (types && types.length ? types : Object.keys(NODE_SPECS)).filter((type) => NODE_SPECS[type] && !NODE_SPECS[type].hidden)
+	return list.map((type) => `- ${type} — ${NODE_SPECS[type].title}: ${clamp(NODE_SPECS[type].purpose, 110)}`).join('\n')
+}
+
+/**
+ * WP48: a card's choice fields with ALL their options (the spec text clamps long option lists),
+ * so the card specialist picks an existing option instead of inventing code or a regex.
+ */
+export function fieldOptionsText(type: string): string {
+	const spec = NODE_SPECS[type]
+	if (!spec) return ''
+	const lines = spec.fields
+		.filter((f) => f.options?.length)
+		.map((f) => `- ${f.key}: ${f.options!.map((o) => JSON.stringify(o)).join(', ')}`)
+	return lines.length
+		? `Choice fields and every allowed value (use one of these exact values; prefer an existing option over writing code, a formula or a regex):\n${lines.join('\n')}`
+		: ''
+}
+
 export { opSpec }

@@ -4,7 +4,10 @@ import type { PromptPart } from '../../shared/types/PromptPart'
 import { AddDetailActionUtil } from '../actions/AddDetailActionUtil'
 import { AlignActionUtil } from '../actions/AlignActionUtil'
 import { BringToFrontActionUtil } from '../actions/BringToFrontActionUtil'
+import { AskUserActionUtil } from '../actions/AskUserActionUtil'
 import { BuildWorkflowActionUtil } from '../actions/BuildWorkflowActionUtil'
+import { EditTextActionUtil } from '../actions/EditTextActionUtil'
+import { FillCardActionUtil } from '../actions/FillCardActionUtil'
 import { ClearActionUtil } from '../actions/ClearActionUtil'
 import { CountShapesActionUtil } from '../actions/CountShapesActionUtil'
 import { WebSearchActionUtil } from '../actions/WebSearchActionUtil'
@@ -30,6 +33,7 @@ import { UpsertTodoListItemActionUtil } from '../actions/UpsertTodoListItemActio
 // Import prompt part utils to ensure they register themselves
 import { AgentViewportBoundsPartUtil } from '../parts/AgentViewportBoundsPartUtil'
 import { BlurryShapesPartUtil } from '../parts/BlurryShapesPartUtil'
+import { CardCatalogPartUtil } from '../parts/CardCatalogPartUtil'
 import { CanvasLintsPartUtil } from '../parts/CanvasLintsPartUtil'
 import { ChatHistoryPartUtil } from '../parts/ChatHistoryPartUtil'
 import { ContextItemsPartUtil } from '../parts/ContextItemsPartUtil'
@@ -116,6 +120,8 @@ export const AGENT_MODE_DEFINITIONS = [
 			BlurryShapesPartUtil.type,
 			PeripheralShapesPartUtil.type,
 			SelectedShapesPartUtil.type,
+			// WP48: the card catalog (build-workflow / fill-card)
+			CardCatalogPartUtil.type,
 
 			// History
 			ChatHistoryPartUtil.type,
@@ -135,6 +141,8 @@ export const AGENT_MODE_DEFINITIONS = [
 		actions: [
 			// Communication
 			MessageActionUtil.type,
+			// WP48: one short clarifying question, shown as chips
+			AskUserActionUtil.type,
 
 			// Planning
 			ThinkActionUtil.type,
@@ -165,8 +173,10 @@ export const AGENT_MODE_DEFINITIONS = [
 			// Drawing
 			PenActionUtil.type,
 
-			// Pipeline cards (WP44: a plan for the user to apply, in the thread)
+			// Pipeline cards and text (WP44/WP48: shown as a preview for the user to apply)
 			BuildWorkflowActionUtil.type,
+			FillCardActionUtil.type,
+			EditTextActionUtil.type,
 
 			// External APIs
 			CountShapesActionUtil.type,

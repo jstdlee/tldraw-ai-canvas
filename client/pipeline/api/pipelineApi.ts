@@ -5,6 +5,7 @@
 
 import { LlmUsage, takeUsageTrailer } from '../../../shared/llmUsage'
 import { ModelCapability } from '../../../shared/aiConfig'
+import { errorText } from '../../../shared/format/agentError'
 
 
 export interface LlmRequestSettings {
@@ -51,7 +52,7 @@ export async function apiGenerateText(params: GenerateTextParams, signal?: Abort
 
 		if (!response.ok) {
 			const err = await response.json().catch(() => ({ error: response.statusText }))
-			throw new Error((err as { error?: string }).error ?? 'Text generation failed')
+			throw new Error(errorText((err as { error?: unknown }).error) || 'Text generation failed')
 		}
 
 		return (await response.json()) as GenerateTextResult
@@ -89,7 +90,7 @@ export async function apiChatStream(
 	})
 	if (!response.ok || !response.body) {
 		const err = await response.json().catch(() => ({ error: response.statusText }))
-		throw new Error((err as { error?: string }).error ?? 'Chat failed')
+		throw new Error(errorText((err as { error?: unknown }).error) || 'Chat failed')
 	}
 	const reader = response.body.getReader()
 	const decoder = new TextDecoder()
@@ -121,7 +122,7 @@ async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Pr
 		signal,
 	})
 	const data = await response.json().catch(() => ({ error: response.statusText }))
-	if (!response.ok) throw new Error((data as { error?: string }).error ?? response.statusText)
+	if (!response.ok) throw new Error(errorText((data as { error?: unknown }).error) || response.statusText)
 	return data as T
 }
 
@@ -324,7 +325,7 @@ export async function* apiAgentRun(params: AgentRunParams, signal?: AbortSignal)
 	})
 	if (!res.body) {
 		const err = await res.json().catch(() => ({ error: res.statusText }))
-		throw new Error((err as { error?: string }).error ?? 'Agent run failed')
+		throw new Error(errorText((err as { error?: unknown }).error) || 'Agent run failed')
 	}
 	const reader = res.body.getReader()
 	const decoder = new TextDecoder()

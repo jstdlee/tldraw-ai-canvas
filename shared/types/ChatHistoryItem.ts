@@ -66,7 +66,8 @@ export interface ChatHistoryTaskItem {
 	label: string // "Summarize", "Build: Load sales.xlsx…"
 	scopeLabel: string // frozen from the scope at send time
 	scopeIds: string[]
-	status: 'running' | 'done' | 'error' | 'applied' | 'discarded'
+	/** WP48: 'preview' = the change is on the canvas, marked, waiting for Apply / Adjust / Discard. */
+	status: 'running' | 'done' | 'preview' | 'error' | 'applied' | 'discarded'
 	text?: string // reply text or the result text placed on the canvas
 	placedIds?: string[] // shapes the task added to the canvas
 	plan?: unknown // AiPlan for build
@@ -77,4 +78,15 @@ export interface ChatHistoryTaskItem {
 	goal?: string
 	/** The request that started the task, so Retry can run it again. */
 	request?: unknown
+	/** WP48: the change a preview made (a tldraw RecordsDiff of shapes, bindings and assets). */
+	previewDiff?: unknown
+	/** WP48 ask-user: the answers offered as chips, and the one the user gave. */
+	options?: string[]
+	answer?: string
+	/** WP48 build: card names and field values from before the preview, so the plan rows keep
+	 * reading "Text → Chart" (not raw ids) and "op: select → filter" after the plan is applied. */
+	planNames?: Record<string, string>
+	planBefore?: Record<string, Record<string, unknown>>
+	/** WP48 build: the arrange choice the preview was made with. */
+	arranged?: boolean
 }

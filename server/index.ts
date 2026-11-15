@@ -46,6 +46,7 @@ import { toPiModel } from './agent/model'
 import { buildMcpTools, buildSearchTools, buildSkillTools, skillsSystemPromptBlock } from './agent/tools'
 import { runAgent } from './agent/runner'
 import { AgentRunRequest, MAX_RUN_MS } from './agent/types'
+import { errorText } from '../shared/format/agentError'
 
 const PORT = Number(process.env.API_PORT ?? 8790)
 const HOST = process.env.HOST ?? '127.0.0.1'
@@ -661,9 +662,11 @@ if (PROD) {
 }
 
 function errorMessage(e: unknown) {
-	const err = e as { message?: string; responseBody?: string; cause?: { message?: string } }
-	const body = err?.responseBody ? ` — ${err.responseBody.slice(0, 300)}` : ''
-	return `${err?.message ?? String(e)}${body}`
+	const err = e as { message?: unknown; responseBody?: string }
+	const body = typeof err?.responseBody === 'string' && err.responseBody ? ` — ${err.responseBody.slice(0, 300)}` : ''
+	// WP48 bug 2: a provider may throw a plain object; never send "[object Object]".
+	const text = (typeof err?.message === 'string' && err.message) || errorText(e) || 'Unknown error'
+	return `${text}${body}`
 }
 
 /** Apply a per-request thinking level over the model's own setting. */

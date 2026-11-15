@@ -31,6 +31,7 @@ import {
 	wordCount,
 } from './canvasFeatures'
 import { openAgentPanel } from '../agent/agentPanelState'
+import { openAiBar } from '../agent/aiBarState'
 import { $findOpen } from './FindBar'
 import { compareTargets, copyDocument, keepVariant, openCompare, retryVariantRequest, selectedVariant, splitIntoParagraphs } from './rewrite'
 import { $imageEditorTarget } from './ImageEditor'
@@ -140,16 +141,18 @@ export function canvasActionOverrides(
 		[id]: { id, label, kbd, readonlyOk: false, onSelect: () => void onSelect() },
 	})
 	return {
-		// WP44: every AI action opens the docked agent panel and runs there as a task.
-		...a('ai-describe-image', 'Describe image', () => openAgentPanel({ run: { action: 'describe' } })),
-		...a('ai-extract-text', 'Extract text (OCR)', () => openAgentPanel({ run: { action: 'ocr' } })),
-		...a('ai-explain', 'Explain selection', () => openAgentPanel({ run: { action: 'explain' } })),
-		...a('ai-ask', 'Ask about selection…', () => openAgentPanel({ focus: true }), '$!k'),
-		...a('build-with-ai', 'Build with AI…', () => openAgentPanel({ run: { action: 'build-workflow' } })),
-		...a('ai-summarize', 'Summarize text', () => openAgentPanel({ run: { action: 'summarize' } })),
-		...a('ai-translate', 'Translate text…', () => openAgentPanel({ run: { action: 'translate' } })),
-		...a('ai-improve', 'Improve writing', () => openAgentPanel({ run: { action: 'improve' } })),
-		...a('ai-brainstorm', 'Brainstorm ideas', () => openAgentPanel({ run: { action: 'brainstorm' } })),
+		// WP48: every AI action goes through the AI bar at the selection (it runs the task and
+		// opens the dock with the thread). Ctrl+K and Ctrl+Shift+K open the bar.
+		...a('ai-describe-image', 'Describe image', () => openAiBar({ run: { action: 'describe' } })),
+		...a('ai-extract-text', 'Extract text (OCR)', () => openAiBar({ run: { action: 'ocr' } })),
+		...a('ai-explain', 'Explain selection', () => openAiBar({ run: { action: 'explain' } })),
+		...a('ai-ask', 'Ask about selection…', () => openAiBar({}), '$!k'),
+		...a('ai-bar', 'Ask AI', () => openAiBar({}), '$k'),
+		...a('build-with-ai', 'Build with AI…', () => openAiBar({ run: { action: 'build-workflow' } })),
+		...a('ai-summarize', 'Summarize text', () => openAiBar({ run: { action: 'summarize' } })),
+		...a('ai-translate', 'Translate text…', () => openAiBar({ run: { action: 'translate' } })),
+		...a('ai-improve', 'Improve writing', () => openAiBar({ run: { action: 'improve' } })),
+		...a('ai-brainstorm', 'Brainstorm ideas', () => openAiBar({ run: { action: 'brainstorm' } })),
 		...a('format-bullets', 'Bulleted list', () => formatSelectionAsList(editor, 'bullet')),
 		...a('format-numbers', 'Numbered list', () => formatSelectionAsList(editor, 'ordered')),
 		...a('format-checklist', 'Checklist', () => formatSelectionAsList(editor, 'task')),
@@ -163,7 +166,7 @@ export function canvasActionOverrides(
 			if (!retry) return notify('Select a variant first', 'warning')
 			// The task's scope is the variant's source: select it, then rewrite it again.
 			editor.select(retry.sourceId)
-			openAgentPanel({ run: { action: 'rewrite', text: retry.instructions, label: retry.label } })
+			openAiBar({ run: { action: 'rewrite', text: retry.instructions, label: retry.label } })
 		}),
 		...a('rewrite-copy', 'Copy document as Markdown', () => copyDocument(editor, notify)),
 		...a('edit-image', 'Edit image…', () => {

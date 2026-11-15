@@ -374,6 +374,11 @@
 	color: var(--tl-color-text-3);
 }
 
+.ai-defaults__grid label > .ai-defaults__warning {
+	color: var(--tl-color-warning);
+	font-size: 11px;
+}
+
 .ai-defaults__label {
 	display: flex;
 	align-items: center;
@@ -484,27 +489,6 @@
 	min-height: 0;
 	width: 100%;
 	border-left: none;
-}
-
-.agent-dock-button {
-	position: fixed;
-	right: 20px;
-	/* 56px further up than the corner, so it does not sit on tldraw's "Get a license" note. */
-	bottom: 76px;
-	z-index: 400;
-	width: 48px;
-	height: 48px;
-	border-radius: 999px;
-	border: 1px solid var(--tl-color-divider);
-	background: var(--tl-color-panel);
-	box-shadow: var(--tl-shadow-2);
-	padding: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	color: var(--tl-color-text-1);
-	cursor: pointer;
-	pointer-events: all;
 }
 
 /* WP44: the dock's header row: title, model chip, menu, history, new chat, close. */

@@ -103,10 +103,55 @@ export const BuildWorkflowAction = z
 	.meta({
 		title: 'Build Workflow',
 		description:
-			'The AI plans a workflow of pipeline cards (nodes wired together: load a file, transform data, call AI, chart, save…) for the goal, and shows the plan to the user to apply. Use this instead of drawing shapes whenever the user asks for a pipeline, workflow, automation or cards that do work (e.g. "load sales.xlsx and chart it"). Put the whole request in "goal".',
+			'The AI plans a workflow of pipeline cards (nodes wired together: load a file, transform data, call AI, chart, save…) for the goal: adds cards, wires them, or changes several cards at once. The plan is shown on the canvas as a preview for the user to apply. Use this instead of drawing shapes whenever the user asks for a pipeline, workflow, automation, new cards, or to wire selected cards together (e.g. "load sales.xlsx and chart it"). Put the whole request in "goal".',
 	})
 
 export type BuildWorkflowAction = z.infer<typeof BuildWorkflowAction>
+
+// Fill Card Action (WP48)
+export const FillCardAction = z
+	.object({
+		_type: z.literal('fill-card'),
+		cardId: SimpleShapeIdSchema,
+		request: z.string(),
+	})
+	.meta({
+		title: 'Fill Card',
+		description:
+			"The AI sets the fields of ONE existing pipeline card (a node) so it does what the user asks, or fixes the card's error. The card's own specialist picks the field values (preferring an existing option of the card over code or a regex) and the change is shown as a preview. Use this when the user asks to change, configure or fix a single card. Put the card's id in \"cardId\" and the user's request, with any detail you know, in \"request\".",
+	})
+
+export type FillCardAction = z.infer<typeof FillCardAction>
+
+// Edit Text Action (WP48)
+export const EditTextAction = z
+	.object({
+		_type: z.literal('edit-text'),
+		shapeIds: z.array(SimpleShapeIdSchema),
+		instruction: z.string(),
+	})
+	.meta({
+		title: 'Edit Text',
+		description:
+			'The AI rewrites the text of existing text, note, geo-label or Markdown shapes in place, following an instruction ("make it shorter", "translate to French", "fix the grammar"). The new text is shown as a preview. Use this instead of `label` when the user wants the wording of existing text changed.',
+	})
+
+export type EditTextAction = z.infer<typeof EditTextAction>
+
+// Ask User Action (WP48)
+export const AskUserAction = z
+	.object({
+		_type: z.literal('ask-user'),
+		question: z.string(),
+		options: z.array(z.string()).optional(),
+	})
+	.meta({
+		title: 'Ask User',
+		description:
+			'The AI asks the user ONE short clarifying question and ends its turn. Use it when the request is vague or could mean several quite different changes; do not guess. Offer 2-4 short likely answers in "options" (they become buttons). When you use this action, do not change the canvas in the same reply.',
+	})
+
+export type AskUserAction = z.infer<typeof AskUserAction>
 
 // Create Table Action (WP40: canvas-native table shape)
 export const CreateTableAction = z

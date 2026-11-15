@@ -9,7 +9,9 @@ import { UiChip } from '../../ui'
  */
 
 /** A plan ref or an existing shape id, shown as the card's name in the preview. */
-function refName(editor: Editor, plan: AiPlan, ref: string): string {
+function refName(editor: Editor, plan: AiPlan, ref: string, names?: Record<string, string>): string {
+	// WP48 bug 3: names frozen when the plan was made, so applied plans never show raw ids.
+	if (names?.[ref]) return names[ref]
 	const added = plan.add.find((node) => node.ref === ref)
 	if (added) return added.label || NODE_SPECS[added.type]?.title || added.type
 	const shape = editor.getShape(ref as TLShapeId)
@@ -17,7 +19,8 @@ function refName(editor: Editor, plan: AiPlan, ref: string): string {
 		const props = shape.props as { label?: string; node: { type: string } }
 		return props.label || NODE_SPECS[props.node.type]?.title || props.node.type
 	}
-	return ref
+	// A card that is gone: never show its raw "shape:…" id.
+	return ref.startsWith('shape:') ? 'a removed card' : ref
 }
 
 function planNodeLine(label: string, propsText: string) {
@@ -38,9 +41,9 @@ function formatDiffValue(value: unknown): string {
 }
 
 /** WP22 B4: an update's own field diffs, e.g. "op: select → filter". */
-function summarizeUpdateDiff(editor: Editor, update: AiPlan['update'][number]): string {
+function summarizeUpdateDiff(editor: Editor, update: AiPlan['update'][number], frozen?: Record<string, unknown>): string {
 	const shape = editor.getShape(update.id as TLShapeId)
-	const before = shape?.type === 'node' ? ((shape.props as { node: Record<string, unknown> }).node ?? {}) : {}
+	const before = frozen ?? (shape?.type === 'node' ? ((shape.props as { node: Record<string, unknown> }).node ?? {}) : {})
 	return Object.entries(update.props)
 		// Only real changes: a field the plan sets to its current value is not worth a line.
 		.filter(([key, value]) => formatDiffValue(before[key]) !== formatDiffValue(value))
@@ -48,7 +51,20 @@ function summarizeUpdateDiff(editor: Editor, update: AiPlan['update'][number]): 
 		.join(', ')
 }
 
-export function AiPlanRows({ editor, plan, warnings }: { editor: Editor; plan: AiPlan; warnings: string[] }) {
+export function AiPlanRows({
+	editor,
+	plan,
+	warnings,
+	names,
+	before,
+}: {
+	editor: Editor
+	plan: AiPlan
+	warnings: string[]
+	/** WP48: card names and field values from before the plan was put on the canvas. */
+	names?: Record<string, string>
+	before?: Record<string, Record<string, unknown>>
+}) {
 	return (
 		<>
 			<p className="BuildPanel-summary">{plan.summary}</p>
@@ -61,14 +77,14 @@ export function AiPlanRows({ editor, plan, warnings }: { editor: Editor; plan: A
 			{plan.update.map((update) => (
 				<div key={update.id} className="BuildPanel-planRow">
 					<UiChip label="Update" />
-					<span>{planNodeLine(refName(editor, plan, update.id), summarizeUpdateDiff(editor, update))}</span>
+					<span>{planNodeLine(refName(editor, plan, update.id, names), summarizeUpdateDiff(editor, update, before?.[update.id]))}</span>
 				</div>
 			))}
 			{plan.unwire.map((item, index) => (
 				<div key={index} className="BuildPanel-planRow">
 					<UiChip label="Unwire" />
 					<span>
-						{refName(editor, plan, item.to)}.{item.toPort}
+						{refName(editor, plan, item.to, names)}.{item.toPort}
 					</span>
 				</div>
 			))}
@@ -76,7 +92,7 @@ export function AiPlanRows({ editor, plan, warnings }: { editor: Editor; plan: A
 				<div key={index} className="BuildPanel-planRow">
 					<UiChip label="Wire" />
 					<span>
-						{refName(editor, plan, wire.from)}.{wire.fromPort} → {refName(editor, plan, wire.to)}.{wire.toPort}
+						{refName(editor, plan, wire.from, names)}.{wire.fromPort} → {refName(editor, plan, wire.to, names)}.{wire.toPort}
 					</span>
 				</div>
 			))}

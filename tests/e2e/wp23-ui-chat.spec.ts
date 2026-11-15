@@ -107,16 +107,20 @@ test.describe('WP23: agent chat builds with selected cards', () => {
 		const cardId = await createNode(page, { type: 'prompt', text: 'existing card' }, { x: 0, y: 0 })
 		await selectShapes(page, [cardId])
 
-		// WP44: the docked agent panel; there is no Draw/Build mode chip any more — the scope
-		// chip shows the selected card, and free text with cards selected routes to Build.
-		await page.locator('.agent-dock-button').click()
+		// WP48: free text goes to the one agent; it answers this one with build-workflow.
+		await page.route('**/stream', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'text/event-stream',
+				body: `data: ${JSON.stringify({ _type: 'build-workflow', goal: 'wire these up', complete: true, time: 10 })}\n\n`,
+			})
+		)
+		await page.locator('.app-panel-toggles').getByText('Agent', { exact: true }).click()
 		const panel = page.locator('aside.agent-dock.is-open')
 		await expect(panel).toBeVisible()
 		await expect(panel.locator('.agent-scope-label')).toHaveText(/^Card: /)
 		await expect(panel.locator('.chat-mode-chip')).toHaveCount(0)
 
-		// One card selected routes free text to the card's own AI; "Wire these up" is the
-		// card-scope way into Build, so select a second card for the free-text build route.
 		const second = await createNode(page, { type: 'prompt', text: 'second card' }, { x: 400, y: 0 })
 		await selectShapes(page, [cardId, second])
 		await expect(panel.locator('.agent-scope-label')).toHaveText('2 cards')
@@ -130,7 +134,8 @@ test.describe('WP23: agent chat builds with selected cards', () => {
 		await expect(message).toContainText('Add a note card')
 		await expect(message.getByText('Apply', { exact: true })).toBeVisible()
 		await expect(message.getByText('Discard', { exact: true })).toBeVisible()
-		// Revise: typing again revises the plan (shown as a hint, not a button).
-		await expect(message.getByText('Type below to revise the plan.')).toBeVisible()
+		// WP48: the plan is a preview; Adjust revises it.
+		await expect(message).toHaveAttribute('data-task-status', 'preview')
+		await expect(message.getByText('Adjust', { exact: true })).toBeVisible()
 	})
 })
