@@ -76,6 +76,11 @@ const WIRED_FIELD_COVERAGE: Record<string, string[]> = {
 	set_variable: ['name'],
 	get_variable: ['name'],
 	notify: ['title', 'message', 'sound'],
+	// WP50: AI cards
+	doc_qa: ['chunkSize', 'overlap', 'topK'],
+	classify: ['labels', 'multiLabel', 'column'],
+	speech_to_text: ['language'],
+	text_to_speech: ['voice', 'format'],
 }
 
 /** Fields deliberately left unwired, each with a reason (kept with the `wire: false` flag

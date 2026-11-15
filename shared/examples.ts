@@ -78,6 +78,23 @@ export const EXAMPLES: CanvasExample[] = [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'Canvas nodes, wires, and a local model.' } },
 		{ id: 'b', type: 'text_ai', x: 460, y: 0, props: { operation: 'summarize' } },
 	], [{ from: 'a', fromPort: 'output', to: 'b', toPort: 'input' }]),
+	// WP50: AI cards.
+	step('ai-doc-qa', 'Ask your documents', 'Document Q&A finds the passages that match the question (embeddings, or keywords without an embed model) and answers with [1], [2] citations.', [
+		{ id: 'docs', type: 'prompt', x: 0, y: 0, props: { text: 'The office opens at 8:00 and closes at 18:00 on weekdays.\n\nOn Saturdays the office opens at 10:00 and closes at 14:00. It is closed on Sundays.\n\nParking is free for visitors in the back yard.' } },
+		{ id: 'qa', type: 'doc_qa', x: 460, y: 0, props: { question: 'When does the office open on Saturday?' } },
+	], [{ from: 'docs', fromPort: 'output', to: 'qa', toPort: 'documents' }]),
+	step('ai-classify', 'Classify reviews', 'Classify labels each row of the table and adds label and confidence columns.', [
+		{ id: 'csv', type: 'prompt', x: 0, y: 0, props: { text: 'id,review\n1,great mug and fast shipping\n2,arrived broken and very late' } },
+		{ id: 'cls', type: 'classify', x: 460, y: 0, props: { labels: 'positive\nneutral\nnegative' } },
+	], [{ from: 'csv', fromPort: 'output', to: 'cls', toPort: 'input' }]),
+	step('ai-speech', 'Speak, then transcribe', 'Text to speech makes an audio file; Speech to text turns it back into text.', [
+		{ id: 'say', type: 'prompt', x: 0, y: 0, props: { text: 'Hello from the canvas.' } },
+		{ id: 'tts', type: 'text_to_speech', x: 460, y: 0, props: { format: 'mp3' } },
+		{ id: 'stt', type: 'speech_to_text', x: 920, y: 0 },
+	], [
+		{ from: 'say', fromPort: 'output', to: 'tts', toPort: 'text' },
+		{ from: 'tts', fromPort: 'output', to: 'stt', toPort: 'audio' },
+	]),
 	step('llm-jev', 'JEV decision', 'A question about the prompt. JEV returns yes, no, or a score.', [
 		{ id: 'a', type: 'prompt', x: 0, y: 0, props: { text: 'The note is kind and short.' } },
 		{ id: 'b', type: 'jev', x: 460, y: 0 },

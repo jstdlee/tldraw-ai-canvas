@@ -84,6 +84,11 @@ export const NODE_PORTS: Record<string, NodePortList> = {
 	},
 	json_fields: { in: ['json'], out: ['rest'], fields: ['json', 'paths'] },
 	extract: { in: ['text'], out: ['table', 'json', 'code', 'list'], fields: ['text', 'find', 'lang', 'clean'] },
+	// WP50: AI cards
+	doc_qa: { in: ['documents', 'question', 'model'], out: ['answer', 'sources'], fields: ['documents', 'question', 'chunkSize', 'overlap', 'topK', 'model', 'embedModel'] },
+	classify: { in: ['input', 'model'], out: ['label', 'table'], fields: ['input', 'labels', 'multiLabel', 'column', 'model'] },
+	speech_to_text: { in: ['audio', 'model'], out: ['text', 'segments'], fields: ['audio', 'language', 'model'] },
+	text_to_speech: { in: ['text', 'model'], out: ['output'], fields: ['text', 'voice', 'format', 'model'] },
 	template: { in: [], out: ['output'], fields: ['template', 'escape'] },
 	merge: { in: ['in1', 'in2'], out: ['output'], fields: ['mode', 'separator'] },
 	gallery: { in: ['images'], out: ['output'], fields: ['columns'] },

@@ -48,8 +48,8 @@ describe('NODE_SPECS coverage', () => {
 	})
 
 	it('keeps the full prompt under the token budget', () => {
-		// WP49 raised this from 40 000 for its five flow safety cards.
-		expect(specPrompt().length).toBeLessThan(46_000)
+		// WP49 (five flow safety cards) and WP50 (four AI cards) raised this from 40 000.
+		expect(specPrompt().length).toBeLessThan(48_000)
 	})
 
 	it('can produce a prompt scoped to a subset of types', () => {

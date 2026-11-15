@@ -40,6 +40,10 @@ import { OpenRouterNodeDefinition, SleepNodeDefinition, VideoNodeDefinition } fr
 import { HtmlFormNodeDefinition, HtmlPreviewNodeDefinition } from './types/HtmlPreviewNode'
 import { JsonFieldsNodeDefinition } from './types/JsonFieldsNode'
 import { ExtractNodeDefinition } from './types/ExtractNode'
+// WP50: AI cards
+import { DocQaNodeDefinition } from './types/DocQaNode'
+import { ClassifyNodeDefinition } from './types/ClassifyNode'
+import { SpeechToTextNodeDefinition, TextToSpeechNodeDefinition } from './types/SpeechNodes'
 import { TemplateNodeDefinition } from './types/TemplateNode'
 import { MergeNodeDefinition } from './types/MergeNode'
 import { GalleryNodeDefinition } from './types/GalleryNode'
@@ -95,6 +99,11 @@ export const NodeDefinitions = {
 	json_fields: JsonFieldsNodeDefinition,
 	extract: ExtractNodeDefinition,
 	template: TemplateNodeDefinition,
+	// WP50: AI cards
+	doc_qa: DocQaNodeDefinition,
+	classify: ClassifyNodeDefinition,
+	speech_to_text: SpeechToTextNodeDefinition,
+	text_to_speech: TextToSpeechNodeDefinition,
 	// Image (runs in the browser)
 	crop: CropNodeDefinition,
 	image_resize: ImageResizeNodeDefinition,

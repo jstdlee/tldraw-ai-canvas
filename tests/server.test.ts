@@ -60,7 +60,12 @@ describe('capability guesses', () => {
 		expect(guessCapabilities('openai-compatible', 'qwen3-vl:8b')).toContain('vision')
 		expect(guessCapabilities('openai', 'gpt-image-1')).toEqual(['image'])
 		expect(guessCapabilities('google', 'imagen-4.0-generate-001')).toEqual(['image'])
-		expect(guessCapabilities('openai-compatible', 'text-embedding-3-small')).toEqual([])
+		// WP50: embedding and speech models get their own capability (still never chat).
+		expect(guessCapabilities('openai-compatible', 'text-embedding-3-small')).toEqual(['embed'])
+		expect(guessCapabilities('openai', 'whisper-1')).toEqual(['stt'])
+		expect(guessCapabilities('openai', 'gpt-4o-mini-transcribe')).toEqual(['stt'])
+		expect(guessCapabilities('openai', 'tts-1')).toEqual(['tts'])
+		expect(guessCapabilities('openai-compatible', 'bge-reranker-v2')).toEqual([])
 	})
 })
 
