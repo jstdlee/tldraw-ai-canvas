@@ -428,6 +428,49 @@ export function IconExtract({ size }: IconProps) {
 	)
 }
 
+/** A document with a question mark. The Document Q&A card (WP50). */
+export function IconDocQa({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M4 1.8h5.2l2.8 2.8v9.6H4z" />
+			<path d="M6.5 7.1a1.5 1.5 0 1 1 2.1 1.4c-.4.2-.6.5-.6.9v.3" />
+			<path d="M8 11.8v.01" />
+		</Svg>
+	)
+}
+
+/** A price tag. The Classify card (WP50). */
+export function IconTag({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M2.2 2.2h5.4l6.2 6.2-5.4 5.4-6.2-6.2z" />
+			<path d="M5.2 5.2v.01" />
+		</Svg>
+	)
+}
+
+/** A microphone. The Speech to text card and its record button (WP50). */
+export function IconMic({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<rect x="5.8" y="1.8" width="4.4" height="7.6" rx="2.2" />
+			<path d="M3.6 7.6a4.4 4.4 0 0 0 8.8 0" />
+			<path d="M8 12v2.2" />
+		</Svg>
+	)
+}
+
+/** A speaker with sound waves. The Text to speech card (WP50). */
+export function IconSpeaker({ size }: IconProps) {
+	return (
+		<Svg size={size}>
+			<path d="M2.2 6h2.4l3.4-2.8v9.6L4.6 10H2.2z" />
+			<path d="M10.4 5.8a3 3 0 0 1 0 4.4" />
+			<path d="M12.2 4a5.6 5.6 0 0 1 0 8" />
+		</Svg>
+	)
+}
+
 /** A document with mirrored {{ }} marks. The Template card. */
 export function IconTemplate({ size }: IconProps) {
 	return (

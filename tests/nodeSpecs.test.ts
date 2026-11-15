@@ -48,7 +48,8 @@ describe('NODE_SPECS coverage', () => {
 	})
 
 	it('keeps the full prompt under the token budget', () => {
-		expect(specPrompt().length).toBeLessThan(40_000)
+		// WP50: +2,000 for the four AI cards (Document Q&A, Classify, Speech to text, Text to speech).
+		expect(specPrompt().length).toBeLessThan(42_000)
 	})
 
 	it('can produce a prompt scoped to a subset of types', () => {

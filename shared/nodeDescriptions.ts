@@ -266,6 +266,26 @@ export const NODE_DESCRIPTIONS: Record<string, NodeDescription> = {
 		description: 'Finds the first table, JSON, fenced code block, or bullet list inside LLM/Agent prose.',
 		keywords: ['extract', 'parse', 'table', 'json', 'markdown', 'fence', 'code block', 'bullet', 'list', 'llm', 'agent'],
 	},
+	doc_qa: {
+		title: 'Document Q&A',
+		description: 'Answers a question from your documents, citing the passages it used.',
+		keywords: ['document', 'documents', 'qa', 'q&a', 'question', 'answer', 'rag', 'retrieval', 'search', 'embeddings', 'bm25', 'pdf', 'notes', 'cite', 'sources', 'ai'],
+	},
+	classify: {
+		title: 'Classify',
+		description: 'Sorts text, or each table row, into your labels with a confidence.',
+		keywords: ['classify', 'classification', 'label', 'labels', 'category', 'categorize', 'tag', 'sentiment', 'sort', 'triage', 'ai'],
+	},
+	speech_to_text: {
+		title: 'Speech to text',
+		description: 'Transcribes audio (a file, URL or recording) to text.',
+		keywords: ['speech', 'audio', 'transcribe', 'transcription', 'whisper', 'stt', 'voice', 'microphone', 'record', 'dictate', 'subtitles', 'ai'],
+	},
+	text_to_speech: {
+		title: 'Text to speech',
+		description: 'Reads text aloud with an AI voice into an mp3 or wav file.',
+		keywords: ['speech', 'tts', 'voice', 'audio', 'read aloud', 'speak', 'narrate', 'mp3', 'wav', 'ai'],
+	},
 	template: {
 		title: 'Template',
 		description: 'Fills {{name}} placeholders from wired values into one piece of text, with JSON/HTML/URL/CSV escaping.',

@@ -1,0 +1,63 @@
+/* WP50: AI cards (Document Q&A, Classify, Speech to text, Text to speech). */
+
+.AiCardSetup,
+.AiCardStatus {
+	min-width: 0;
+}
+
+.AiCardSetup-text {
+	flex: 1;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.AiCardStatus-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.AiCardStatus-text.is-error {
+	white-space: nowrap;
+}
+
+.AiAudioPlayer {
+	display: flex;
+	align-items: center;
+	padding: 0 var(--tl-space-4);
+	box-sizing: border-box;
+	pointer-events: all;
+}
+
+.AiAudioPlayer-audio {
+	width: 100%;
+	height: 2.2em;
+}
+
+.AiAudioPlayer-empty {
+	font-size: var(--fs-meta);
+	color: var(--tl-color-text-3);
+}
+
+.AiRecording {
+	color: var(--tl-color-danger);
+}
+
+.AiVoiceField {
+	display: flex;
+	align-items: center;
+	gap: var(--tl-space-2);
+	min-width: 0;
+	width: 100%;
+}
+
+.AiVoiceField > .UiInput {
+	flex: 1;
+	min-width: 0;
+}
+
+.AiVoiceField-pick {
+	flex: 0 0 auto;
+	max-width: 7em;
+}

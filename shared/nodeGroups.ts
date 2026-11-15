@@ -58,6 +58,11 @@ export const NODE_CATEGORY: Record<string, NodeGroupId> = {
 	model_source: 'ai',
 	openrouter: 'ai',
 	image_gen: 'ai',
+	// WP50
+	doc_qa: 'ai',
+	classify: 'ai',
+	speech_to_text: 'ai',
+	text_to_speech: 'ai',
 	// Decide
 	jev: 'decide',
 	decision_switch: 'decide',

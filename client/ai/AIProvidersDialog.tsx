@@ -40,6 +40,9 @@ const CAPABILITY_HELP: Record<ModelCapability, string> = {
 	vision: 'Reads images (chat with sketches, describe image)',
 	jev: 'JEV decisions: probabilities for yes/no, choice, score (System One API, or any chat model)',
 	image: 'Generate image node (text-to-image)',
+	embed: 'Text embeddings for Document Q&A search (/v1/embeddings). Without one, Document Q&A uses keyword search.',
+	stt: 'Speech to text card (/v1/audio/transcriptions), e.g. whisper-1',
+	tts: 'Text to speech card (/v1/audio/speech), e.g. tts-1',
 }
 
 function uniqueId(base: string, taken: string[], fallback = 'provider') {

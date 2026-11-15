@@ -69,6 +69,11 @@ const PORTS: Record<string, { inn: string[]; out: string[] }> = {
 	template: { inn: [], out: ['output'] },
 	merge: { inn: ['in1', 'in2'], out: ['output'] },
 	gallery: { inn: ['images'], out: ['output'] },
+	// WP50
+	doc_qa: { inn: ['documents', 'question', 'model'], out: ['answer', 'sources'] },
+	classify: { inn: ['input', 'model'], out: ['label', 'table'] },
+	speech_to_text: { inn: ['audio', 'model'], out: ['text', 'segments'] },
+	text_to_speech: { inn: ['text', 'model'], out: ['output'] },
 	agent: { inn: ['context', 'task', 'model'], out: ['output', 'steps'] },
 }
 

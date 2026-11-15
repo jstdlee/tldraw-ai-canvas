@@ -453,5 +453,46 @@
 		"error",
 		"lastImages",
 		"type"
+	],
+	"doc_qa": [
+		"chunkSize",
+		"documents",
+		"error",
+		"lastAnswer",
+		"lastSources",
+		"model",
+		"overlap",
+		"question",
+		"topK",
+		"type"
+	],
+	"classify": [
+		"column",
+		"error",
+		"input",
+		"labels",
+		"lastLabel",
+		"lastTable",
+		"model",
+		"multiLabel",
+		"type"
+	],
+	"speech_to_text": [
+		"audio",
+		"error",
+		"language",
+		"lastSegments",
+		"lastText",
+		"model",
+		"type"
+	],
+	"text_to_speech": [
+		"error",
+		"format",
+		"lastAudio",
+		"model",
+		"text",
+		"type",
+		"voice"
 	]
 }

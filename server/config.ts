@@ -4,9 +4,8 @@ import {
 	AIConfig,
 	getDefaultModelKey,
 	isValidCloudflareAccountId,
-	MODEL_CAPABILITIES,
 	ModelCapability,
-	PROVIDER_KINDS,
+	normalizeAIConfig,
 	ModelConfig,
 	ProviderConfig,
 	PublicAIConfig,
@@ -45,14 +44,7 @@ export function loadConfig(): AIConfig {
 	}
 	const raw = JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) as Partial<AIConfig>
 	// Older configs may hold image providers (ComfyUI, Replicate) and image jobs: drop them.
-	const providers = (raw.providers ?? []).filter((p) => p.kind in PROVIDER_KINDS)
-	const ids = new Set(providers.map((p) => p.id))
-	const models = (raw.models ?? [])
-		.filter((m) => ids.has(m.providerId))
-		.map((m) => ({ ...m, capabilities: m.capabilities.filter((c) => MODEL_CAPABILITIES.includes(c)) }))
-	const defaults = Object.fromEntries(
-		Object.entries(raw.defaults ?? {}).filter(([job]) => MODEL_CAPABILITIES.includes(job as ModelCapability))
-	)
+	const { providers, models, defaults } = normalizeAIConfig(raw)
 	cached = { providers, models, defaults }
 	return cached
 }

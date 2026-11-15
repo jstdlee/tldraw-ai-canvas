@@ -36,6 +36,7 @@ import { NET_TOOLS, NetTool, runNetTool } from './nettools'
 import { apiKeyOrLocalPlaceholder, getLanguageModel, getProviderOptions, listProviderModels, ProviderModelInfo } from './llm'
 import { guessCapabilities, ModelCapability, ModelConfig } from '../shared/aiConfig'
 import { registerBatchRoutes } from './batchRoutes'
+import { embedTexts, listVoices, resolveAudio, saveSpeech, synthesizeSpeech, transcribeAudio } from './aiServices'
 import { checkModelsHealth } from './modelHealth'
 import { McpConfig, McpServerConfig, toPublicMcpConfig } from '../shared/mcpConfig'
 import { loadMcpConfig, saveMcpConfig } from './mcpStore'
@@ -441,6 +442,44 @@ app.post('/api/generate-text', async (c) => {
 		text: stripThink(generated.text),
 		usage: normalizeLlmUsage(generated.usage, Date.now() - started),
 	})
+})
+
+// --- WP50: embeddings, speech to text, text to speech -------------------------
+
+/** Document Q&A: embed chunk texts (or a question) with the embed model. */
+app.post('/api/embed', async (c) => {
+	const body = (await c.req.json()) as { model?: string; texts?: unknown }
+	const texts = Array.isArray(body.texts) ? body.texts.map((t) => String(t ?? '')) : []
+	if (!texts.length) throw new ConfigError('texts is required')
+	if (texts.length > 4096) throw new ConfigError('Too many texts in one request (limit 4096).')
+	const { model, provider } = resolveModelRef(body.model, 'embed')
+	const vectors = await embedTexts(provider, model, texts, c.req.raw.signal)
+	return c.json({ model: model.key, vectors })
+})
+
+/** Speech to text: audio from a data URL, a stored file or a URL. */
+app.post('/api/transcribe', async (c) => {
+	const body = (await c.req.json()) as { model?: string; audio?: string; language?: string }
+	const { model, provider } = resolveModelRef(body.model, 'stt')
+	const audio = await resolveAudio(String(body.audio ?? ''), c.req.raw.signal)
+	const transcript = await transcribeAudio(provider, model, audio, { language: body.language }, c.req.raw.signal)
+	return c.json({ ...transcript, model: model.key })
+})
+
+/** Text to speech: the audio is saved in the file store and served from /api/files/<id>. */
+app.post('/api/speech', async (c) => {
+	const body = (await c.req.json()) as { model?: string; text?: string; voice?: string; format?: string }
+	const { model, provider } = resolveModelRef(body.model, 'tts')
+	const format = body.format === 'wav' ? 'wav' : 'mp3'
+	const audio = await synthesizeSpeech(provider, model, { text: String(body.text ?? ''), voice: body.voice, format }, c.req.raw.signal)
+	return c.json({ ...saveSpeech(audio.bytes, audio.mime, format), model: model.key })
+})
+
+/** Voice names for the Text to speech card's suggestions. */
+app.post('/api/speech/voices', async (c) => {
+	const body = (await c.req.json()) as { model?: string }
+	const { model, provider } = resolveModelRef(body.model, 'tts')
+	return c.json({ voices: await listVoices(provider, model, c.req.raw.signal) })
 })
 
 // --- Custom nodes (saved packed groups) -------------------------------------

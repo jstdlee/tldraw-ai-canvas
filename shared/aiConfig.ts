@@ -20,8 +20,14 @@ export type ModelCapability =
 	| 'jev'
 	/** Image generation (the Generate image node). */
 	| 'image'
+	/** Text embeddings (`/v1/embeddings`): Document Q&A retrieval. */
+	| 'embed'
+	/** Speech to text (`/v1/audio/transcriptions`). */
+	| 'stt'
+	/** Text to speech (`/v1/audio/speech`). */
+	| 'tts'
 
-export const MODEL_CAPABILITIES: ModelCapability[] = ['agent', 'chat', 'vision', 'jev', 'image']
+export const MODEL_CAPABILITIES: ModelCapability[] = ['agent', 'chat', 'vision', 'jev', 'image', 'embed', 'stt', 'tts']
 
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high'
 
@@ -62,6 +68,9 @@ export interface AIDefaults {
 	vision?: string
 	jev?: string
 	image?: string
+	embed?: string
+	stt?: string
+	tts?: string
 }
 
 export interface AIConfig {
@@ -100,14 +109,14 @@ export const PROVIDER_KINDS: Record<ProviderKind, ProviderKindInfo> = {
 		label: 'OpenAI-compatible (Ollama, LM Studio, vLLM, llama.cpp…)',
 		defaultBaseURL: 'http://127.0.0.1:11434/v1',
 		needsApiKey: false,
-		capabilities: ['agent', 'chat', 'vision', 'jev', 'image'],
+		capabilities: ['agent', 'chat', 'vision', 'jev', 'image', 'embed', 'stt', 'tts'],
 		local: true,
 	},
 	openai: {
 		label: 'OpenAI',
 		defaultBaseURL: 'https://api.openai.com/v1',
 		needsApiKey: true,
-		capabilities: ['agent', 'chat', 'vision', 'jev', 'image'],
+		capabilities: ['agent', 'chat', 'vision', 'jev', 'image', 'embed', 'stt', 'tts'],
 		local: false,
 	},
 	anthropic: {
@@ -134,7 +143,7 @@ export const PROVIDER_KINDS: Record<ProviderKind, ProviderKindInfo> = {
 	cloudflare: {
 		label: 'Cloudflare Workers AI (chat + Clef decisions)',
 		needsApiKey: true,
-		capabilities: ['agent', 'chat', 'vision', 'jev'],
+		capabilities: ['agent', 'chat', 'vision', 'jev', 'embed'],
 		local: false,
 	},
 }
@@ -225,8 +234,11 @@ export function guessCapabilities(kind: ProviderKind, model: string): ModelCapab
 	if (/(gpt-image|dall-e|imagen|image-preview|flash-image|flux|sdxl|stable-diffusion|seedream|ideogram)/.test(id)) {
 		return ['image']
 	}
-	// Embeddings and speech models can't do either.
-	if (/(embed|whisper|tts|rerank)/.test(id)) return []
+	// Embeddings and speech models can't chat; each does its own one job.
+	if (/rerank/.test(id)) return []
+	if (/(embed|bge-|nomic-embed|e5-)/.test(id)) return ['embed']
+	if (/(whisper|transcribe|parakeet|asr|stt)/.test(id)) return ['stt']
+	if (/(tts|kokoro|speech|piper|orpheus)/.test(id)) return ['tts']
 	const caps: ModelCapability[] = ['chat']
 	if (/(vl|vision|gpt-4o|gpt-4\.1|gpt-5|claude|gemini|llava|gemma3|gemma4|pixtral|qwen2\.5-omni)/.test(id)) {
 		caps.push('vision')
@@ -235,4 +247,28 @@ export function guessCapabilities(kind: ProviderKind, model: string): ModelCapab
 		caps.push('agent')
 	}
 	return caps
+}
+
+/**
+ * Clean a config read from disk (server) so an old or newer file always loads: providers of
+ * a kind this build does not know are dropped (older files held ComfyUI / Replicate), models
+ * of a dropped provider go with them, capability names this build does not know are ignored
+ * (a newer build may add some), and a model without a capability list gets an empty one.
+ * Old files simply have no `embed` / `stt` / `tts` entries, which is valid.
+ */
+export function normalizeAIConfig(raw: Partial<AIConfig> | null | undefined): AIConfig {
+	const providers = (Array.isArray(raw?.providers) ? raw!.providers : []).filter((p) => p && p.kind in PROVIDER_KINDS)
+	const ids = new Set(providers.map((p) => p.id))
+	const models = (Array.isArray(raw?.models) ? raw!.models : [])
+		.filter((m) => m && ids.has(m.providerId))
+		.map((m) => ({
+			...m,
+			capabilities: (Array.isArray(m.capabilities) ? m.capabilities : []).filter((c) => MODEL_CAPABILITIES.includes(c)),
+		}))
+	const defaults = Object.fromEntries(
+		Object.entries(raw?.defaults ?? {}).filter(
+			([job, key]) => MODEL_CAPABILITIES.includes(job as ModelCapability) && typeof key === 'string'
+		)
+	) as AIDefaults
+	return { providers, models, defaults }
 }
